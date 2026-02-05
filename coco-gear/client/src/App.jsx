@@ -981,21 +981,16 @@ function ReportsPage({kits,personnel,depts,comps,types,locs,logs,analytics}){
         }} disabled={report==="custody"&&!custodyKit}>Export CSV</Bt></div></div>}</div>);}
 
 /* ═══════════ MAINTENANCE PAGE ═══════════ */
-function MaintenancePage({kits,setKits,types,locs,personnel,addLog,curUserId}){
+function MaintenancePage({kits,setKits,types,locs,personnel,addLog,curUserId,onSendMaint,onReturnMaint}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({reason:"",notes:"",type:"repair"});
   const inMaint=kits.filter(k=>k.maintenanceStatus);const available=kits.filter(k=>!k.maintenanceStatus&&!k.issuedTo);
-  
-  const sendToMaint=(kitId)=>{
-    setKits(p=>p.map(k=>k.id===kitId?{...k,maintenanceStatus:fm.type,maintenanceHistory:[...k.maintenanceHistory,
-      {id:uid(),type:fm.type,reason:fm.reason,notes:fm.notes,startDate:td(),endDate:null,startedBy:curUserId}]}:k));
-    addLog("maintenance_start","kit",kitId,curUserId,now(),{kitColor:kits.find(x=>x.id===kitId)?.color,reason:fm.reason});
+
+  const sendToMaint=async(kitId)=>{
+    try{await onSendMaint(kitId,fm.type,fm.reason,fm.notes)}catch(e){/* handled in parent */}
     setMd(null);setFm({reason:"",notes:"",type:"repair"})};
-  
-  const returnFromMaint=(kitId)=>{
-    setKits(p=>p.map(k=>{if(k.id!==kitId)return k;
-      const hist=k.maintenanceHistory.map((h,i)=>i===k.maintenanceHistory.length-1&&!h.endDate?{...h,endDate:td(),completedBy:curUserId}:h);
-      return{...k,maintenanceStatus:null,maintenanceHistory:hist}}));
-    addLog("maintenance_end","kit",kitId,curUserId,now(),{kitColor:kits.find(x=>x.id===kitId)?.color})};
+
+  const returnFromMaint=async(kitId)=>{
+    try{await onReturnMaint(kitId,"")}catch(e){/* handled in parent */}};
   
   return(<div>
     <SH title="Maintenance" sub={inMaint.length+" in maintenance | "+available.length+" available"} 
@@ -1043,7 +1038,7 @@ function MaintenancePage({kits,setKits,types,locs,personnel,addLog,curUserId}){
           <Bt v="warn" onClick={()=>sendToMaint(fm.kitId)} disabled={!fm.kitId}>Send to Maintenance</Bt></div></div></ModalWrap></div>);}
 
 /* ═══════════ RESERVATIONS PAGE ═══════════ */
-function ReservationsPage({reservations,setReservations,kits,personnel,curUserId,isAdmin,addLog}){
+function ReservationsPage({reservations,setReservations,kits,personnel,curUserId,isAdmin,addLog,onRefreshReservations}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({kitId:"",startDate:"",endDate:"",purpose:""});
   const[viewDate,setViewDate]=useState(()=>new Date());const[selectedDay,setSelectedDay]=useState(null);
   const pending=reservations.filter(r=>r.status==="pending");
@@ -1054,15 +1049,14 @@ function ReservationsPage({reservations,setReservations,kits,personnel,curUserId
     return reservations.some(r=>r.id!==excludeId&&r.kitId===kitId&&r.status!=="cancelled"&&
       new Date(r.startDate)<=new Date(end)&&new Date(r.endDate)>=new Date(start))};
   
-  const createRes=()=>{
+  const createRes=async()=>{
     if(checkConflict(fm.kitId,fm.startDate,fm.endDate)){alert("Conflict with existing reservation");return}
-    setReservations(p=>[...p,{id:uid(),kitId:fm.kitId,personId:curUserId,startDate:fm.startDate,endDate:fm.endDate,
-      purpose:fm.purpose,status:isAdmin?"confirmed":"pending",createdDate:td()}]);
-    addLog("reservation_create","kit",fm.kitId,curUserId,now(),{kitColor:kits.find(k=>k.id===fm.kitId)?.color});
+    try{await api.reservations.create({kitId:fm.kitId,startDate:fm.startDate,endDate:fm.endDate,purpose:fm.purpose});
+    await onRefreshReservations()}catch(e){alert(e.message)}
     setMd(null);setFm({kitId:"",startDate:"",endDate:"",purpose:""})};
-  
-  const approveRes=(id)=>{setReservations(p=>p.map(r=>r.id===id?{...r,status:"confirmed"}:r))};
-  const cancelRes=(id)=>{setReservations(p=>p.map(r=>r.id===id?{...r,status:"cancelled"}:r))};
+
+  const approveRes=async(id)=>{try{await api.reservations.approve(id);await onRefreshReservations()}catch(e){alert(e.message)}};
+  const cancelRes=async(id)=>{try{await api.reservations.cancel(id);await onRefreshReservations()}catch(e){alert(e.message)}};
   
   /* Calendar helpers */
   const year=viewDate.getFullYear();const month=viewDate.getMonth();
@@ -1179,7 +1173,7 @@ function ReservationsPage({reservations,setReservations,kits,personnel,curUserId
           <Bt v="primary" onClick={createRes} disabled={!fm.kitId||!fm.startDate||!fm.endDate||checkConflict(fm.kitId,fm.startDate,fm.endDate)}>Create</Bt></div></div></ModalWrap></div>);}
 
 /* ═══════════ CONSUMABLES PAGE ═══════════ */
-function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,locs,addLog,curUserId,isAdmin}){
+function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,locs,addLog,curUserId,isAdmin,onRefreshConsumables,onRefreshAssets}){
   const[tab,setTab]=useState("consumables");
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",sku:"",category:"Other",qty:0,minQty:0,unit:"ea"});
   const[afm,setAfm]=useState({name:"",serial:"",category:"Optics",locId:"",notes:""});
@@ -1187,33 +1181,28 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
   const lowStock=consumables.filter(c=>c.qty<=c.minQty);
   const issuedAssets=assets.filter(a=>a.issuedTo);const availAssets=assets.filter(a=>!a.issuedTo);
   
-  const saveCon=()=>{if(!fm.name.trim())return;
-    if(md==="addCon"){setConsumables(p=>[...p,{id:uid(),name:fm.name,sku:fm.sku,category:fm.category,qty:Number(fm.qty),minQty:Number(fm.minQty),unit:fm.unit}])}
-    else{setConsumables(p=>p.map(c=>c.id===md?{...c,name:fm.name,sku:fm.sku,category:fm.category,minQty:Number(fm.minQty),unit:fm.unit}:c))}
+  const saveCon=async()=>{if(!fm.name.trim())return;
+    try{if(md==="addCon"){await api.consumables.create({name:fm.name,sku:fm.sku,category:fm.category,qty:Number(fm.qty),minQty:Number(fm.minQty),unit:fm.unit})}
+    else{await api.consumables.update(md,{name:fm.name,sku:fm.sku,category:fm.category,minQty:Number(fm.minQty),unit:fm.unit})}
+    await onRefreshConsumables()}catch(e){alert(e.message)}
     setMd(null)};
-  
-  const saveAsset=()=>{if(!afm.name.trim()||!afm.serial.trim())return;
-    if(md==="addAsset"){setAssets(p=>[...p,{id:uid(),name:afm.name,serial:afm.serial,category:afm.category,locId:afm.locId||null,
-      issuedTo:null,issueHistory:[],lastInspected:null,condition:"GOOD",notes:afm.notes}])}
-    else{setAssets(p=>p.map(a=>a.id===md?{...a,name:afm.name,serial:afm.serial,category:afm.category,locId:afm.locId||null,notes:afm.notes}:a))}
+
+  const saveAsset=async()=>{if(!afm.name.trim()||!afm.serial.trim())return;
+    try{if(md==="addAsset"){await api.assets.create({name:afm.name,serial:afm.serial,category:afm.category,locId:afm.locId||null,notes:afm.notes})}
+    else{await api.assets.update(md,{name:afm.name,serial:afm.serial,category:afm.category,locId:afm.locId||null,notes:afm.notes})}
+    await onRefreshAssets()}catch(e){alert(e.message)}
     setMd(null)};
-  
-  const adjust=()=>{
-    setConsumables(p=>p.map(c=>c.id===adj.id?{...c,qty:Math.max(0,c.qty+Number(adj.delta))}:c));
-    addLog("consumable_adjust","consumable",adj.id,curUserId,now(),{delta:adj.delta,reason:adj.reason});
+
+  const adjust=async()=>{
+    try{await api.consumables.adjust(adj.id,Number(adj.delta),adj.reason);await onRefreshConsumables()}catch(e){alert(e.message)}
     setAdj({id:"",delta:0,reason:""})};
-  
-  const checkoutAsset=(assetId,personId)=>{
-    setAssets(p=>p.map(a=>a.id===assetId?{...a,issuedTo:personId,
-      issueHistory:[...a.issueHistory,{id:uid(),personId,issuedDate:td(),returnedDate:null,issuedBy:curUserId}]}:a));
-    addLog("asset_checkout","asset",assetId,curUserId,now(),{serial:assets.find(a=>a.id===assetId)?.serial});
+
+  const checkoutAsset=async(assetId,personId)=>{
+    try{await api.assets.checkout(assetId,personId);await onRefreshAssets()}catch(e){alert(e.message)}
     setMd(null)};
-  
-  const returnAsset=(assetId)=>{
-    setAssets(p=>p.map(a=>{if(a.id!==assetId)return a;
-      const hist=a.issueHistory.map((h,i)=>i===a.issueHistory.length-1&&!h.returnedDate?{...h,returnedDate:td()}:h);
-      return{...a,issuedTo:null,issueHistory:hist}}));
-    addLog("asset_return","asset",assetId,curUserId,now(),{serial:assets.find(a=>a.id===assetId)?.serial})};
+
+  const returnAsset=async(assetId)=>{
+    try{await api.assets.return(assetId);await onRefreshAssets()}catch(e){alert(e.message)}};
   
   const[checkoutPerson,setCheckoutPerson]=useState("");
   
@@ -1397,19 +1386,20 @@ function AuditLogPage({logs,kits,personnel}){
       {!filtered.length&&<div style={{padding:20,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No matching events</div>}</div></div>);}
 
 /* ═══════════ COMPONENTS ADMIN ═══════════ */
-function CompAdmin({comps,setComps,types}){
+function CompAdmin({comps,setComps,types,onRefreshComps}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({key:"",label:"",cat:"Comms",ser:false,calibrationRequired:false,calibrationIntervalDays:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const grouped=useMemo(()=>{const g={};comps.forEach(c=>{(g[c.cat]=g[c.cat]||[]).push(c)});return g},[comps]);
-  const save=()=>{if(!fm.label.trim())return;
+  const save=async()=>{if(!fm.label.trim())return;
     const k=fm.key.trim()||fm.label.trim().replace(/[^a-zA-Z0-9]/g,"").replace(/^./,ch=>ch.toLowerCase());
-    if(md==="add"){setComps(p=>[...p,{id:uid(),key:k,label:fm.label.trim(),cat:fm.cat,ser:fm.ser,calibrationRequired:fm.calibrationRequired,calibrationIntervalDays:fm.calibrationRequired?Number(fm.calibrationIntervalDays):null}])}
-    else{setComps(p=>p.map(c=>c.id===md?{...c,key:fm.key,label:fm.label.trim(),cat:fm.cat,ser:fm.ser,calibrationRequired:fm.calibrationRequired,calibrationIntervalDays:fm.calibrationRequired?Number(fm.calibrationIntervalDays):null}:c))}
+    try{if(md==="add"){await api.components.create({key:k,label:fm.label.trim(),cat:fm.cat,ser:fm.ser,calibrationRequired:fm.calibrationRequired,calibrationIntervalDays:fm.calibrationRequired?Number(fm.calibrationIntervalDays):null})}
+    else{await api.components.update(md,{key:fm.key,label:fm.label.trim(),cat:fm.cat,ser:fm.ser,calibrationRequired:fm.calibrationRequired,calibrationIntervalDays:fm.calibrationRequired?Number(fm.calibrationIntervalDays):null})}
+    await onRefreshComps()}catch(e){alert(e.message)}
     setMd(null)};
   const confirmDelete=(comp)=>{const inUse=types?.filter(t=>t.compIds.includes(comp.id)).length||0;
     if(inUse>0){alert("Cannot delete: component is used in "+inUse+" kit type(s)");return}
     setDeleteConfirm(comp)};
-  const doDelete=()=>{if(deleteConfirm)setComps(p=>p.filter(x=>x.id!==deleteConfirm.id))};
+  const doDelete=async()=>{if(deleteConfirm){try{await api.components.delete(deleteConfirm.id);await onRefreshComps()}catch(e){alert(e.message)}}};
   return(<div>
     <SH title="Components" sub={comps.length+" items | "+comps.filter(c=>c.ser).length+" serialized"}
       action={<Bt v="primary" onClick={()=>{setFm({key:"",label:"",cat:"Comms",ser:false,calibrationRequired:false,calibrationIntervalDays:""});setMd("add")}}>+ Add</Bt>}/>
@@ -1444,7 +1434,7 @@ function CompAdmin({comps,setComps,types}){
       title="Delete Component?" message={`Are you sure you want to delete "${deleteConfirm?.label}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ KIT TYPES ═══════════ */
-function TypeAdmin({types,setTypes,comps,kits}){
+function TypeAdmin({types,setTypes,comps,kits,onRefreshTypes}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",desc:"",compIds:[],compQtys:{},fields:[]});const[fd,setFd]=useState({key:"",label:"",type:"text"});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const grouped=useMemo(()=>{const g={};comps.forEach(c=>{(g[c.cat]=g[c.cat]||[]).push(c)});return g},[comps]);
@@ -1453,13 +1443,14 @@ function TypeAdmin({types,setTypes,comps,kits}){
   const addField=()=>{if(!fd.label.trim())return;const k=fd.key.trim()||fd.label.trim().replace(/[^a-zA-Z0-9]/g,"").replace(/^./,ch=>ch.toLowerCase());
     setFm(p=>({...p,fields:[...p.fields,{key:k,label:fd.label.trim(),type:fd.type}]}));setFd({key:"",label:"",type:"text"})};
   const totalExpanded=(ids,qtys)=>ids.reduce((s,id)=>s+(qtys[id]||1),0);
-  const save=()=>{if(!fm.name.trim())return;
-    if(md==="add"){setTypes(p=>[...p,{id:uid(),name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields}])}
-    else{setTypes(p=>p.map(t=>t.id===md?{...t,name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields}:t))}setMd(null)};
+  const save=async()=>{if(!fm.name.trim())return;
+    try{if(md==="add"){await api.types.create({name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields})}
+    else{await api.types.update(md,{name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields})}
+    await onRefreshTypes()}catch(e){alert(e.message)}setMd(null)};
   const confirmDelete=(type)=>{const n=kits?.filter(k=>k.typeId===type.id).length||0;
     if(n>0){alert("Cannot delete: "+n+" kit(s) use this type");return}
     setDeleteConfirm(type)};
-  const doDelete=()=>{if(deleteConfirm)setTypes(p=>p.filter(x=>x.id!==deleteConfirm.id))};
+  const doDelete=async()=>{if(deleteConfirm){try{await api.types.delete(deleteConfirm.id);await onRefreshTypes()}catch(e){alert(e.message)}}};
   return(<div>
     <SH title="Kit Types" sub={types.length+" templates"} action={<Bt v="primary" onClick={()=>{setFm({name:"",desc:"",compIds:[],compQtys:{},fields:[]});setMd("add")}}>+ Add</Bt>}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
@@ -1507,16 +1498,17 @@ function TypeAdmin({types,setTypes,comps,kits}){
       title="Delete Kit Type?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This template will no longer be available for new kits.`}/></div>);}
 
 /* ═══════════ LOCATIONS ═══════════ */
-function LocAdmin({locs,setLocs,kits}){
+function LocAdmin({locs,setLocs,kits,onRefreshLocs}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",sc:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
-  const save=()=>{if(!fm.name.trim())return;
-    if(md==="add"){setLocs(p=>[...p,{id:uid(),name:fm.name.trim(),sc:fm.sc.trim()||fm.name.trim().slice(0,4).toUpperCase()}])}
-    else{setLocs(p=>p.map(l=>l.id===md?{...l,name:fm.name.trim(),sc:fm.sc.trim()}:l))}setMd(null)};
+  const save=async()=>{if(!fm.name.trim())return;
+    try{if(md==="add"){await api.locations.create({name:fm.name.trim(),shortCode:fm.sc.trim()||fm.name.trim().slice(0,4).toUpperCase()})}
+    else{await api.locations.update(md,{name:fm.name.trim(),shortCode:fm.sc.trim()})}
+    await onRefreshLocs()}catch(e){alert(e.message)}setMd(null)};
   const confirmDelete=(loc)=>{const n=kits.filter(k=>k.locId===loc.id).length;
     if(n>0){alert("Cannot delete: location has "+n+" kit(s)");return}
     setDeleteConfirm(loc)};
-  const doDelete=()=>{if(deleteConfirm)setLocs(p=>p.filter(x=>x.id!==deleteConfirm.id))};
+  const doDelete=async()=>{if(deleteConfirm){try{await api.locations.delete(deleteConfirm.id);await onRefreshLocs()}catch(e){alert(e.message)}}};
   return(<div>
     <SH title="Locations" sub={locs.length+" locations"} action={<Bt v="primary" onClick={()=>{setFm({name:"",sc:""});setMd("add")}}>+ Add</Bt>}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
@@ -1537,16 +1529,17 @@ function LocAdmin({locs,setLocs,kits}){
       title="Delete Location?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ DEPARTMENTS ═══════════ */
-function DeptAdmin({depts,setDepts,personnel,kits}){
+function DeptAdmin({depts,setDepts,personnel,kits,onRefreshDepts}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",color:T.bl,headId:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
-  const save=()=>{if(!fm.name.trim())return;
-    if(md==="add"){setDepts(p=>[...p,{id:uid(),name:fm.name.trim(),color:fm.color,headId:fm.headId||null}])}
-    else{setDepts(p=>p.map(d=>d.id===md?{...d,name:fm.name.trim(),color:fm.color,headId:fm.headId||null}:d))}setMd(null)};
+  const save=async()=>{if(!fm.name.trim())return;
+    try{if(md==="add"){await api.departments.create({name:fm.name.trim(),color:fm.color,headId:fm.headId||null})}
+    else{await api.departments.update(md,{name:fm.name.trim(),color:fm.color,headId:fm.headId||null})}
+    await onRefreshDepts()}catch(e){alert(e.message)}setMd(null)};
   const confirmDelete=(dept)=>{const dKits=kits.filter(k=>k.deptId===dept.id);
     if(dKits.length>0){alert("Cannot delete: department has "+dKits.length+" kit(s) assigned");return}
     setDeleteConfirm(dept)};
-  const doDelete=()=>{if(deleteConfirm)setDepts(p=>p.filter(x=>x.id!==deleteConfirm.id))};
+  const doDelete=async()=>{if(deleteConfirm){try{await api.departments.delete(deleteConfirm.id);await onRefreshDepts()}catch(e){alert(e.message)}}};
   const dColors=["#60a5fa","#818cf8","#a78bfa","#f472b6","#fb923c","#4ade80","#2dd4bf","#fbbf24","#f87171","#22d3ee"];
   return(<div>
     <SH title="Departments" sub={depts.length+" departments"} action={<Bt v="primary" onClick={()=>{setFm({name:"",color:T.bl,headId:""});setMd("add")}}>+ Add</Bt>}/>
@@ -1569,7 +1562,7 @@ function DeptAdmin({depts,setDepts,personnel,kits}){
       title="Delete Department?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? Personnel in this department will become unassigned.`}/></div>);}
 
 /* ═══════════ PERSONNEL ═══════════ */
-function PersonnelAdmin({personnel,setPersonnel,kits,depts}){
+function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",title:"",role:"user",deptId:"",pin:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
 
@@ -1577,21 +1570,23 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts}){
   const primarySuper=personnel.find(p=>p.role==="super");
   const isPrimarySuper=(id)=>primarySuper?.id===id;
 
-  const save=()=>{if(!fm.name.trim())return;
-    if(md==="add"){setPersonnel(p=>[...p,{id:uid(),name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||"1234"}])}
+  const save=async()=>{if(!fm.name.trim())return;
+    try{if(md==="add"){await api.personnel.create({name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||"1234"})}
     else{
-      /* Prevent demoting the primary super admin */
       if(isPrimarySuper(md)&&fm.role!=="super"){alert("Cannot change role of primary administrator");return}
-      setPersonnel(p=>p.map(x=>x.id===md?{...x,name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||x.pin}:x))}
+      const data={name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null};
+      if(fm.pin)data.pin=fm.pin;
+      await api.personnel.update(md,data)}
+    await onRefreshPersonnel()}catch(e){alert(e.message)}
     setMd(null)};
-  
+
   const confirmDelete=(person)=>{
     const ik=kits.filter(k=>k.issuedTo===person.id);
     if(ik.length>0){alert("Cannot delete: user has "+ik.length+" kit(s) checked out");return}
     if(isPrimarySuper(person.id)){alert("Cannot delete the primary administrator");return}
     setDeleteConfirm(person)};
-  
-  const doDelete=()=>{if(deleteConfirm)setPersonnel(p=>p.filter(x=>x.id!==deleteConfirm.id))};
+
+  const doDelete=async()=>{if(deleteConfirm){try{await api.personnel.delete(deleteConfirm.id);await onRefreshPersonnel()}catch(e){alert(e.message)}}};
   
   const rc={super:T.rd,admin:T.am,user:T.bl};
   const grouped=useMemo(()=>{const g={"Unassigned":[]};depts.forEach(d=>{g[d.name]=[]});
@@ -1634,8 +1629,13 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts}){
       title="Delete User?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ SETTINGS (SUPER ADMIN) ═══════════ */
-function SettingsPage({settings,setSettings}){
+function SettingsPage({settings,setSettings,onSaveSettings}){
   const[tab,setTab]=useState("general");
+  const saveTimer=useRef(null);
+  const updateSetting=(key,value)=>{setSettings(p=>{const next={...p,[key]:value};
+    clearTimeout(saveTimer.current);saveTimer.current=setTimeout(()=>{if(onSaveSettings)onSaveSettings(next)},800);return next})};
+  const updateAdminPerm=(key,value)=>{setSettings(p=>{const next={...p,adminPerms:{...p.adminPerms,[key]:value}};
+    clearTimeout(saveTimer.current);saveTimer.current=setTimeout(()=>{if(onSaveSettings)onSaveSettings(next)},800);return next})};
   const generalItems=[
     {k:"requireDeptApproval",l:"Require dept head approval",d:"For department-locked kits"},
     {k:"allowUserLocationUpdate",l:"Allow user location updates",d:"Users can update kit locations"},
@@ -1677,27 +1677,29 @@ function SettingsPage({settings,setSettings}){
     <Tabs tabs={[{id:"general",l:"General"},{id:"serials",l:"Serials"},{id:"features",l:"Features"},{id:"admin",l:"Admin Permissions"}]} active={tab} onChange={setTab}/>
     <div style={{maxWidth:600,display:"flex",flexDirection:"column",gap:6}}>
       {tab==="general"&&<>
-        {generalItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>setSettings(p=>({...p,[it.k]:v}))}/>)}
+        {generalItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
         {numItems.map(it=><div key={it.k} style={{display:"flex",alignItems:"center",gap:14,padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
           <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>{it.l}</div>
             <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{it.d}</div></div>
-          <In type="number" value={settings[it.k]} onChange={e=>setSettings(p=>({...p,[it.k]:Number(e.target.value)}))} style={{width:70,textAlign:"right"}}/>
+          <In type="number" value={settings[it.k]} onChange={e=>updateSetting(it.k,Number(e.target.value))} style={{width:70,textAlign:"right"}}/>
           <span style={{fontSize:10,color:T.mu,fontFamily:T.m,width:30}}>{it.unit}</span></div>)}</>}
-      {tab==="serials"&&serialItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>setSettings(p=>({...p,[it.k]:v}))}/>)}
-      {tab==="features"&&featureItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>setSettings(p=>({...p,[it.k]:v}))}/>)}
+      {tab==="serials"&&serialItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
+      {tab==="features"&&featureItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
       {tab==="admin"&&<>
         <div style={{padding:12,borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.1)",marginBottom:8}}>
           <div style={{fontSize:10,color:T.am,fontFamily:T.m}}>Configure which pages Admins can access. Super Admins always have full access.</div></div>
-        {adminPermItems.map(it=><ToggleRow key={it.k} item={it} checked={settings.adminPerms?.[it.k]!==false} 
-          onChange={v=>setSettings(p=>({...p,adminPerms:{...p.adminPerms,[it.k]:v}}))}/>)}</>}</div></div>);}
+        {adminPermItems.map(it=><ToggleRow key={it.k} item={it} checked={settings.adminPerms?.[it.k]!==false}
+          onChange={v=>updateAdminPerm(it.k,v)}/>)}</>}</div></div>);}
 
 /* ═══════════ MY PROFILE (User Settings) ═══════════ */
-function MyProfile({user,personnel,setPersonnel,kits,assets,depts}){
+function MyProfile({user,personnel,setPersonnel,kits,assets,depts,onRefreshPersonnel}){
   const[editing,setEditing]=useState(false);
   const[fm,setFm]=useState({name:user.name,title:user.title||""});
-  
-  const save=()=>{if(!fm.name.trim())return;
+
+  const save=async()=>{if(!fm.name.trim())return;
+    try{await api.auth.updateProfile({name:fm.name.trim(),title:fm.title.trim()});
     setPersonnel(p=>p.map(x=>x.id===user.id?{...x,name:fm.name.trim(),title:fm.title.trim()}:x));
+    if(onRefreshPersonnel)await onRefreshPersonnel()}catch(e){alert(e.message)}
     setEditing(false)};
   
   const myKits=kits.filter(k=>k.issuedTo===user.id);
@@ -1817,21 +1819,15 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
   const issuedCt=kits.filter(k=>k.issuedTo).length;const myCt=kits.filter(k=>k.issuedTo===curUserId).length;
   const needsApproval=kit=>{if(!settings.requireDeptApproval||!kit.deptId||isSuper||isAdmin)return false;
     const dept=depts.find(d=>d.id===kit.deptId);return!(dept&&dept.headId===curUserId)};
-  const doCheckout=(kitId,data)=>{const kit=kits.find(k=>k.id===kitId);
-    if(kit&&needsApproval(kit)){setRequests(p=>[...p,{id:uid(),kitId,personId:curUserId,deptId:kit.deptId,date:td(),status:"pending",serials:data.serials,notes:data.notes,resolvedBy:null,resolvedDate:null}]);
-      addLog("checkout_request","kit",kitId,curUserId,now(),{kitColor:kit.color});setMd(null);return}
-    setKits(p=>p.map(k=>{if(k.id!==kitId)return k;const ns={...k.serials};if(data.serials)Object.entries(data.serials).forEach(([cid,sn])=>{if(sn)ns[cid]=sn});
-      return{...k,issuedTo:curUserId,serials:ns,issueHistory:[...k.issueHistory,{id:uid(),personId:curUserId,issuedDate:td(),returnedDate:null,issuedBy:curUserId,checkoutSerials:data.serials||{},returnSerials:{},checkoutLoc:k.locId}]}}));
-    addLog("checkout","kit",kitId,curUserId,now(),{kitColor:kit.color});setMd(null)};
-  const doAdminIssue=(kitId,personId,data)=>{const kit=kits.find(k=>k.id===kitId);
-    setKits(p=>p.map(k=>{if(k.id!==kitId)return k;const ns={...k.serials};if(data.serials)Object.entries(data.serials).forEach(([cid,sn])=>{if(sn)ns[cid]=sn});
-      return{...k,issuedTo:personId,serials:ns,issueHistory:[...k.issueHistory,{id:uid(),personId,issuedDate:td(),returnedDate:null,issuedBy:curUserId,checkoutSerials:data.serials||{},returnSerials:{},checkoutLoc:k.locId}]}}));
-    addLog("checkout","kit",kitId,curUserId,now(),{kitColor:kit?.color,issuedTo:personnel.find(p=>p.id===personId)?.name});setMd(null)};
-  const doReturn=(kitId,data)=>{const kit=kits.find(k=>k.id===kitId);
-    setKits(p=>p.map(k=>{if(k.id!==kitId)return k;const ns={...k.serials};if(data.serials)Object.entries(data.serials).forEach(([cid,sn])=>{if(sn)ns[cid]=sn});
-      const hist=k.issueHistory.map((h,i)=>i===k.issueHistory.length-1&&!h.returnedDate?{...h,returnedDate:td(),returnSerials:data.serials||{},returnNotes:data.notes,returnLoc:k.locId}:h);
-      return{...k,issuedTo:null,serials:ns,issueHistory:hist}}));
-    addLog("return","kit",kitId,curUserId,now(),{kitColor:kit?.color});setMd(null)};
+  const doCheckout=async(kitId,data)=>{const kit=kits.find(k=>k.id===kitId);
+    try{await apiCheckout(kitId,curUserId,data.serials,data.notes)}catch(e){/* apiCheckout shows alert */}
+    setMd(null)};
+  const doAdminIssue=async(kitId,personId,data)=>{
+    try{await apiCheckout(kitId,personId,data.serials,data.notes)}catch(e){/* apiCheckout shows alert */}
+    setMd(null)};
+  const doReturn=async(kitId,data)=>{
+    try{await apiReturn(kitId,data.serials,data.notes)}catch(e){/* apiReturn shows alert */}
+    setMd(null)};
   return(<div>
     <SH title="Checkout / Return" sub={issuedCt+" out | "+(kits.length-issuedCt)+" available | "+myCt+" mine"}
       action={<div style={{display:"flex",gap:6}}>
@@ -1852,8 +1848,8 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
               <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{ty?.name} | {lo?.name}</div></div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}><Bg color={st.fg} bg={st.bg}>{st.tag}</Bg>{dept&&<DeptBg dept={dept}/>}</div></div>
           {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!inMaint&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-            <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={kit.locId} onChange={e=>{setKits(p=>p.map(k=>k.id===kit.id?{...k,locId:e.target.value}:k));
-              addLog("location_change","kit",kit.id,curUserId,now(),{kitColor:kit.color,from:lo?.name,to:locs.find(l=>l.id===e.target.value)?.name})}} style={{flex:1,fontSize:9,padding:"4px 8px"}}/></div>}
+            <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={kit.locId} onChange={e=>{const newLocId=e.target.value;setKits(p=>p.map(k=>k.id===kit.id?{...k,locId:newLocId}:k));
+              api.kits.updateLocation(kit.id,newLocId).then(()=>refreshKits()).catch(err=>console.error("Location update error:",err))}} style={{flex:1,fontSize:9,padding:"4px 8px"}}/></div>}
           {inMaint?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.am}}/><span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance ({kit.maintenanceStatus})</span></div>
           :person?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:isMine?"rgba(244,114,182,.06)":"rgba(244,114,182,.03)",border:"1px solid rgba(244,114,182,.12)"}}>
@@ -1903,17 +1899,14 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
   const changeStatusFilter=(f)=>{setStatusFilter(f);if(onFilterChange)onFilterChange(f)};
   
   const openAdd=()=>{const ft=types[0];setKf({typeId:ft?.id||"",color:"BLACK",locId:locs[0]?.id||"",fields:{},deptId:""});setMd("addK")};
-  const saveK=()=>{if(!kf)return;const ty=types.find(t=>t.id===kf.typeId);
-    if(md==="addK"){const ns={};const nc={};if(ty){const ex=expandComps(ty.compIds,ty.compQtys||{});ex.forEach(e=>{ns[e.key]="";nc[e.key]=null})}
-      setKits(p=>[...p,{id:uid(),typeId:kf.typeId,color:kf.color,locId:kf.locId,deptId:kf.deptId||null,fields:{...kf.fields},lastChecked:null,
-        comps:ty?mkCS(ty.compIds,ty.compQtys||{}):{},serials:ns,calibrationDates:nc,inspections:[],issuedTo:null,issueHistory:[],maintenanceStatus:null,maintenanceHistory:[],photos:[]}]);
-      addLog("kit_create","kit",null,curUserId,now(),{kitColor:kf.color})}
-    else{setKits(p=>p.map(k=>k.id===md?{...k,typeId:kf.typeId,color:kf.color,locId:kf.locId,deptId:kf.deptId||null,fields:{...kf.fields}}:k))}
+  const saveK=async()=>{if(!kf)return;
+    try{if(md==="addK"){await api.kits.create({typeId:kf.typeId,color:kf.color,locId:kf.locId,deptId:kf.deptId||null,fields:kf.fields})}
+    else{await api.kits.update(md,{typeId:kf.typeId,color:kf.color,locId:kf.locId,deptId:kf.deptId||null,fields:kf.fields})}
+    await refreshKits()}catch(e){alert(e.message)}
     setMd(null);setKf(null)};
-  const doneInsp=data=>{const kid=String(md).split(":")[1];
-    setKits(p=>p.map(k=>{if(k.id!==kid)return k;const ns={...k.serials};if(data.serials)Object.entries(data.serials).forEach(([cid,sn])=>{if(sn)ns[cid]=sn});
-      return{...k,comps:data.results,lastChecked:data.date,serials:ns,inspections:[...k.inspections,data],photos:[...k.photos,...(data.photos||[])]}}));
-    addLog("inspect","kit",kid,curUserId,now(),{kitColor:kits.find(x=>x.id===kid)?.color});setMd(null)};
+  const doneInsp=async data=>{const kid=String(md).split(":")[1];
+    try{await apiInspect(kid,curUserId,data.notes,data.results)}catch(e){/* apiInspect logs error */}
+    setMd(null)};
   
   /* Get overdue kit IDs from analytics if available */  
   const overdueIds=useMemo(()=>new Set((analytics?.overdueReturns||[]).map(k=>k.id)),[analytics]);
@@ -2025,7 +2018,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
             {(isAdmin||isSuper)&&<Bt v="primary" sm onClick={()=>{setKf({typeId:sel.typeId,color:sel.color,locId:sel.locId,fields:{...sel.fields},deptId:sel.deptId||""});setMd(sel.id)}}>Edit</Bt>}
             <Bt sm v="ind" onClick={()=>setMd("qr:"+sel.id)}>QR Code</Bt>
             <Bt sm onClick={()=>setMd("hist:"+sel.id)}>History</Bt>
-            {(isAdmin||isSuper)&&<Bt v="danger" sm onClick={()=>{setKits(p=>p.filter(k=>k.id!==sel.id));setSelId(null)}} style={{marginLeft:"auto"}}>Delete</Bt>}</div></div>)})()}</div>
+            {(isAdmin||isSuper)&&<Bt v="danger" sm onClick={async()=>{try{await api.kits.delete(sel.id);await refreshKits();setSelId(null)}catch(e){alert(e.message)}}} style={{marginLeft:"auto"}}>Delete</Bt>}</div></div>)})()}</div>
     <ModalWrap open={md==="addK"||kf&&md&&md!=="addK"&&!String(md).startsWith("insp")&&!String(md).startsWith("hist")&&!String(md).startsWith("qr")} onClose={()=>{setMd(null);setKf(null)}} title={md==="addK"?"Add Kit":"Edit Kit"}>
       {kf&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Type"><Sl options={types.map(t=>({v:t.id,l:t.name}))} value={kf.typeId} onChange={e=>setKf(p=>({...p,typeId:e.target.value,fields:{}}))}/></Fl>
@@ -2076,18 +2069,16 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
         onClose={()=>setMd(null)}/>}</ModalWrap></div>);}
 
 /* ═══════════ APPROVALS ═══════════ */
-function ApprovalsPage({requests,setRequests,kits,setKits,personnel,depts,allC,types,curUserId,addLog}){
+function ApprovalsPage({requests,setRequests,kits,setKits,personnel,depts,allC,types,curUserId,addLog,onRefreshKits}){
   const user=personnel.find(p=>p.id===curUserId);const isSuper=user?.role==="super";
   const headOf=depts.filter(d=>d.headId===curUserId).map(d=>d.id);
   const visible=requests.filter(r=>isSuper||headOf.includes(r.deptId));
   const pending=visible.filter(r=>r.status==="pending");const resolved=visible.filter(r=>r.status!=="pending");
-  const approve=reqId=>{const req=requests.find(r=>r.id===reqId);if(!req)return;
+  const approve=async reqId=>{const req=requests.find(r=>r.id===reqId);if(!req)return;
+    try{await api.kits.checkout({kitId:req.kitId,personId:req.personId,serials:req.serials,notes:req.notes});
     setRequests(p=>p.map(r=>r.id===reqId?{...r,status:"approved",resolvedBy:curUserId,resolvedDate:td()}:r));
-    setKits(p=>p.map(k=>{if(k.id!==req.kitId)return k;const ns={...k.serials};if(req.serials)Object.entries(req.serials).forEach(([cid,sn])=>{if(sn)ns[cid]=sn});
-      return{...k,issuedTo:req.personId,serials:ns,issueHistory:[...k.issueHistory,{id:uid(),personId:req.personId,issuedDate:td(),returnedDate:null,issuedBy:curUserId,checkoutSerials:req.serials||{},returnSerials:{},checkoutLoc:k.locId}]}}));
-    addLog("approved","kit",req.kitId,curUserId,now(),{kitColor:kits.find(k=>k.id===req.kitId)?.color})};
-  const deny=reqId=>{setRequests(p=>p.map(r=>r.id===reqId?{...r,status:"denied",resolvedBy:curUserId,resolvedDate:td()}:r));
-    addLog("denied","kit",requests.find(r=>r.id===reqId)?.kitId,curUserId,now())};
+    if(onRefreshKits)await onRefreshKits()}catch(e){alert(e.message)}};
+  const deny=reqId=>{setRequests(p=>p.map(r=>r.id===reqId?{...r,status:"denied",resolvedBy:curUserId,resolvedDate:td()}:r))};
   return(<div>
     <SH title="Approvals" sub={pending.length+" pending"}/>
     {!pending.length&&<div style={{padding:30,textAlign:"center",color:T.dm,fontFamily:T.m}}>No pending requests</div>}
@@ -2319,6 +2310,7 @@ export default function App(){
   const refreshLocs=async()=>{try{const d=await api.locations.list();setLocs(d.map(xformLoc))}catch(e){}};
   const refreshDepts=async()=>{try{const d=await api.departments.list();setDepts(d.map(xformDept))}catch(e){}};
   const refreshLogs=async()=>{try{const d=await api.audit.list({limit:500});setLogs((d.logs||[]).map(xformLog))}catch(e){}};
+  const saveSettings=async(s)=>{try{await api.settings.update(s)}catch(e){console.error("Settings save error:",e)}};
 
   const user=curUser?personnel.find(p=>p.id===curUser):authCtx.user?personnel.find(p=>p.id===authCtx.user.id):personnel[0];
   const isSuper=user?.role==="super";const isAdmin=user?.role==="admin"||isSuper;
@@ -2456,21 +2448,22 @@ export default function App(){
         {pg==="analytics"&&canAccess({access:"admin",perm:"analytics"})&&<AnalyticsPage analytics={analytics} kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs}/>}
         {pg==="reports"&&canAccess({access:"admin",perm:"reports"})&&<ReportsPage kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs} logs={logs} analytics={analytics}/>}
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}
-          personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} addLog={addLog}/>}
+          personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} addLog={addLog} onRefreshKits={refreshKits}/>}
         {pg==="reservations"&&settings.enableReservations&&<ReservationsPage reservations={reservations} setReservations={setReservations}
-          kits={kits} personnel={personnel} curUserId={curUser} isAdmin={isAdmin} addLog={addLog}/>}
+          kits={kits} personnel={personnel} curUserId={curUser} isAdmin={isAdmin} addLog={addLog} onRefreshReservations={refreshReservations}/>}
         {pg==="maintenance"&&canAccess({access:"admin",perm:"maintenance",setting:"enableMaintenance"})&&settings.enableMaintenance&&<MaintenancePage kits={kits} setKits={setKits} types={types} locs={locs}
-          personnel={personnel} addLog={addLog} curUserId={curUser}/>}
+          personnel={personnel} addLog={addLog} curUserId={curUser} onSendMaint={apiSendMaint} onReturnMaint={apiReturnMaint}/>}
         {pg==="consumables"&&canAccess({access:"admin",perm:"consumables",setting:"enableConsumables"})&&settings.enableConsumables&&<ConsumablesPage consumables={consumables} setConsumables={setConsumables}
-          assets={assets} setAssets={setAssets} personnel={personnel} locs={locs} addLog={addLog} curUserId={curUser} isAdmin={isAdmin}/>}
+          assets={assets} setAssets={setAssets} personnel={personnel} locs={locs} addLog={addLog} curUserId={curUser} isAdmin={isAdmin}
+          onRefreshConsumables={refreshConsumables} onRefreshAssets={refreshAssets}/>}
         {pg==="auditlog"&&isSuper&&<AuditLogPage logs={logs} kits={kits} personnel={personnel}/>}
-        {pg==="types"&&canAccess({access:"admin",perm:"types"})&&<TypeAdmin types={types} setTypes={setTypes} comps={comps} kits={kits}/>}
-        {pg==="components"&&canAccess({access:"admin",perm:"components"})&&<CompAdmin comps={comps} setComps={setComps} types={types}/>}
-        {pg==="locations"&&canAccess({access:"admin",perm:"locations"})&&<LocAdmin locs={locs} setLocs={setLocs} kits={kits}/>}
-        {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits}/>}
-        {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts}/>}
-        {pg==="settings"&&isSuper&&<SettingsPage settings={settings} setSettings={setSettings}/>}
-        {pg==="profile"&&<MyProfile user={user} personnel={personnel} setPersonnel={setPersonnel} kits={kits} assets={assets} depts={depts}/>}
+        {pg==="types"&&canAccess({access:"admin",perm:"types"})&&<TypeAdmin types={types} setTypes={setTypes} comps={comps} kits={kits} onRefreshTypes={refreshTypes}/>}
+        {pg==="components"&&canAccess({access:"admin",perm:"components"})&&<CompAdmin comps={comps} setComps={setComps} types={types} onRefreshComps={refreshComps}/>}
+        {pg==="locations"&&canAccess({access:"admin",perm:"locations"})&&<LocAdmin locs={locs} setLocs={setLocs} kits={kits} onRefreshLocs={refreshLocs}/>}
+        {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} onRefreshDepts={refreshDepts}/>}
+        {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
+        {pg==="settings"&&isSuper&&<SettingsPage settings={settings} setSettings={setSettings} onSaveSettings={saveSettings}/>}
+        {pg==="profile"&&<MyProfile user={user} personnel={personnel} setPersonnel={setPersonnel} kits={kits} assets={assets} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
       </main>
       
       <ModalWrap open={searchMd} onClose={()=>setSearchMd(false)} title="Search">
