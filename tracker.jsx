@@ -41,7 +41,8 @@ const daysAgo=d=>{if(!d)return null;return Math.floor((Date.now()-new Date(d).ge
 const daysUntil=d=>{if(!d)return null;return Math.floor((new Date(d).getTime()-Date.now())/864e5)};
 const stMeta=d=>{const n=daysAgo(d);if(n===null)return{bg:"rgba(239,68,68,.1)",fg:T.rd,tag:"NEVER"};if(n<=7)return{bg:"rgba(34,197,94,.1)",fg:T.gn,tag:n+"d"};if(n<=30)return{bg:"rgba(251,191,36,.1)",fg:T.am,tag:n+"d"};return{bg:"rgba(239,68,68,.1)",fg:T.rd,tag:n+"d"}};
 const cSty={GOOD:{bg:"rgba(34,197,94,.1)",bd:"rgba(34,197,94,.25)",fg:T.gn,ic:"OK"},MISSING:{bg:"rgba(239,68,68,.1)",bd:"rgba(239,68,68,.2)",fg:T.rd,ic:"X"},DAMAGED:{bg:"rgba(251,191,36,.1)",bd:"rgba(251,191,36,.2)",fg:T.am,ic:"!!"}};
-const mkCS=ids=>Object.fromEntries(ids.map(id=>[id,"GOOD"]));
+const expandComps=(compIds,compQtys={})=>{const r=[];compIds.forEach(id=>{const q=compQtys[id]||1;for(let i=0;i<q;i++)r.push({compId:id,idx:i,qty:q,key:q>1?id+"#"+i:id})});return r};
+const mkCS=(ids,qtys={})=>Object.fromEntries(expandComps(ids,qtys).map(e=>[e.key,"GOOD"]));
 const fmtDate=d=>d?new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"2-digit"}):"--";
 
 /* ─── DEFAULT SETTINGS ─── */
@@ -66,8 +67,7 @@ const IC=[
   {id:uid(),key:"uxv",label:"UXV",cat:"Comms",ser:true,calibrationRequired:true,calibrationIntervalDays:365},
   {id:uid(),key:"uxvCharger",label:"UXV Charger",cat:"Power",ser:false,calibrationRequired:false,calibrationIntervalDays:null},
   {id:uid(),key:"silvus4200",label:"Silvus 4200",cat:"Comms",ser:true,calibrationRequired:true,calibrationIntervalDays:180},
-  {id:uid(),key:"silvusBatt1",label:"Silvus Batt 1",cat:"Power",ser:true,calibrationRequired:false,calibrationIntervalDays:null},
-  {id:uid(),key:"silvusBatt2",label:"Silvus Batt 2",cat:"Power",ser:true,calibrationRequired:false,calibrationIntervalDays:null},
+  {id:uid(),key:"silvusBatt",label:"Silvus Battery",cat:"Power",ser:true,calibrationRequired:false,calibrationIntervalDays:null},
   {id:uid(),key:"silvusDockCh",label:"Silvus Dock Charger",cat:"Power",ser:true,calibrationRequired:false,calibrationIntervalDays:null},
   {id:uid(),key:"silvusDock",label:"Silvus Batt Dock",cat:"Power",ser:true,calibrationRequired:false,calibrationIntervalDays:null},
   {id:uid(),key:"hiGainAnt",label:"Hi-Gain Antenna",cat:"Comms",ser:false,calibrationRequired:false,calibrationIntervalDays:null},
@@ -84,9 +84,9 @@ const IC=[
 
 /* ─── KIT TYPES ─── */
 const IKT=[
-  {id:uid(),name:"COCO Kit",desc:"Standard comms kit",compIds:IC.map(c=>c.id),fields:[{key:"uxvModel",label:"UXV Model",type:"text"},{key:"silvusIP",label:"Silvus IP",type:"text"}]},
-  {id:uid(),name:"Starlink Kit",desc:"Starlink connectivity",compIds:[],fields:[{key:"miniPanel",label:"Panel S/N",type:"text"},{key:"ecoflow",label:"EcoFlow #",type:"text"}]},
-  {id:uid(),name:"NVG Set",desc:"PVS-31 night vision",compIds:[],fields:[{key:"serial",label:"Serial",type:"text"},{key:"hasMount",label:"Mount",type:"toggle"}]},
+  {id:uid(),name:"COCO Kit",desc:"Standard comms kit",compIds:IC.map(c=>c.id),compQtys:{[IC.find(c=>c.key==="silvusBatt").id]:2},fields:[{key:"uxvModel",label:"UXV Model",type:"text"},{key:"silvusIP",label:"Silvus IP",type:"text"}]},
+  {id:uid(),name:"Starlink Kit",desc:"Starlink connectivity",compIds:[],compQtys:{},fields:[{key:"miniPanel",label:"Panel S/N",type:"text"},{key:"ecoflow",label:"EcoFlow #",type:"text"}]},
+  {id:uid(),name:"NVG Set",desc:"PVS-31 night vision",compIds:[],compQtys:{},fields:[{key:"serial",label:"Serial",type:"text"},{key:"hasMount",label:"Mount",type:"toggle"}]},
 ];
 
 /* ─── LOCATIONS ─── */
@@ -106,14 +106,14 @@ const IDEPT=[
 
 /* ─── PERSONNEL ─── */
 const IP=[
-  {id:uid(),name:"Jordan Martinez",title:"Operations Director",role:"super",deptId:null},
-  {id:uid(),name:"Riley Chen",title:"Field Technician",role:"user",deptId:null},
-  {id:uid(),name:"Drew Williams",title:"Project Manager",role:"user",deptId:null},
-  {id:uid(),name:"Kim Thompson",title:"Engineer",role:"user",deptId:null},
-  {id:uid(),name:"Morgan Davis",title:"Analyst",role:"user",deptId:null},
-  {id:uid(),name:"Taylor Nguyen",title:"Team Lead",role:"admin",deptId:null},
-  {id:uid(),name:"Lee Garcia",title:"Technician",role:"user",deptId:null},
-  {id:uid(),name:"Ash Patel",title:"Support Specialist",role:"user",deptId:null},
+  {id:uid(),name:"Jordan Martinez",title:"Operations Director",role:"super",deptId:null,pin:"1234"},
+  {id:uid(),name:"Riley Chen",title:"Field Technician",role:"user",deptId:null,pin:"1234"},
+  {id:uid(),name:"Drew Williams",title:"Project Manager",role:"user",deptId:null,pin:"1234"},
+  {id:uid(),name:"Kim Thompson",title:"Engineer",role:"user",deptId:null,pin:"1234"},
+  {id:uid(),name:"Morgan Davis",title:"Analyst",role:"user",deptId:null,pin:"1234"},
+  {id:uid(),name:"Taylor Nguyen",title:"Team Lead",role:"admin",deptId:null,pin:"1234"},
+  {id:uid(),name:"Lee Garcia",title:"Technician",role:"user",deptId:null,pin:"1234"},
+  {id:uid(),name:"Ash Patel",title:"Support Specialist",role:"user",deptId:null,pin:"1234"},
 ];
 /* Wire dept heads */
 IDEPT[0].headId=IP[5].id;IDEPT[1].headId=IP[0].id;IDEPT[2].headId=IP[5].id;
@@ -148,8 +148,9 @@ const IASSETS=[
 /* ─── BUILD KITS WITH FULL DATA ─── */
 const buildKits=(types,locs,pers,depts)=>{
   const ct=types[0];const d=locs[0].id,g=locs[1].id,dm=locs[2].id,a=locs[3].id;
-  const mkSer=()=>Object.fromEntries(ct.compIds.map(id=>[id,""]));
-  const mkCal=()=>Object.fromEntries(ct.compIds.map(id=>[id,null])); // calibration dates
+  const expanded=expandComps(ct.compIds,ct.compQtys||{});
+  const mkSer=()=>Object.fromEntries(expanded.map(e=>[e.key,""]));
+  const mkCal=()=>Object.fromEntries(expanded.map(e=>[e.key,null]));
   const raw=[
     {color:"PINK",l:d,uxv:"Micronav 16",ip:"172.17.126.251",chk:"2026-01-20",iss:null,dept:depts[0].id,maint:null},
     {color:"RED",l:d,uxv:"Micronav 8",ip:"172.17.127.242",chk:"2026-01-18",iss:pers[1].id,dept:depts[0].id,maint:null},
@@ -167,8 +168,8 @@ const buildKits=(types,locs,pers,depts)=>{
   return raw.map((r,i)=>({
     id:uid(),typeId:ct.id,color:r.color,locId:r.l,deptId:r.dept,
     fields:{uxvModel:r.uxv,silvusIP:r.ip},
-    lastChecked:r.chk,comps:mkCS(ct.compIds),serials:mkSer(),calibrationDates:mkCal(),
-    inspections:i<4?[{date:"2026-01-"+String(15+i).padStart(2,"0"),inspector:"System",results:mkCS(ct.compIds),serials:{},notes:"Initial inspection"}]:[],
+    lastChecked:r.chk,comps:mkCS(ct.compIds,ct.compQtys||{}),serials:mkSer(),calibrationDates:mkCal(),
+    inspections:i<4?[{date:"2026-01-"+String(15+i).padStart(2,"0"),inspector:"System",results:mkCS(ct.compIds,ct.compQtys||{}),serials:{},notes:"Initial inspection"}]:[],
     issuedTo:r.iss,
     issueHistory:r.iss?[{id:uid(),personId:r.iss,issuedDate:"2026-01-15",returnedDate:null,issuedBy:pers[0].id,checkoutSerials:{},returnSerials:{},checkoutLoc:r.l,returnLoc:null}]:[],
     maintenanceStatus:r.maint, // null | "repair" | "calibration"
@@ -341,7 +342,8 @@ function useAnalytics(kits,personnel,depts,comps,types,logs,reservations){
     /* Component reliability */
     const compStats=comps.map(c=>{
       let damaged=0,missing=0,total=0;
-      kits.forEach(k=>{k.inspections.forEach(ins=>{if(ins.results[c.id]){total++;if(ins.results[c.id]==="DAMAGED")damaged++;if(ins.results[c.id]==="MISSING")missing++}})});
+      kits.forEach(k=>{const ty=types.find(t=>t.id===k.typeId);const q=(ty?.compQtys||{})[c.id]||1;
+        k.inspections.forEach(ins=>{for(let i=0;i<q;i++){const key=q>1?c.id+"#"+i:c.id;if(ins.results[key]){total++;if(ins.results[key]==="DAMAGED")damaged++;if(ins.results[key]==="MISSING")missing++}}})});
       return{comp:c,damaged,missing,total,failRate:total?(damaged+missing)/total:0}});
     const problemComps=[...compStats].sort((a,b)=>b.failRate-a.failRate).filter(c=>c.failRate>0).slice(0,10);
     
@@ -367,9 +369,11 @@ function useAnalytics(kits,personnel,depts,comps,types,logs,reservations){
     /* Calibration due */
     const calibrationDue=[];
     kits.forEach(k=>{const ty=types.find(t=>t.id===k.typeId);if(!ty)return;
-      ty.compIds.forEach(cid=>{const c=comps.find(x=>x.id===cid);if(c&&c.calibrationRequired){
-        const lastCal=k.calibrationDates[cid];const due=lastCal?daysUntil(new Date(new Date(lastCal).getTime()+c.calibrationIntervalDays*day).toISOString()):0;
-        if(due!==null&&due<=30)calibrationDue.push({kit:k,comp:c,dueIn:due,lastCal})}})});
+      const ex=expandComps(ty.compIds,ty.compQtys||{});
+      ex.forEach(e=>{const c=comps.find(x=>x.id===e.compId);if(c&&c.calibrationRequired){
+        const lastCal=k.calibrationDates[e.key];const due=lastCal?daysUntil(new Date(new Date(lastCal).getTime()+c.calibrationIntervalDays*day).toISOString()):0;
+        const lbl=e.qty>1?c.label+" ("+(e.idx+1)+" of "+e.qty+")":c.label;
+        if(due!==null&&due<=30)calibrationDue.push({kit:k,comp:{...c,label:lbl},dueIn:due,lastCal})}})});
     
     /* Activity trends (last 7 days) */
     const last7=Array(7).fill(0).map((_,i)=>{const d=new Date(now-i*day).toISOString().slice(0,10);
@@ -390,12 +394,13 @@ function useAnalytics(kits,personnel,depts,comps,types,logs,reservations){
 
 /* ═══════════ SERIAL ENTRY FORM ═══════════ */
 function SerialEntryForm({kit,type,allC,existingSerials,mode,onDone,onCancel,settings}){
-  const cs=type.compIds.map(id=>allC.find(c=>c.id===id)).filter(Boolean);
+  const expanded=expandComps(type.compIds,type.compQtys||{});
+  const cs=expanded.map(e=>{const c=allC.find(x=>x.id===e.compId);return c?{...c,_key:e.key,_idx:e.idx,_qty:e.qty}:null}).filter(Boolean);
   const needSer=(mode==="checkout"&&settings.requireSerialsOnCheckout)||(mode==="return"&&settings.requireSerialsOnReturn)||(mode==="inspect"&&settings.requireSerialsOnInspect);
   const serComps=needSer?cs.filter(c=>c.ser):[];
-  const[serials,setSerials]=useState(()=>{const init={};serComps.forEach(c=>{init[c.id]=(existingSerials&&existingSerials[c.id])||""});return init});
+  const[serials,setSerials]=useState(()=>{const init={};serComps.forEach(c=>{init[c._key]=(existingSerials&&existingSerials[c._key])||""});return init});
   const[notes,setNotes]=useState("");
-  const filled=serComps.every(c=>serials[c.id]&&serials[c.id].trim());
+  const filled=serComps.every(c=>serials[c._key]&&serials[c._key].trim());
   const ml=mode==="checkout"?"Checkout":mode==="return"?"Return":"Inspection";
   const mc=mode==="checkout"?T.bl:mode==="return"?T.am:T.gn;
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -406,13 +411,13 @@ function SerialEntryForm({kit,type,allC,existingSerials,mode,onDone,onCancel,set
       <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:mc,fontFamily:T.m,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
         <div style={{width:5,height:5,borderRadius:"50%",background:mc}}/>Serialized Items ({serComps.length})</div>
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
-        {serComps.map(c=>{const ex=existingSerials&&existingSerials[c.id];return(
-          <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:8,background:"rgba(251,191,36,.02)",border:"1px solid rgba(251,191,36,.1)"}}>
+        {serComps.map(c=>{const ex=existingSerials&&existingSerials[c._key];const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return(
+          <div key={c._key} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:8,background:"rgba(251,191,36,.02)",border:"1px solid rgba(251,191,36,.1)"}}>
             <div style={{flex:1}}>
-              <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:2}}>{c.label}</div>
+              <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:2}}>{lbl}</div>
               {ex&&mode!=="checkout"&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginBottom:3}}>Last: {ex}</div>}
-              <In value={serials[c.id]} onChange={e=>setSerials(p=>({...p,[c.id]:e.target.value}))} placeholder="S/N" style={{fontSize:11,padding:"5px 9px"}}/></div>
-            <span style={{color:serials[c.id]?.trim()?T.gn:T.rd,fontSize:12,fontWeight:700}}>{serials[c.id]?.trim()?"✓":"--"}</span></div>)})}</div></div>}
+              <In value={serials[c._key]} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{fontSize:11,padding:"5px 9px"}}/></div>
+            <span style={{color:serials[c._key]?.trim()?T.gn:T.rd,fontSize:12,fontWeight:700}}>{serials[c._key]?.trim()?"✓":"--"}</span></div>)})}</div></div>}
     <Fl label="Notes"><Ta value={notes} onChange={e=>setNotes(e.target.value)} rows={2} placeholder="Any notes..."/></Fl>
     <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={onCancel}>Cancel</Bt>
       <Bt v={mode==="checkout"?"primary":mode==="return"?"warn":"success"} onClick={()=>onDone({serials,notes})} disabled={needSer&&!filled}>
@@ -420,19 +425,21 @@ function SerialEntryForm({kit,type,allC,existingSerials,mode,onDone,onCancel,set
 
 /* ═══════════ INSPECTION WORKFLOW ═══════════ */
 function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
-  const cs=type.compIds.map(id=>allC.find(c=>c.id===id)).filter(Boolean);const tot=cs.length;
-  const[step,setStep]=useState(0);const[res,setRes]=useState({...kit.comps});
+  const expanded=expandComps(type.compIds,type.compQtys||{});
+  const cs=expanded.map(e=>{const c=allC.find(x=>x.id===e.compId);return c?{...c,_key:e.key,_idx:e.idx,_qty:e.qty}:null}).filter(Boolean);const tot=cs.length;
+  const[step,setStep]=useState(0);const[res,setRes]=useState(()=>{const init={};cs.forEach(c=>{init[c._key]=kit.comps[c._key]||"GOOD"});return init});
   const needSer=settings.requireSerialsOnInspect;const serComps=cs.filter(c=>c.ser);
-  const[serials,setSerials]=useState(()=>{const init={};serComps.forEach(c=>{init[c.id]=(kit.serials&&kit.serials[c.id])||""});return init});
+  const[serials,setSerials]=useState(()=>{const init={};serComps.forEach(c=>{init[c._key]=(kit.serials&&kit.serials[c._key])||""});return init});
   const[notes,setNotes]=useState("");const[insp,setInsp]=useState("");const[photos,setPhotos]=useState([]);
   const isRev=step>=tot;const cur=cs[step];
-  const mark=s=>{setRes(p=>({...p,[cur.id]:s}));if(step<tot-1)setTimeout(()=>setStep(p=>p+1),150);else setTimeout(()=>setStep(tot),150)};
-  const counts=useMemo(()=>{const c={GOOD:0,MISSING:0,DAMAGED:0};cs.forEach(comp=>{c[res[comp.id]||"GOOD"]++});return c},[res,cs]);
-  const allSerFilled=!needSer||serComps.every(c=>serials[c.id]?.trim());
+  const mark=s=>{setRes(p=>({...p,[cur._key]:s}));if(step<tot-1)setTimeout(()=>setStep(p=>p+1),150);else setTimeout(()=>setStep(tot),150)};
+  const counts=useMemo(()=>{const c={GOOD:0,MISSING:0,DAMAGED:0};cs.forEach(comp=>{c[res[comp._key]||"GOOD"]++});return c},[res,cs]);
+  const allSerFilled=!needSer||serComps.every(c=>serials[c._key]?.trim());
   const handlePhoto=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();
     reader.onload=ev=>{setPhotos(p=>[...p,{id:uid(),data:ev.target.result,name:file.name,date:td()}])};reader.readAsDataURL(file)};
+  const instLabel=c=>c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;
   if(tot===0)return <div style={{padding:20,textAlign:"center",color:T.mu}}>No components.</div>;
-  if(isRev){const iss=cs.filter(c=>res[c.id]!=="GOOD");return(
+  if(isRev){const iss=cs.filter(c=>res[c._key]!=="GOOD");return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <div style={{display:"flex",gap:10,alignItems:"center"}}><Sw color={kit.color} size={30}/>
         <div><div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>Review - Kit {kit.color}</div>
@@ -442,17 +449,17 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
           <div style={{fontSize:20,fontWeight:700,color:s.fg,fontFamily:T.u}}>{v}</div>
           <div style={{fontSize:9,color:s.fg,fontFamily:T.m}}>{k}</div></div>)})}</div>
       {iss.length>0&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
-        {iss.map(c=>{const s=cSty[res[c.id]];return(
-          <div key={c.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 11px",borderRadius:6,background:s.bg,border:"1px solid "+s.bd}}>
+        {iss.map(c=>{const s=cSty[res[c._key]];return(
+          <div key={c._key} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 11px",borderRadius:6,background:s.bg,border:"1px solid "+s.bd}}>
             <span style={{color:s.fg,fontSize:11,fontWeight:700,width:20}}>{s.ic}</span>
-            <span style={{flex:1,fontSize:11,color:T.tx,fontFamily:T.m}}>{c.label}</span>
-            <Bg color={s.fg} bg="transparent">{res[c.id]}</Bg></div>)})}</div>}
+            <span style={{flex:1,fontSize:11,color:T.tx,fontFamily:T.m}}>{instLabel(c)}</span>
+            <Bg color={s.fg} bg="transparent">{res[c._key]}</Bg></div>)})}</div>}
       {needSer&&serComps.length>0&&<div>
         <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.am,fontFamily:T.m,marginBottom:8}}>Serials</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-          {serComps.map(c=><div key={c.id} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:6,background:"rgba(251,191,36,.02)",border:"1px solid rgba(251,191,36,.08)"}}>
-            <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1}}>{c.label}</span>
-            <In value={serials[c.id]} onChange={e=>setSerials(p=>({...p,[c.id]:e.target.value}))} placeholder="S/N" style={{width:100,fontSize:9,padding:"3px 6px"}}/></div>)}</div></div>}
+          {serComps.map(c=><div key={c._key} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:6,background:"rgba(251,191,36,.02)",border:"1px solid rgba(251,191,36,.08)"}}>
+            <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1}}>{instLabel(c)}</span>
+            <In value={serials[c._key]} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{width:100,fontSize:9,padding:"3px 6px"}}/></div>)}</div></div>}
       <div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:6}}>Photos ({photos.length})</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {photos.map(ph=><div key={ph.id} style={{width:60,height:60,borderRadius:6,background:`url(${ph.data}) center/cover`,border:"1px solid "+T.bd}}/>)}
@@ -470,11 +477,11 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
       <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{step+1}/{tot}</span></div>
     <div style={{textAlign:"center",padding:"10px 0"}}>
       <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.5,color:T.mu,fontFamily:T.m,marginBottom:4}}>{cur.cat}</div>
-      <div style={{fontSize:20,fontWeight:700,fontFamily:T.u,color:T.tx}}>{cur.label}</div>
+      <div style={{fontSize:20,fontWeight:700,fontFamily:T.u,color:T.tx}}>{instLabel(cur)}</div>
       {cur.ser&&needSer&&<div style={{marginTop:6}}><Bg color={T.am} bg="rgba(251,191,36,.08)">S/N Required</Bg></div>}</div>
     {cur.ser&&needSer&&<div style={{padding:"10px 16px",borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.12)"}}>
-      <In value={serials[cur.id]||""} onChange={e=>setSerials(p=>({...p,[cur.id]:e.target.value}))} placeholder={"S/N for "+cur.label}/></div>}
-    <div style={{display:"flex",gap:10,justifyContent:"center"}}>{Object.entries(cSty).map(([key,s])=>{const a=res[cur.id]===key;return(
+      <In value={serials[cur._key]||""} onChange={e=>setSerials(p=>({...p,[cur._key]:e.target.value}))} placeholder={"S/N for "+instLabel(cur)}/></div>}
+    <div style={{display:"flex",gap:10,justifyContent:"center"}}>{Object.entries(cSty).map(([key,s])=>{const a=res[cur._key]===key;return(
       <button key={key} onClick={()=>mark(key)} style={{all:"unset",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5,
         padding:"18px 24px",borderRadius:10,minWidth:90,background:a?s.bg:"rgba(255,255,255,.02)",border:a?"2px solid "+s.fg:"1px solid "+T.bd,transition:"all .15s"}}>
         <span style={{fontSize:20,fontWeight:700}}>{s.ic}</span>
@@ -1372,31 +1379,33 @@ function CompAdmin({comps,setComps,types}){
 
 /* ═══════════ KIT TYPES ═══════════ */
 function TypeAdmin({types,setTypes,comps,kits}){
-  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",desc:"",compIds:[],fields:[]});const[fd,setFd]=useState({key:"",label:"",type:"text"});
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",desc:"",compIds:[],compQtys:{},fields:[]});const[fd,setFd]=useState({key:"",label:"",type:"text"});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const grouped=useMemo(()=>{const g={};comps.forEach(c=>{(g[c.cat]=g[c.cat]||[]).push(c)});return g},[comps]);
-  const togC=cid=>{setFm(p=>({...p,compIds:p.compIds.includes(cid)?p.compIds.filter(x=>x!==cid):[...p.compIds,cid]}))};
+  const togC=cid=>{setFm(p=>{if(p.compIds.includes(cid)){const nq={...p.compQtys};delete nq[cid];return{...p,compIds:p.compIds.filter(x=>x!==cid),compQtys:nq}}return{...p,compIds:[...p.compIds,cid]}})};
+  const setCompQty=(cid,val)=>{const n=Math.max(1,parseInt(val)||1);setFm(p=>({...p,compQtys:n>1?{...p.compQtys,[cid]:n}:Object.fromEntries(Object.entries(p.compQtys).filter(([k])=>k!==cid))}))};
   const addField=()=>{if(!fd.label.trim())return;const k=fd.key.trim()||fd.label.trim().replace(/[^a-zA-Z0-9]/g,"").replace(/^./,ch=>ch.toLowerCase());
     setFm(p=>({...p,fields:[...p.fields,{key:k,label:fd.label.trim(),type:fd.type}]}));setFd({key:"",label:"",type:"text"})};
+  const totalExpanded=(ids,qtys)=>ids.reduce((s,id)=>s+(qtys[id]||1),0);
   const save=()=>{if(!fm.name.trim())return;
-    if(md==="add"){setTypes(p=>[...p,{id:uid(),name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,fields:fm.fields}])}
-    else{setTypes(p=>p.map(t=>t.id===md?{...t,name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,fields:fm.fields}:t))}setMd(null)};
+    if(md==="add"){setTypes(p=>[...p,{id:uid(),name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields}])}
+    else{setTypes(p=>p.map(t=>t.id===md?{...t,name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields}:t))}setMd(null)};
   const confirmDelete=(type)=>{const n=kits?.filter(k=>k.typeId===type.id).length||0;
     if(n>0){alert("Cannot delete: "+n+" kit(s) use this type");return}
     setDeleteConfirm(type)};
   const doDelete=()=>{if(deleteConfirm)setTypes(p=>p.filter(x=>x.id!==deleteConfirm.id))};
   return(<div>
-    <SH title="Kit Types" sub={types.length+" templates"} action={<Bt v="primary" onClick={()=>{setFm({name:"",desc:"",compIds:[],fields:[]});setMd("add")}}>+ Add</Bt>}/>
+    <SH title="Kit Types" sub={types.length+" templates"} action={<Bt v="primary" onClick={()=>{setFm({name:"",desc:"",compIds:[],compQtys:{},fields:[]});setMd("add")}}>+ Add</Bt>}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
-      {types.map(t=>{const sc=t.compIds.filter(id=>comps.find(c=>c.id===id&&c.ser)).length;const inUse=kits?.filter(k=>k.typeId===t.id).length||0;return(
+      {types.map(t=>{const sc=t.compIds.filter(id=>comps.find(c=>c.id===id&&c.ser)).length;const inUse=kits?.filter(k=>k.typeId===t.id).length||0;const tc=totalExpanded(t.compIds,t.compQtys||{});return(
         <div key={t.id} style={{padding:18,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
             <div><div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>{t.name}</div>
               <div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:2}}>{t.desc||"No description"}</div></div>
-            <div style={{display:"flex",gap:4}}><Bt v="ghost" sm onClick={()=>{setFm({name:t.name,desc:t.desc,compIds:[...t.compIds],fields:t.fields.map(f=>({...f}))});setMd(t.id)}}>Edit</Bt>
+            <div style={{display:"flex",gap:4}}><Bt v="ghost" sm onClick={()=>{setFm({name:t.name,desc:t.desc,compIds:[...t.compIds],compQtys:{...(t.compQtys||{})},fields:t.fields.map(f=>({...f}))});setMd(t.id)}}>Edit</Bt>
               <Bt v="ghost" sm onClick={()=>confirmDelete(t)} style={{color:T.rd}} disabled={inUse>0}>Del</Bt></div></div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            <Bg color={T.ind} bg="rgba(129,140,248,.1)">{t.compIds.length} comps</Bg>
+            <Bg color={T.ind} bg="rgba(129,140,248,.1)">{tc} items ({t.compIds.length} types)</Bg>
             {sc>0&&<Bg color={T.am} bg="rgba(251,191,36,.08)">{sc} serialized</Bg>}
             <Bg color={T.tl} bg="rgba(45,212,191,.1)">{t.fields.length} fields</Bg>
             {inUse>0&&<Bg color={T.pk} bg="rgba(244,114,182,.08)">{inUse} kits</Bg>}</div></div>)})}</div>
@@ -1405,14 +1414,20 @@ function TypeAdmin({types,setTypes,comps,kits}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fl label="Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))}/></Fl>
           <Fl label="Description"><In value={fm.desc} onChange={e=>setFm(p=>({...p,desc:e.target.value}))}/></Fl></div>
-        <div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:8}}>Components ({fm.compIds.length})</div>
+        <div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:8}}>Components ({totalExpanded(fm.compIds,fm.compQtys)} items, {fm.compIds.length} types)</div>
           {Object.entries(grouped).map(([cat,items])=><div key={cat} style={{marginBottom:10}}>
             <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginBottom:4,textTransform:"uppercase"}}>{cat}</div>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-              {items.map(c=>{const s=fm.compIds.includes(c.id);return(
-                <button key={c.id} onClick={()=>togC(c.id)} style={{all:"unset",cursor:"pointer",padding:"4px 10px",borderRadius:5,fontSize:10,fontFamily:T.m,
-                  background:s?"rgba(129,140,248,.15)":"rgba(255,255,255,.02)",border:s?"1px solid rgba(129,140,248,.35)":"1px solid "+T.bd,color:s?T.ind:T.mu}}>
-                  {s?"✓ ":""}{c.label}</button>)})}</div></div>)}</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+              {items.map(c=>{const s=fm.compIds.includes(c.id);const q=fm.compQtys[c.id]||1;return(
+                <div key={c.id} style={{display:"flex",alignItems:"center",gap:2}}>
+                  <button onClick={()=>togC(c.id)} style={{all:"unset",cursor:"pointer",padding:"4px 10px",borderRadius:s&&q>1?"5px 0 0 5px":5,fontSize:10,fontFamily:T.m,
+                    background:s?"rgba(129,140,248,.15)":"rgba(255,255,255,.02)",border:s?"1px solid rgba(129,140,248,.35)":"1px solid "+T.bd,color:s?T.ind:T.mu}}>
+                    {s?"✓ ":""}{c.label}{s&&q>1?" x"+q:""}</button>
+                  {s&&<div style={{display:"flex",alignItems:"center",background:"rgba(129,140,248,.08)",border:"1px solid rgba(129,140,248,.35)",borderLeft:"none",borderRadius:"0 5px 5px 0",overflow:"hidden"}}>
+                    <button onClick={()=>setCompQty(c.id,q-1)} style={{all:"unset",cursor:"pointer",padding:"4px 6px",fontSize:10,color:q>1?T.ind:T.dm,fontFamily:T.m}}>-</button>
+                    <span style={{fontSize:10,fontFamily:T.m,color:T.ind,minWidth:14,textAlign:"center"}}>{q}</span>
+                    <button onClick={()=>setCompQty(c.id,q+1)} style={{all:"unset",cursor:"pointer",padding:"4px 6px",fontSize:10,color:T.ind,fontFamily:T.m}}>+</button></div>}
+                </div>)})}</div></div>)}</div>
         <div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:8}}>Custom Fields ({fm.fields.length})</div>
           {fm.fields.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:6,background:T.card,border:"1px solid "+T.bd,marginBottom:4}}>
             <span style={{fontSize:11,color:T.tx,fontFamily:T.m,flex:1}}>{f.label}</span><Bg>{f.type}</Bg>
@@ -1489,19 +1504,19 @@ function DeptAdmin({depts,setDepts,personnel,kits}){
 
 /* ═══════════ PERSONNEL ═══════════ */
 function PersonnelAdmin({personnel,setPersonnel,kits,depts}){
-  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",title:"",role:"user",deptId:""});
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",title:"",role:"user",deptId:"",pin:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
-  
+
   /* First super admin is protected and cannot be deleted */
   const primarySuper=personnel.find(p=>p.role==="super");
   const isPrimarySuper=(id)=>primarySuper?.id===id;
-  
+
   const save=()=>{if(!fm.name.trim())return;
-    if(md==="add"){setPersonnel(p=>[...p,{id:uid(),name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null}])}
+    if(md==="add"){setPersonnel(p=>[...p,{id:uid(),name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||"1234"}])}
     else{
       /* Prevent demoting the primary super admin */
       if(isPrimarySuper(md)&&fm.role!=="super"){alert("Cannot change role of primary administrator");return}
-      setPersonnel(p=>p.map(x=>x.id===md?{...x,name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null}:x))}
+      setPersonnel(p=>p.map(x=>x.id===md?{...x,name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||x.pin}:x))}
     setMd(null)};
   
   const confirmDelete=(person)=>{
@@ -1516,7 +1531,7 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts}){
   const grouped=useMemo(()=>{const g={"Unassigned":[]};depts.forEach(d=>{g[d.name]=[]});
     personnel.forEach(p=>{const d=p.deptId?depts.find(x=>x.id===p.deptId):null;(g[d?.name||"Unassigned"]=g[d?.name||"Unassigned"]||[]).push(p)});return g},[personnel,depts]);
   return(<div>
-    <SH title="Personnel" sub={personnel.length+" people"} action={<Bt v="primary" onClick={()=>{setFm({name:"",title:"",role:"user",deptId:""});setMd("add")}}>+ Add</Bt>}/>
+    <SH title="Personnel" sub={personnel.length+" people"} action={<Bt v="primary" onClick={()=>{setFm({name:"",title:"",role:"user",deptId:"",pin:""});setMd("add")}}>+ Add</Bt>}/>
     {Object.entries(grouped).filter(([,members])=>members.length>0).map(([deptName,members])=>{const dept=depts.find(d=>d.name===deptName);return(<div key={deptName} style={{marginBottom:20}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
         {dept&&<div style={{width:4,height:16,borderRadius:2,background:dept.color}}/>}
@@ -1532,7 +1547,7 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts}){
               <div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}}>
                 <Bg color={rc[p.role]} bg={(rc[p.role])+"18"}>{p.role}</Bg>
                 {ik.length>0&&<Bg color={T.pk} bg="rgba(244,114,182,.08)">{ik.length} kit{ik.length>1?"s":""}</Bg>}</div></div>
-            <Bt v="ghost" sm onClick={()=>{setFm({name:p.name,title:p.title||"",role:p.role,deptId:p.deptId||""});setMd(p.id)}}>Edit</Bt>
+            <Bt v="ghost" sm onClick={()=>{setFm({name:p.name,title:p.title||"",role:p.role,deptId:p.deptId||"",pin:p.pin||""});setMd(p.id)}}>Edit</Bt>
             <Bt v="ghost" sm onClick={()=>confirmDelete(p)} style={{color:T.rd}} disabled={ik.length>0||isProtected}
               title={isProtected?"Primary admin cannot be deleted":ik.length>0?"Has kits checked out":""}>Del</Bt></div>)})}</div></div>)})}
     
@@ -1540,10 +1555,11 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts}){
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))}/></Fl>
         <Fl label="Title"><In value={fm.title} onChange={e=>setFm(p=>({...p,title:e.target.value}))} placeholder="e.g. Project Manager, Engineer"/></Fl>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
           <Fl label="Role"><Sl options={[{v:"user",l:"User"},{v:"admin",l:"Admin"},{v:"super",l:"Super Admin"}]} value={fm.role} onChange={e=>setFm(p=>({...p,role:e.target.value}))}
             disabled={isPrimarySuper(md)}/></Fl>
-          <Fl label="Department"><Sl options={[{v:"",l:"-- None --"},...depts.map(d=>({v:d.id,l:d.name}))] } value={fm.deptId} onChange={e=>setFm(p=>({...p,deptId:e.target.value}))}/></Fl></div>
+          <Fl label="Department"><Sl options={[{v:"",l:"-- None --"},...depts.map(d=>({v:d.id,l:d.name}))] } value={fm.deptId} onChange={e=>setFm(p=>({...p,deptId:e.target.value}))}/></Fl>
+          <Fl label="Login PIN"><In type="password" value={fm.pin} onChange={e=>setFm(p=>({...p,pin:e.target.value}))} placeholder={md==="add"?"1234":"unchanged"} maxLength={6}/></Fl></div>
         {isPrimarySuper(md)&&<div style={{padding:10,borderRadius:6,background:"rgba(239,68,68,.05)",border:"1px solid rgba(239,68,68,.1)"}}>
           <div style={{fontSize:10,color:T.rd,fontFamily:T.m}}>This is the primary administrator. Role cannot be changed.</div></div>}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add":"Save"}</Bt></div></div></ModalWrap>
@@ -1809,9 +1825,9 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
   
   const openAdd=()=>{const ft=types[0];setKf({typeId:ft?.id||"",color:"BLACK",locId:locs[0]?.id||"",fields:{},deptId:""});setMd("addK")};
   const saveK=()=>{if(!kf)return;const ty=types.find(t=>t.id===kf.typeId);
-    if(md==="addK"){const ns={};const nc={};if(ty){ty.compIds.forEach(id=>{ns[id]="";nc[id]=null})}
+    if(md==="addK"){const ns={};const nc={};if(ty){const ex=expandComps(ty.compIds,ty.compQtys||{});ex.forEach(e=>{ns[e.key]="";nc[e.key]=null})}
       setKits(p=>[...p,{id:uid(),typeId:kf.typeId,color:kf.color,locId:kf.locId,deptId:kf.deptId||null,fields:{...kf.fields},lastChecked:null,
-        comps:ty?mkCS(ty.compIds):{},serials:ns,calibrationDates:nc,inspections:[],issuedTo:null,issueHistory:[],maintenanceStatus:null,maintenanceHistory:[],photos:[]}]);
+        comps:ty?mkCS(ty.compIds,ty.compQtys||{}):{},serials:ns,calibrationDates:nc,inspections:[],issuedTo:null,issueHistory:[],maintenanceStatus:null,maintenanceHistory:[],photos:[]}]);
       addLog("kit_create","kit",null,curUserId,now(),{kitColor:kf.color})}
     else{setKits(p=>p.map(k=>k.id===md?{...k,typeId:kf.typeId,color:kf.color,locId:kf.locId,deptId:kf.deptId||null,fields:{...kf.fields}}:k))}
     setMd(null);setKf(null)};
@@ -1866,7 +1882,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
     <div style={{display:"grid",gridTemplateColumns:sel?"1fr 360px":"1fr",gap:0}}>
       <div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
         {filt.map(kit=>{const st=stMeta(kit.lastChecked);const ty=types.find(t=>t.id===kit.typeId);const lo=locs.find(l=>l.id===kit.locId);
-          const cIds=ty?ty.compIds:[];const iss=cIds.filter(cid=>kit.comps[cid]&&kit.comps[cid]!=="GOOD");const isSel=selId===kit.id;
+          const cEx=ty?expandComps(ty.compIds,ty.compQtys||{}):[];const iss=cEx.filter(e=>kit.comps[e.key]&&kit.comps[e.key]!=="GOOD");const isSel=selId===kit.id;
           const person=kit.issuedTo?personnel.find(p=>p.id===kit.issuedTo):null;const dept=kit.deptId?depts.find(d=>d.id===kit.deptId):null;const isFav=favorites.includes(kit.id);
           return(<button key={kit.id} onClick={()=>setSelId(isSel?null:kit.id)} style={{all:"unset",cursor:"pointer",display:"flex",flexDirection:"column",gap:8,
             padding:12,borderRadius:8,background:isSel?"rgba(255,255,255,.06)":T.card,border:"1px solid "+(isSel?T.bdH:T.bd),transition:"all .12s"}}>
@@ -1881,10 +1897,12 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
               {ty&&<Bg color={T.ind} bg="rgba(129,140,248,.08)">{ty.name}</Bg>}
               {kit.maintenanceStatus?<Bg color={T.am} bg="rgba(251,191,36,.08)">Maint</Bg>:person?<Bg color={T.pk} bg="rgba(244,114,182,.06)">{person.title}</Bg>:<Bg color={T.gn} bg="rgba(34,197,94,.05)">Avail</Bg>}
               {dept&&<DeptBg dept={dept}/>}</div>
-            {cIds.length>0&&<div style={{display:"flex",gap:1}}>{cIds.map(cid=>{const s=cSty[kit.comps[cid]||"GOOD"];return <div key={cid} style={{flex:1,height:2.5,borderRadius:1,background:s.fg,opacity:.55}}/>})}</div>}</button>)})}</div>
+            {cEx.length>0&&<div style={{display:"flex",gap:1}}>{cEx.map(e=>{const s=cSty[kit.comps[e.key]||"GOOD"];return <div key={e.key} style={{flex:1,height:2.5,borderRadius:1,background:s.fg,opacity:.55}}/>})}</div>}</button>)})}</div>
         {!filt.length&&<div style={{padding:40,textAlign:"center",color:T.dm,fontFamily:T.m}}>No kits</div>}</div>
       {sel&&(()=>{const ty=types.find(t=>t.id===sel.typeId);const lo=locs.find(l=>l.id===sel.locId);const st=stMeta(sel.lastChecked);
-        const cs=(ty?ty.compIds:[]).map(id=>allC.find(c=>c.id===id)).filter(Boolean);const person=sel.issuedTo?personnel.find(p=>p.id===sel.issuedTo):null;
+        const cEx=ty?expandComps(ty.compIds,ty.compQtys||{}):[];
+        const cs=cEx.map(e=>{const c=allC.find(x=>x.id===e.compId);return c?{...c,_key:e.key,_idx:e.idx,_qty:e.qty}:null}).filter(Boolean);
+        const person=sel.issuedTo?personnel.find(p=>p.id===sel.issuedTo):null;
         const serComps=cs.filter(c=>c.ser);const dept=sel.deptId?depts.find(d=>d.id===sel.deptId):null;const isFav=favorites.includes(sel.id);
         return(<div style={{borderLeft:"1px solid "+T.bd,padding:"18px 20px",overflowY:"auto",background:"rgba(255,255,255,.008)"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
@@ -1907,12 +1925,12 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
               <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.ind,fontFamily:T.m,marginBottom:2}}>{f.label}</div>
               <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.m}}>{f.type==="toggle"?(sel.fields[f.key]?"Yes":"No"):(sel.fields[f.key]||"--")}</div></div>)}</div>}
           {serComps.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.2,color:T.am,fontFamily:T.m,marginBottom:6}}>Serials</div>
-            {serComps.map(c=><div key={c.id} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",borderRadius:4,background:"rgba(251,191,36,.02)",marginBottom:2}}>
-              <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1}}>{c.label}</span><span style={{fontSize:10,color:sel.serials[c.id]?T.am:T.dm,fontFamily:T.m,fontWeight:600}}>{sel.serials[c.id]||"--"}</span></div>)}</div>}
+            {serComps.map(c=>{const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return <div key={c._key} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",borderRadius:4,background:"rgba(251,191,36,.02)",marginBottom:2}}>
+              <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1}}>{lbl}</span><span style={{fontSize:10,color:sel.serials[c._key]?T.am:T.dm,fontFamily:T.m,fontWeight:600}}>{sel.serials[c._key]||"--"}</span></div>})}</div>}
           {cs.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:6}}>Components</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:2}}>{cs.map(c=>{const s=cSty[sel.comps[c.id]||"GOOD"];return(
-              <div key={c.id} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 7px",borderRadius:4,background:"rgba(255,255,255,.012)"}}>
-                <span style={{color:s.fg,fontSize:9,fontWeight:700,width:16}}>{s.ic}</span><span style={{fontSize:8,color:(sel.comps[c.id]||"GOOD")==="GOOD"?T.mu:T.tx,fontFamily:T.m}}>{c.label}</span></div>)})}</div></div>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:2}}>{cs.map(c=>{const s=cSty[sel.comps[c._key]||"GOOD"];const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return(
+              <div key={c._key} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 7px",borderRadius:4,background:"rgba(255,255,255,.012)"}}>
+                <span style={{color:s.fg,fontSize:9,fontWeight:700,width:16}}>{s.ic}</span><span style={{fontSize:8,color:(sel.comps[c._key]||"GOOD")==="GOOD"?T.mu:T.tx,fontFamily:T.m}}>{lbl}</span></div>)})}</div></div>}
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {canInspect&&!sel.maintenanceStatus&&<Bt v="success" sm onClick={()=>setMd("insp:"+sel.id)}>Inspect</Bt>}
             {(isAdmin||isSuper)&&<Bt v="primary" sm onClick={()=>{setKf({typeId:sel.typeId,color:sel.color,locId:sel.locId,fields:{...sel.fields},deptId:sel.deptId||""});setMd(sel.id)}}>Edit</Bt>}
@@ -2080,12 +2098,47 @@ function NavSection({section,pg,setPg,collapsed,onToggle,canAccess,getBadge}){
             background:n.id==="approvals"?"rgba(251,146,60,.12)":"rgba(239,68,68,.12)",padding:"1px 5px",borderRadius:8,fontFamily:T.m}}>{badge}</span>}
         </button>)})}</div>}</div>);}
 
+/* ═══════════ LOGIN SCREEN ═══════════ */
+function LoginScreen({personnel,onLogin}){
+  const[selUser,setSelUser]=useState("");const[pin,setPin]=useState("");const[error,setError]=useState("");
+  const attempt=()=>{const person=personnel.find(p=>p.id===selUser);
+    if(!person){setError("Select a user");return}
+    if(person.pin&&person.pin!==pin){setError("Incorrect PIN");return}
+    if(!person.pin&&pin){setError("Incorrect PIN");return}
+    onLogin(person.id)};
+  return(
+    <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        *{box-sizing:border-box}::selection{background:rgba(96,165,250,.3)}
+        option{background:#16171b;color:#e4e4e7}
+      `}</style>
+      <div style={{width:380,padding:36,borderRadius:16,background:T.panel,border:"1px solid "+T.bd,animation:"mdIn .25s ease-out"}}>
+        <style>{`@keyframes mdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{width:56,height:56,borderRadius:28,background:"rgba(96,165,250,.1)",border:"1px solid rgba(96,165,250,.25)",
+            display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:22,fontWeight:800,color:T.bl,fontFamily:T.u}}>CG</div>
+          <div style={{fontSize:24,fontWeight:800,color:T.tx,letterSpacing:-.5}}>COCO Gear</div>
+          <div style={{fontSize:11,color:T.mu,fontFamily:T.m,marginTop:4}}>Equipment Management System</div></div>
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          <Fl label="User">
+            <Sl options={[{v:"",l:"-- Select User --"},...personnel.map(p=>({v:p.id,l:p.name+" ["+p.role+"]"}))]}
+              value={selUser} onChange={e=>{setSelUser(e.target.value);setError("")}}/></Fl>
+          <Fl label="PIN">
+            <In type="password" value={pin} onChange={e=>{setPin(e.target.value);setError("")}}
+              placeholder="Enter PIN" onKeyDown={e=>{if(e.key==="Enter")attempt()}} maxLength={6}/></Fl>
+          {error&&<div style={{fontSize:11,color:T.rd,fontFamily:T.m,textAlign:"center",padding:"8px 12px",borderRadius:6,
+            background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)"}}>{error}</div>}
+          <Bt v="primary" onClick={attempt} style={{justifyContent:"center",padding:"11px 0",fontSize:13}}>Sign In</Bt>
+          <div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>Default PIN: 1234</div>
+        </div></div></div>);}
+
 export default function App(){
   const[pg,setPg]=useState("dashboard");
   const[comps,setComps]=useState(IC);const[types,setTypes]=useState(IKT);const[locs,setLocs]=useState(IL);
   const[depts,setDepts]=useState(IDEPT);const[personnel,setPersonnel]=useState(IP);
   const[kits,setKits]=useState(()=>buildKits(IKT,IL,IP,IDEPT));
-  const[curUser,setCurUser]=useState(IP[0].id);const[settings,setSettings]=useState(DEF_SETTINGS);
+  const[curUser,setCurUser]=useState(IP[0].id);const[isLoggedIn,setIsLoggedIn]=useState(false);const[settings,setSettings]=useState(DEF_SETTINGS);
   const[requests,setRequests]=useState([]);const[logs,setLogs]=useState(()=>buildHistoricalData(buildKits(IKT,IL,IP,IDEPT),IP));
   const[reservations,setReservations]=useState(()=>buildReservations(buildKits(IKT,IL,IP,IDEPT),IP));
   const[consumables,setConsumables]=useState(ICONS);const[assets,setAssets]=useState(IASSETS);const[favorites,setFavorites]=useState([]);
@@ -2138,6 +2191,8 @@ export default function App(){
     else if(result.type==="person"){setPg("personnel")}
     setSearchMd(false)};
 
+  if(!isLoggedIn)return <LoginScreen personnel={personnel} onLogin={id=>{setCurUser(id);setIsLoggedIn(true)}}/>;
+
   return(
     <div style={{display:"flex",minHeight:"100vh",background:T.bg,color:T.tx,fontFamily:T.u}}>
       <style>{`
@@ -2181,10 +2236,11 @@ export default function App(){
           <span style={{fontSize:10,color:T.dm}}>⚙</span></button>
         
         <div style={{padding:"10px 12px",borderTop:"1px solid "+T.bd}}>
-          <div style={{fontSize:7,textTransform:"uppercase",letterSpacing:1,color:T.dm,fontFamily:T.m,marginBottom:4}}>Switch User (Demo)</div>
-          <select value={curUser} onChange={e=>setCurUser(e.target.value)} style={{width:"100%",padding:"5px 7px",borderRadius:5,
-            background:"rgba(255,255,255,.04)",border:"1px solid "+T.bd,color:T.tx,fontSize:9,fontFamily:T.m,outline:"none",cursor:"pointer"}}>
-            {personnel.map(p=><option key={p.id} value={p.id}>{p.name+" ["+p.role+"]"}</option>)}</select></div></nav>
+          <button onClick={()=>{setIsLoggedIn(false);setPg("dashboard")}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+            width:"100%",padding:"7px 0",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:T.m,color:T.rd,
+            background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)",transition:"all .15s"}}
+            onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,.12)"}
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(239,68,68,.06)"}>Sign Out</button></div></nav>
       
       <main style={{flex:1,padding:"20px 26px",overflowY:"auto",overflowX:"hidden"}}>
         {pg==="dashboard"&&<Dash kits={kits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts} requests={requests}
