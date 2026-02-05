@@ -5,10 +5,10 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('coco_user');
+    const saved = localStorage.getItem('slate_user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [token, setToken] = useState(() => localStorage.getItem('coco_token'));
+  const [token, setToken] = useState(() => localStorage.getItem('slate_token'));
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -30,8 +30,8 @@ export function AuthProvider({ children }) {
     setError('');
     try {
       const { token: newToken, user: userData } = await authApi.login(userId, pin);
-      localStorage.setItem('coco_token', newToken);
-      localStorage.setItem('coco_user', JSON.stringify(userData));
+      localStorage.setItem('slate_token', newToken);
+      localStorage.setItem('slate_user', JSON.stringify(userData));
       setToken(newToken);
       setUser(userData);
       return userData;
@@ -44,8 +44,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('coco_token');
-    localStorage.removeItem('coco_user');
+    localStorage.removeItem('slate_token');
+    localStorage.removeItem('slate_user');
     setToken(null);
     setUser(null);
   }, []);
@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
     try {
       const userData = await authApi.me();
       setUser(userData);
-      localStorage.setItem('coco_user', JSON.stringify(userData));
+      localStorage.setItem('slate_user', JSON.stringify(userData));
     } catch {
       logout();
     }

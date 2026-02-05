@@ -1,7 +1,7 @@
 const BASE = '/api';
 
 function getToken() {
-  return localStorage.getItem('coco_token');
+  return localStorage.getItem('slate_token');
 }
 
 async function request(path, options = {}) {
@@ -14,8 +14,8 @@ async function request(path, options = {}) {
   }
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
   if (res.status === 401) {
-    localStorage.removeItem('coco_token');
-    localStorage.removeItem('coco_user');
+    localStorage.removeItem('slate_token');
+    localStorage.removeItem('slate_user');
     window.location.reload();
     throw new Error('Session expired');
   }
