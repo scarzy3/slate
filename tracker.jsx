@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 /* ═══════════════════════════════════════════════════════════════════
    COCO GEAR v6 — Full-featured asset management system
@@ -44,6 +44,106 @@ const cSty={GOOD:{bg:"rgba(34,197,94,.1)",bd:"rgba(34,197,94,.25)",fg:T.gn,ic:"O
 const expandComps=(compIds,compQtys={})=>{const r=[];compIds.forEach(id=>{const q=compQtys[id]||1;for(let i=0;i<q;i++)r.push({compId:id,idx:i,qty:q,key:q>1?id+"#"+i:id})});return r};
 const mkCS=(ids,qtys={})=>Object.fromEntries(expandComps(ids,qtys).map(e=>[e.key,"GOOD"]));
 const fmtDate=d=>d?new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"2-digit"}):"--";
+
+/* ═══════════ QR CODE GENERATOR (inline, no deps) ═══════════ */
+const QR=(()=>{
+  /* Galois Field GF(2^8) with primitive polynomial 0x11d */
+  const EX=new Array(256),LG=new Array(256);let xv=1;
+  for(let i=0;i<256;i++){EX[i]=xv;LG[xv]=i;xv=(xv<<1)^(xv&128?0x11d:0)}
+  const gm=(a,b)=>a&&b?EX[(LG[a]+LG[b])%255]:0;
+  /* Reed-Solomon generator polynomial */
+  const rsG=n=>{let g=[1];for(let i=0;i<n;i++){const p=Array(g.length+1).fill(0);
+    for(let j=0;j<g.length;j++){p[j+1]^=g[j];p[j]^=gm(g[j],EX[i])}g=p}return g};
+  /* Reed-Solomon encode: returns EC codewords */
+  const rsE=(d,n)=>{const g=rsG(n),r=Array(d.length+n).fill(0);for(let i=0;i<d.length;i++)r[i]=d[i];
+    for(let i=0;i<d.length;i++){const c=r[i];if(c)for(let j=0;j<g.length;j++)r[i+j]^=gm(g[j],c)}return r.slice(d.length)};
+  /* Version params (EC Level M): [totalCW, ecPerBlock, g1Blocks, g1Data, g2Blocks, g2Data] */
+  const VI=[null,[26,10,1,16,0,0],[44,16,1,28,0,0],[70,26,1,44,0,0],[100,18,2,32,0,0],
+    [134,24,2,43,0,0],[172,16,4,27,0,0],[196,18,4,31,0,0],[242,22,2,38,2,39],[292,22,3,36,2,37],[346,26,4,43,1,44]];
+  const DCAP=[0,14,26,42,62,84,106,122,152,180,213];
+  const ALN=[null,[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50]];
+  /* 8 mask functions */
+  const MF=[(r,c)=>(r+c)%2===0,r=>r%2===0,(_,c)=>c%3===0,(r,c)=>(r+c)%3===0,
+    (r,c)=>(~~(r/2)+~~(c/3))%2===0,(r,c)=>(r*c)%2+(r*c)%3===0,
+    (r,c)=>((r*c)%2+(r*c)%3)%2===0,(r,c)=>((r+c)%2+(r*c)%3)%2===0];
+  /* BCH format info for EC M */
+  const fmtBits=mk=>{let d=mk,b=d<<10;for(let i=4;i>=0;i--)if(b&(1<<(i+10)))b^=(0x537<<i);return((d<<10)|b)^0x5412};
+  /* Penalty score for mask selection */
+  const penalty=m=>{const n=m.length;let p=0;
+    for(let i=0;i<n;i++){let c=1;for(let j=1;j<n;j++){if(m[i][j]===m[i][j-1])c++;else{if(c>=5)p+=c-2;c=1}}if(c>=5)p+=c-2}
+    for(let j=0;j<n;j++){let c=1;for(let i=1;i<n;i++){if(m[i][j]===m[i-1][j])c++;else{if(c>=5)p+=c-2;c=1}}if(c>=5)p+=c-2}
+    for(let i=0;i<n-1;i++)for(let j=0;j<n-1;j++){const v=m[i][j];if(v===m[i][j+1]&&v===m[i+1][j]&&v===m[i+1][j+1])p+=3}
+    let dk=0;for(let i=0;i<n;i++)for(let j=0;j<n;j++)dk+=m[i][j];p+=~~(Math.abs(dk*100/(n*n)-50)/5)*10;return p};
+  function generate(text){
+    const bytes=[...new TextEncoder().encode(text)];
+    let ver=0;for(let i=1;i<=10;i++)if(bytes.length<=DCAP[i]){ver=i;break}
+    if(!ver)return null;
+    const nf=VI[ver],sz=ver*4+17,totalData=nf[2]*nf[3]+nf[4]*nf[5];
+    /* Encode data (byte mode) */
+    const bits=[];const ab=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>i)&1)};
+    ab(4,4);ab(bytes.length,ver<=9?8:16);bytes.forEach(b=>ab(b,8));
+    for(let i=0;i<4&&bits.length<totalData*8;i++)bits.push(0);
+    while(bits.length%8)bits.push(0);
+    let pd=0xEC;while(bits.length<totalData*8){ab(pd,8);pd=pd===0xEC?0x11:0xEC}
+    const cw=[];for(let i=0;i<totalData;i++){let b=0;for(let j=0;j<8;j++)b=(b<<1)|bits[i*8+j];cw.push(b)}
+    /* Split into blocks & compute EC */
+    const bk=[];let off=0;
+    for(let g=0;g<2;g++){const nb=g?nf[4]:nf[2],dl=g?nf[5]:nf[3];
+      for(let i=0;i<nb;i++){const d=cw.slice(off,off+dl);bk.push({d,e:rsE(d,nf[1])});off+=dl}}
+    /* Interleave data + EC */
+    const fin=[];const mxD=Math.max(...bk.map(b=>b.d.length));
+    for(let i=0;i<mxD;i++)for(const b of bk)if(i<b.d.length)fin.push(b.d[i]);
+    for(let i=0;i<nf[1];i++)for(const b of bk)fin.push(b.e[i]);
+    /* Build matrix */
+    const mt=Array.from({length:sz},()=>Array(sz).fill(0)),rv=Array.from({length:sz},()=>Array(sz).fill(0));
+    /* Finder patterns */
+    const fp=(tr,tc)=>{for(let dr=-1;dr<=7;dr++)for(let dc=-1;dc<=7;dc++){
+      const nr=tr+dr,nc=tc+dc;if(nr<0||nr>=sz||nc<0||nc>=sz)continue;
+      const outer=dr===-1||dr===7||dc===-1||dc===7;
+      mt[nr][nc]=(!outer&&(dr===0||dr===6||dc===0||dc===6||(dr>=2&&dr<=4&&dc>=2&&dc<=4)))?1:0;rv[nr][nc]=1}};
+    fp(0,0);fp(0,sz-7);fp(sz-7,0);
+    /* Timing patterns */
+    for(let i=8;i<sz-8;i++){mt[6][i]=mt[i][6]=(i&1)?0:1;rv[6][i]=rv[i][6]=1}
+    /* Alignment patterns */
+    const al=ALN[ver];for(const ar of al)for(const ac of al){if(rv[ar][ac])continue;
+      for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){
+        mt[ar+dr][ac+dc]=(Math.abs(dr)===2||Math.abs(dc)===2||(!dr&&!dc))?1:0;rv[ar+dr][ac+dc]=1}}
+    /* Dark module + reserve format areas */
+    mt[sz-8][8]=1;rv[sz-8][8]=1;
+    for(let i=0;i<9;i++){rv[8][i]=1;rv[i][8]=1}
+    for(let i=0;i<8;i++){rv[8][sz-1-i]=1;rv[sz-1-i][8]=1}
+    /* Place data bits (zigzag) */
+    const db=[];for(const byte of fin)for(let i=7;i>=0;i--)db.push((byte>>i)&1);
+    let bi=0,up=true;
+    for(let col=sz-1;col>=0;col-=2){if(col===6)col=5;
+      const rows=up?Array.from({length:sz},(_,i)=>sz-1-i):Array.from({length:sz},(_,i)=>i);
+      for(const row of rows)for(let dc=0;dc<=1;dc++){const c=col-dc;if(c<0||rv[row][c])continue;mt[row][c]=bi<db.length?db[bi++]:0}
+      up=!up}
+    /* Select best mask */
+    let bm=0,bp=Infinity;
+    for(let mi=0;mi<8;mi++){const mm=mt.map(rw=>[...rw]);
+      for(let rr=0;rr<sz;rr++)for(let cc=0;cc<sz;cc++)if(!rv[rr][cc]&&MF[mi](rr,cc))mm[rr][cc]^=1;
+      const p=penalty(mm);if(p<bp){bp=p;bm=mi}}
+    /* Apply best mask */
+    for(let rr=0;rr<sz;rr++)for(let cc=0;cc<sz;cc++)if(!rv[rr][cc]&&MF[bm](rr,cc))mt[rr][cc]^=1;
+    /* Place format information */
+    const fmt=fmtBits(bm);
+    [[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]]
+      .forEach(([fr,fc],i)=>{mt[fr][fc]=(fmt>>i)&1});
+    for(let i=0;i<7;i++)mt[sz-1-i][8]=(fmt>>i)&1;
+    for(let i=0;i<8;i++)mt[8][sz-8+i]=(fmt>>(7+i))&1;
+    return mt}
+  return{generate}
+})();
+/* QR data helpers */
+const qrKitData=id=>"kit:"+id;
+const qrAssetData=id=>"asset:"+id;
+const qrSerialData=(kitId,compKey,serial)=>"ser:"+kitId.slice(0,8)+":"+compKey+":"+serial;
+const parseQR=val=>{if(!val)return null;const s=val.trim();
+  if(s.startsWith("kit:"))return{type:"kit",id:s.slice(4)};
+  if(s.startsWith("asset:"))return{type:"asset",id:s.slice(6)};
+  if(s.startsWith("ser:"))return{type:"serial",parts:s.slice(4).split(":")};
+  return{type:"text",value:s}};
 
 /* ─── DEFAULT SETTINGS ─── */
 const DEF_SETTINGS={
@@ -309,6 +409,97 @@ function SparkLine({data,width=100,height=30,color=T.bl}){
   if(!data.length)return null;const max=Math.max(...data);const min=Math.min(...data);const range=max-min||1;
   const pts=data.map((v,i)=>`${i/(data.length-1)*width},${height-(v-min)/range*height}`).join(" ");
   return(<svg width={width} height={height}><polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/></svg>);}
+
+/* ═══════════ QR CODE COMPONENTS ═══════════ */
+function QRSvg({data,size=160,padding=2}){
+  const matrix=useMemo(()=>QR.generate(data),[data]);
+  if(!matrix)return <div style={{width:size,height:size,display:"flex",alignItems:"center",justifyContent:"center",
+    background:"#fff",borderRadius:8,fontSize:10,color:"#999",fontFamily:T.m}}>Too long</div>;
+  const n=matrix.length;const total=n+padding*2;const cs=size/total;
+  return(<svg width={size} height={size} viewBox={"0 0 "+size+" "+size} style={{borderRadius:4}}>
+    <rect width={size} height={size} fill="#fff"/>
+    {matrix.map((row,r)=>row.map((cell,c)=>cell?
+      <rect key={r*n+c} x={(c+padding)*cs} y={(r+padding)*cs} width={cs+.5} height={cs+.5} fill="#000"/>:null))}</svg>);}
+
+function QRScanner({onScan,onClose}){
+  const vidRef=useRef(null);const streamRef=useRef(null);
+  const[err,setErr]=useState("");const[manual,setManual]=useState("");const[active,setActive]=useState(true);
+  useEffect(()=>{
+    if(!active)return;let animId=null;let stopped=false;
+    const start=async()=>{
+      try{
+        if(!('BarcodeDetector' in window)){setErr("Camera scanning not supported. Use manual entry below.");setActive(false);return}
+        const detector=new BarcodeDetector({formats:['qr_code']});
+        const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+        streamRef.current=stream;
+        if(vidRef.current){vidRef.current.srcObject=stream;await vidRef.current.play()}
+        const scan=async()=>{
+          if(stopped||!vidRef.current)return;
+          try{const codes=await detector.detect(vidRef.current);
+            if(codes.length>0){onScan(codes[0].rawValue);return}}catch(e){}
+          animId=requestAnimationFrame(scan)};
+        scan();
+      }catch(e){setErr("Camera access denied. Use manual entry.");setActive(false)}};
+    start();
+    return()=>{stopped=true;if(animId)cancelAnimationFrame(animId);
+      if(streamRef.current)streamRef.current.getTracks().forEach(t=>t.stop())};
+  },[active]);
+  const go=()=>{if(manual.trim())onScan(manual.trim())};
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {active&&<div style={{position:"relative",borderRadius:10,overflow:"hidden",background:"#000",aspectRatio:"4/3"}}>
+      <video ref={vidRef} style={{width:"100%",height:"100%",objectFit:"cover"}} playsInline muted/>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+        <div style={{width:"55%",height:"55%",border:"2px solid rgba(96,165,250,.6)",borderRadius:12}}/></div>
+      <div style={{position:"absolute",bottom:10,left:0,right:0,textAlign:"center",fontSize:10,color:"rgba(255,255,255,.7)",fontFamily:T.m}}>
+        Point camera at QR code</div></div>}
+    {err&&<div style={{padding:12,borderRadius:8,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.15)",
+      fontSize:11,color:T.am,fontFamily:T.m}}>{err}</div>}
+    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m}}>Or enter kit color / ID manually</div>
+    <div style={{display:"flex",gap:8}}>
+      <In value={manual} onChange={e=>setManual(e.target.value)} placeholder="Kit color, serial, or ID..."
+        onKeyDown={e=>{if(e.key==="Enter")go()}} style={{flex:1}}/>
+      <Bt v="primary" onClick={go} disabled={!manual.trim()}>Go</Bt></div>
+    <div style={{display:"flex",justifyContent:"flex-end"}}><Bt onClick={onClose}>Cancel</Bt></div></div>);}
+
+function QRPrintSheet({items,onClose}){
+  return(<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <div style={{fontSize:12,color:T.mu,fontFamily:T.m}}>{items.length} QR codes</div>
+      <div style={{display:"flex",gap:8}}>
+        <Bt v="primary" onClick={()=>window.print()}>Print</Bt>
+        <Bt onClick={onClose}>Close</Bt></div></div>
+    <style>{`@media print{body>*{visibility:hidden}#qr-print-sheet,#qr-print-sheet *{visibility:visible}
+      #qr-print-sheet{position:fixed;top:0;left:0;width:100%;background:#fff;padding:12px;z-index:9999}}`}</style>
+    <div id="qr-print-sheet" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12,padding:8}}>
+      {items.map(item=><div key={item.id} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,
+        padding:12,border:"1px solid #ddd",borderRadius:6,background:"#fff",pageBreakInside:"avoid"}}>
+        <QRSvg data={item.qrData} size={120}/>
+        <div style={{fontSize:12,fontWeight:700,color:"#111",fontFamily:"sans-serif",textAlign:"center"}}>{item.label}</div>
+        <div style={{fontSize:9,color:"#666",fontFamily:"monospace",textAlign:"center"}}>{item.sub}</div></div>)}</div></div>);}
+
+function QRDetailView({qrData,label,sub,serials,kitId,onClose}){
+  return(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+    <QRSvg data={qrData} size={200} padding={3}/>
+    <div style={{textAlign:"center"}}>
+      <div style={{fontSize:16,fontWeight:700,color:T.tx,fontFamily:T.u}}>{label}</div>
+      {sub&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:2}}>{sub}</div>}</div>
+    <div style={{padding:10,borderRadius:8,background:"rgba(255,255,255,.03)",border:"1px solid "+T.bd,width:"100%"}}>
+      <div style={{fontSize:9,color:T.dm,fontFamily:T.m,wordBreak:"break-all",textAlign:"center"}}>{qrData}</div></div>
+    {serials&&serials.length>0&&<div style={{width:"100%"}}>
+      <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.am,fontFamily:T.m,marginBottom:8}}>
+        Serialized Component QR Codes</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {serials.map(s=><div key={s.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+          padding:10,borderRadius:8,background:"rgba(251,191,36,.02)",border:"1px solid rgba(251,191,36,.1)"}}>
+          <QRSvg data={qrSerialData(kitId,s.key,s.serial)} size={80} padding={1}/>
+          <div style={{fontSize:9,fontWeight:600,color:T.tx,fontFamily:T.m,textAlign:"center"}}>{s.label}</div>
+          <div style={{fontSize:8,color:T.am,fontFamily:T.m}}>{s.serial}</div></div>)}</div></div>}
+    <div style={{display:"flex",gap:8}}>
+      <Bt v="primary" onClick={()=>{const w=window.open('','_blank','width=320,height=450');
+        w.document.write('<html><body style="display:flex;flex-direction:column;align-items:center;padding:24px;font-family:sans-serif">');
+        w.document.write('<div id="qr"></div><h3>'+label+'</h3><p style="font-family:monospace;font-size:10px;color:#888">'+qrData+'</p>');
+        w.document.write('<script>window.print();setTimeout(()=>window.close(),500)<\/script></body></html>');w.document.close()}}>Print</Bt>
+      <Bt onClick={onClose}>Close</Bt></div></div>);}
 
 /* ═══════════ ANALYTICS COMPUTATIONS ═══════════ */
 function useAnalytics(kits,personnel,depts,comps,types,logs,reservations){
@@ -1199,7 +1390,8 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
               <Bt sm onClick={()=>setAdj({id:c.id,delta:0,reason:""})}>Adjust</Bt></div></div>)})}</div></div>}
     
     {tab==="assets"&&<div>
-      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:6,marginBottom:12}}>
+        <Bt sm v="ind" onClick={()=>setMd("qr-assets")}>Print QR Codes</Bt>
         {isAdmin&&<Bt v="primary" onClick={()=>{setAfm({name:"",serial:"",category:"Optics",locId:"",notes:""});setMd("addAsset")}}>+ Add Asset</Bt>}</div>
       
       {issuedAssets.length>0&&<div style={{marginBottom:20}}>
@@ -1216,7 +1408,9 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
                 <div style={{width:5,height:5,borderRadius:"50%",background:T.pk}}/>
                 <span style={{fontSize:10,fontWeight:600,color:T.pk,fontFamily:T.m,flex:1}}>{isMine?"YOU":person?.name}</span>
                 {lastIssue&&<span style={{fontSize:9,color:T.dm,fontFamily:T.m}}>since {lastIssue.issuedDate}</span>}</div>
-              {(isMine||isAdmin)&&<div style={{marginTop:8}}><Bt v="warn" sm onClick={()=>returnAsset(a.id)}>Return</Bt></div>}</div>)})}</div></div>}
+              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+                {(isMine||isAdmin)&&<Bt v="warn" sm onClick={()=>returnAsset(a.id)}>Return</Bt>}
+                <Bt sm v="ind" onClick={()=>setMd("qr-asset:"+a.id)}>QR</Bt></div></div>)})}</div></div>}
       
       <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.gn,fontFamily:T.m,marginBottom:10}}>Available ({availAssets.length})</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
@@ -1230,10 +1424,11 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
                 {isAdmin&&<Bt v="ghost" sm onClick={()=>{setAfm({name:a.name,serial:a.serial,category:a.category,locId:a.locId||"",notes:a.notes||""});setMd(a.id)}}>Edit</Bt>}</div></div>
             <div style={{display:"flex",gap:6,marginTop:8}}>
               <Bt v="primary" sm onClick={()=>{setCheckoutPerson("");setMd("checkout:"+a.id)}}>Checkout</Bt>
+              <Bt sm v="ind" onClick={()=>setMd("qr-asset:"+a.id)}>QR</Bt>
               {a.issueHistory.length>0&&<Bt sm onClick={()=>setMd("history:"+a.id)}>History</Bt>}</div></div>)})}</div></div>}
     
     {/* Consumable edit modal */}
-    <ModalWrap open={md==="addCon"||(typeof md==="string"&&md.length>10&&!md.startsWith("checkout")&&!md.startsWith("history")&&!md.startsWith("addAsset")&&tab==="consumables")} onClose={()=>setMd(null)} title={md==="addCon"?"Add Consumable":"Edit Consumable"}>
+    <ModalWrap open={md==="addCon"||(typeof md==="string"&&md.length>10&&!md.startsWith("checkout")&&!md.startsWith("history")&&!md.startsWith("addAsset")&&!md.startsWith("qr")&&tab==="consumables")} onClose={()=>setMd(null)} title={md==="addCon"?"Add Consumable":"Edit Consumable"}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))}/></Fl>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -1246,7 +1441,7 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={saveCon}>Save</Bt></div></div></ModalWrap>
     
     {/* Asset edit modal */}
-    <ModalWrap open={md==="addAsset"||(typeof md==="string"&&md.length>10&&!md.startsWith("checkout")&&!md.startsWith("history")&&tab==="assets"&&md!=="addCon")} onClose={()=>setMd(null)} title={md==="addAsset"?"Add Asset":"Edit Asset"}>
+    <ModalWrap open={md==="addAsset"||(typeof md==="string"&&md.length>10&&!md.startsWith("checkout")&&!md.startsWith("history")&&!md.startsWith("qr")&&tab==="assets"&&md!=="addCon")} onClose={()=>setMd(null)} title={md==="addAsset"?"Add Asset":"Edit Asset"}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Name"><In value={afm.name} onChange={e=>setAfm(p=>({...p,name:e.target.value}))} placeholder="e.g. PVS-14 Night Vision"/></Fl>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -1292,7 +1487,17 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
                   <span style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{p?.name||"Unknown"}</span>
                   <Bg color={h.returnedDate?T.gn:T.pk} bg={h.returnedDate?"rgba(34,197,94,.1)":"rgba(244,114,182,.1)"}>{h.returnedDate?"Returned":"Active"}</Bg></div>
                 <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:4}}>{h.issuedDate}{h.returnedDate?" → "+h.returnedDate:""} | By: {ib?.name||"System"}</div></div>)})}
-          </div>:<div style={{padding:20,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No history</div>}</div>)})()}</ModalWrap></div>);}
+          </div>:<div style={{padding:20,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No history</div>}</div>)})()}</ModalWrap>
+    {/* Asset QR Code modal */}
+    <ModalWrap open={String(md).startsWith("qr-asset:")} onClose={()=>setMd(null)} title="Asset QR Code">
+      {String(md).startsWith("qr-asset:")&&(()=>{const aid=md.slice(9);const a=assets.find(x=>x.id===aid);
+        if(!a)return null;const loc=a.locId?locs.find(l=>l.id===a.locId):null;
+        return <QRDetailView qrData={qrAssetData(a.id)} label={a.name} sub={a.serial+" | "+a.category+(loc?" | "+loc.name:"")}
+          serials={[]} kitId="" onClose={()=>setMd(null)}/>})()}</ModalWrap>
+    {/* Bulk Asset QR Print */}
+    <ModalWrap open={md==="qr-assets"} onClose={()=>setMd(null)} title="Print Asset QR Codes" wide>
+      {md==="qr-assets"&&<QRPrintSheet items={assets.map(a=>({id:a.id,qrData:qrAssetData(a.id),label:a.name,sub:a.serial}))}
+        onClose={()=>setMd(null)}/>}</ModalWrap></div>);}
 
 /* ═══════════ AUDIT LOG PAGE ═══════════ */
 function AuditLogPage({logs,kits,personnel}){
@@ -1768,7 +1973,9 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     addLog("return","kit",kitId,curUserId,now(),{kitColor:kit?.color});setMd(null)};
   return(<div>
     <SH title="Checkout / Return" sub={issuedCt+" out | "+(kits.length-issuedCt)+" available | "+myCt+" mine"}
-      action={(isAdmin||isSuper)&&<Bt v="primary" onClick={()=>setMd("adminIssue")}>Admin Issue</Bt>}/>
+      action={<div style={{display:"flex",gap:6}}>
+        <Bt sm onClick={()=>setMd("qr-scan")}>Scan QR</Bt>
+        {(isAdmin||isSuper)&&<Bt v="primary" onClick={()=>setMd("adminIssue")}>Admin Issue</Bt>}</div>}/>
     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
       <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:200}}/>
       {["all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
@@ -1802,7 +2009,18 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
       {String(md).startsWith("return:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
         if(!k||!ty)return null;return <SerialEntryForm kit={k} type={ty} allC={allC} existingSerials={k.serials} mode="return" onDone={data=>doReturn(kid,data)} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
     <ModalWrap open={md==="adminIssue"} onClose={()=>setMd(null)} title="Admin Issue" wide>
-      {md==="adminIssue"&&<AdminIssuePicker kits={kits} types={types} locs={locs} personnel={personnel} allC={allC} settings={settings} onIssue={(kid,pid,data)=>doAdminIssue(kid,pid,data)} onCancel={()=>setMd(null)}/>}</ModalWrap></div>);}
+      {md==="adminIssue"&&<AdminIssuePicker kits={kits} types={types} locs={locs} personnel={personnel} allC={allC} settings={settings} onIssue={(kid,pid,data)=>doAdminIssue(kid,pid,data)} onCancel={()=>setMd(null)}/>}</ModalWrap>
+    {/* QR Scanner for quick checkout/return */}
+    <ModalWrap open={md==="qr-scan"} onClose={()=>setMd(null)} title="Scan QR to Checkout/Return">
+      {md==="qr-scan"&&<QRScanner onScan={val=>{
+        const parsed=parseQR(val);
+        if(parsed?.type==="kit"){const k=kits.find(x=>x.id===parsed.id);
+          if(k){if(k.issuedTo){setMd("return:"+k.id)}else if(!k.maintenanceStatus){setMd("checkout:"+k.id)}else{setMd(null)}return}}
+        /* Fallback: search by color */
+        const q=val.toLowerCase();const match=kits.find(k=>k.color.toLowerCase()===q||Object.values(k.serials).some(s=>s?.toLowerCase()===q));
+        if(match){if(match.issuedTo){setMd("return:"+match.id)}else if(!match.maintenanceStatus){setMd("checkout:"+match.id)}else{setMd(null)}}
+        else{setSearch(val);setMd(null)}
+      }} onClose={()=>setMd(null)}/>}</ModalWrap></div>);}
 
 function AdminIssuePicker({kits,types,locs,personnel,allC,settings,onIssue,onCancel}){
   const[selKit,setSelKit]=useState("");const[selPerson,setSelPerson]=useState("");const[phase,setPhase]=useState("pick");
@@ -1862,7 +2080,10 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
   const overdueCt=overdueIds.size;
   
   return(<div>
-    <SH title="Kit Inventory" sub={kits.length+" kits"} action={(isAdmin||isSuper)&&<Bt v="primary" onClick={openAdd} disabled={!types.length}>+ Add Kit</Bt>}/>
+    <SH title="Kit Inventory" sub={kits.length+" kits"} action={<div style={{display:"flex",gap:6}}>
+      <Bt sm onClick={()=>setMd("qr-scan")}>Scan QR</Bt>
+      <Bt sm v="ind" onClick={()=>setMd("qr-bulk")}>Print QR Codes</Bt>
+      {(isAdmin||isSuper)&&<Bt v="primary" onClick={openAdd} disabled={!types.length}>+ Add Kit</Bt>}</div>}/>
     
     {/* Status filter tabs */}
     <div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
@@ -1931,12 +2152,20 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:2}}>{cs.map(c=>{const s=cSty[sel.comps[c._key]||"GOOD"];const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return(
               <div key={c._key} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 7px",borderRadius:4,background:"rgba(255,255,255,.012)"}}>
                 <span style={{color:s.fg,fontSize:9,fontWeight:700,width:16}}>{s.ic}</span><span style={{fontSize:8,color:(sel.comps[c._key]||"GOOD")==="GOOD"?T.mu:T.tx,fontFamily:T.m}}>{lbl}</span></div>)})}</div></div>}
+          {/* Inline QR Code */}
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:8,background:"rgba(129,140,248,.03)",border:"1px solid rgba(129,140,248,.1)",marginBottom:8,cursor:"pointer"}}
+            onClick={()=>setMd("qr:"+sel.id)}>
+            <QRSvg data={qrKitData(sel.id)} size={56} padding={1}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:10,fontWeight:600,color:T.ind,fontFamily:T.m}}>QR Code</div>
+              <div style={{fontSize:8,color:T.dm,fontFamily:T.m}}>Click to view full size, print, or see serialized items</div></div></div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {canInspect&&!sel.maintenanceStatus&&<Bt v="success" sm onClick={()=>setMd("insp:"+sel.id)}>Inspect</Bt>}
             {(isAdmin||isSuper)&&<Bt v="primary" sm onClick={()=>{setKf({typeId:sel.typeId,color:sel.color,locId:sel.locId,fields:{...sel.fields},deptId:sel.deptId||""});setMd(sel.id)}}>Edit</Bt>}
+            <Bt sm v="ind" onClick={()=>setMd("qr:"+sel.id)}>QR Code</Bt>
             <Bt sm onClick={()=>setMd("hist:"+sel.id)}>History</Bt>
             {(isAdmin||isSuper)&&<Bt v="danger" sm onClick={()=>{setKits(p=>p.filter(k=>k.id!==sel.id));setSelId(null)}} style={{marginLeft:"auto"}}>Delete</Bt>}</div></div>)})()}</div>
-    <ModalWrap open={md==="addK"||kf&&md&&md!=="addK"&&!String(md).startsWith("insp")&&!String(md).startsWith("hist")} onClose={()=>{setMd(null);setKf(null)}} title={md==="addK"?"Add Kit":"Edit Kit"}>
+    <ModalWrap open={md==="addK"||kf&&md&&md!=="addK"&&!String(md).startsWith("insp")&&!String(md).startsWith("hist")&&!String(md).startsWith("qr")} onClose={()=>{setMd(null);setKf(null)}} title={md==="addK"?"Add Kit":"Edit Kit"}>
       {kf&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Type"><Sl options={types.map(t=>({v:t.id,l:t.name}))} value={kf.typeId} onChange={e=>setKf(p=>({...p,typeId:e.target.value,fields:{}}))}/></Fl>
         <Fl label="Color"><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{Object.keys(CM).map(c=><button key={c} onClick={()=>setKf(p=>({...p,color:c}))} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:5,
@@ -1961,7 +2190,29 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
           {e.type==="inspection"&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:4}}>Inspector: {e.inspector}</div>}
           {e.type==="checkout"&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:4}}>{personnel.find(p=>p.id===e.personId)?.name}{e.returnedDate?" → Returned "+e.returnedDate:""}</div>}
           {e.type==="maintenance"&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:4}}>{e.reason}{e.endDate?" → Completed "+e.endDate:""}</div>}</div>)
-          :<div style={{padding:20,textAlign:"center",color:T.dm}}>No history</div>}</div>)})()}</ModalWrap></div>);}
+          :<div style={{padding:20,textAlign:"center",color:T.dm}}>No history</div>}</div>)})()}</ModalWrap>
+    {/* QR Code detail modal */}
+    <ModalWrap open={String(md).startsWith("qr:")&&md!=="qr-scan"&&md!=="qr-bulk"} onClose={()=>setMd(null)} title="Kit QR Code">
+      {String(md).startsWith("qr:")&&md!=="qr-scan"&&md!=="qr-bulk"&&(()=>{const kid=md.slice(3);const k=kits.find(x=>x.id===kid);
+        if(!k)return null;const ty=types.find(t=>t.id===k.typeId);const lo=locs.find(l=>l.id===k.locId);
+        const serComps=ty?expandComps(ty.compIds,ty.compQtys||{}).map(e=>{const c=allC.find(x=>x.id===e.compId);
+          return c&&c.ser&&k.serials[e.key]?{key:e.key,label:e.qty>1?c.label+" ("+(e.idx+1)+" of "+e.qty+")":c.label,serial:k.serials[e.key]}:null}).filter(Boolean):[];
+        return <QRDetailView qrData={qrKitData(k.id)} label={"Kit "+k.color} sub={(ty?.name||"")+" | "+(lo?.name||"")}
+          serials={serComps} kitId={k.id} onClose={()=>setMd(null)}/>})()}</ModalWrap>
+    {/* QR Scanner modal */}
+    <ModalWrap open={md==="qr-scan"} onClose={()=>setMd(null)} title="Scan QR Code">
+      {md==="qr-scan"&&<QRScanner onScan={val=>{
+        const parsed=parseQR(val);
+        if(parsed?.type==="kit"){const k=kits.find(x=>x.id===parsed.id);if(k){setSelId(k.id);setMd(null);return}}
+        /* Fallback: search by color or serial */
+        const q=val.toLowerCase();const match=kits.find(k=>k.color.toLowerCase()===q||Object.values(k.serials).some(s=>s?.toLowerCase()===q));
+        if(match){setSelId(match.id);setMd(null)}else{setMd(null);setSearch(val)}
+      }} onClose={()=>setMd(null)}/>}</ModalWrap>
+    {/* Bulk QR Print modal */}
+    <ModalWrap open={md==="qr-bulk"} onClose={()=>setMd(null)} title="Print QR Codes" wide>
+      {md==="qr-bulk"&&<QRPrintSheet items={filt.map(k=>{const ty=types.find(t=>t.id===k.typeId);const lo=locs.find(l=>l.id===k.locId);
+        return{id:k.id,qrData:qrKitData(k.id),label:"Kit "+k.color,sub:(ty?.name||"")+" | "+(lo?.name||"")}})}
+        onClose={()=>setMd(null)}/>}</ModalWrap></div>);}
 
 /* ═══════════ APPROVALS ═══════════ */
 function ApprovalsPage({requests,setRequests,kits,setKits,personnel,depts,allC,types,curUserId,addLog}){
