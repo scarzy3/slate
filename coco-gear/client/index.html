@@ -3,13 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>COCO Gear</title>
+  <title>Slate</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #06070a; color: #e4e4e7; font-family: 'Outfit', sans-serif; }
+    body { font-family: 'Outfit', sans-serif; transition: background .2s, color .2s; }
     #root { min-height: 100vh; }
   </style>
+  <script>
+    (function(){var t=localStorage.getItem('slate_theme');
+    document.body.style.background=t==='light'?'#f4f5f7':'#06070a';
+    document.body.style.color=t==='light'?'#18181b':'#e4e4e7';})();
+  </script>
 </head>
 <body>
   <div id="root"></div>

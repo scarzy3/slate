@@ -3,11 +3,11 @@ import { useAuth } from './auth.jsx';
 import api from './api.js';
 
 /* ═══════════════════════════════════════════════════════════════════
-   COCO GEAR v6 — Full-featured asset management system
+   SLATE — Full-featured asset management system
    Analytics, Reports, Maintenance, Reservations, Audit, Alerts
    ═══════════════════════════════════════════════════════════════════ */
 
-const T = {
+const DARK = {
   bg:"#06070a",panel:"#0c0d11",card:"rgba(255,255,255,0.022)",
   cardH:"rgba(255,255,255,0.045)",bd:"rgba(255,255,255,0.055)",
   bdH:"rgba(255,255,255,0.13)",tx:"#e4e4e7",sub:"#a1a1aa",
@@ -15,7 +15,24 @@ const T = {
   pu:"#a78bfa",gn:"#4ade80",rd:"#f87171",am:"#fbbf24",
   tl:"#2dd4bf",pk:"#f472b6",or:"#fb923c",cy:"#22d3ee",
   m:"'IBM Plex Mono',monospace",u:"'Outfit',sans-serif",
+  _scrollThumb:"rgba(255,255,255,.07)",_optBg:"#16171b",_optColor:"#e4e4e7",
+  _selBg:"rgba(96,165,250,.3)",_isDark:true,
 };
+const LIGHT = {
+  bg:"#f4f5f7",panel:"#ffffff",card:"rgba(0,0,0,0.025)",
+  cardH:"rgba(0,0,0,0.055)",bd:"rgba(0,0,0,0.1)",
+  bdH:"rgba(0,0,0,0.18)",tx:"#18181b",sub:"#52525b",
+  mu:"#71717a",dm:"#a1a1aa",bl:"#2563eb",ind:"#6366f1",
+  pu:"#7c3aed",gn:"#16a34a",rd:"#dc2626",am:"#d97706",
+  tl:"#0d9488",pk:"#db2777",or:"#ea580c",cy:"#0891b2",
+  m:"'IBM Plex Mono',monospace",u:"'Outfit',sans-serif",
+  _scrollThumb:"rgba(0,0,0,.12)",_optBg:"#ffffff",_optColor:"#18181b",
+  _selBg:"rgba(37,99,235,.2)",_isDark:false,
+};
+let T = (localStorage.getItem("slate_theme")==="light") ? {...LIGHT} : {...DARK};
+function applyTheme(dark){const src=dark?DARK:LIGHT;Object.assign(T,src);
+  localStorage.setItem("slate_theme",dark?"dark":"light");
+  document.body.style.background=T.bg;document.body.style.color=T.tx;}
 const CM={
   /* Solid Colors */
   BLACK:"#27272a",WHITE:"#E2E8F0",SILVER:"#94a3b8",GRAY:"#6b7280",
@@ -166,7 +183,7 @@ const DEF_SETTINGS={
 /* ═══════════ UI PRIMITIVES ═══════════ */
 function Sw({color,size=24}){const c=CM[color];const p=c&&(c.includes("gradient")||c.includes("conic"));
   return <div style={{width:size,height:size,borderRadius:4,flexShrink:0,background:p?c:(c||"#444"),border:color==="WHITE"?"1.5px solid #555":"1px solid "+T.bd}}/>;}
-function Bg({children,color=T.mu,bg="rgba(255,255,255,.05)"}){
+function Bg({children,color=T.mu,bg=T.card}){
   return <span style={{fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:5,background:bg,color,fontFamily:T.m,letterSpacing:.3,whiteSpace:"nowrap"}}>{children}</span>;}
 function Bt({children,onClick,v="default",disabled,sm,style:sx}){
   const base={all:"unset",cursor:disabled?"not-allowed":"pointer",display:"inline-flex",alignItems:"center",gap:6,
@@ -185,24 +202,24 @@ function Bt({children,onClick,v="default",disabled,sm,style:sx}){
 function Fl({label,children,sub}){return <div style={{display:"flex",flexDirection:"column",gap:4}}>
   <label style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,whiteSpace:"nowrap"}}>
     {label}{sub&&<span style={{color:T.dm,fontWeight:400,textTransform:"none",letterSpacing:0}}> {sub}</span>}</label>{children}</div>;}
-function In(props){return <input {...props} style={{padding:"7px 11px",borderRadius:6,background:"rgba(255,255,255,.04)",
+function In(props){return <input {...props} style={{padding:"7px 11px",borderRadius:6,background:T.card,
   border:"1px solid "+T.bd,color:T.tx,fontSize:12,fontFamily:T.m,outline:"none",width:"100%",...props.style}}/>;}
-function Ta(props){return <textarea {...props} style={{padding:"7px 11px",borderRadius:6,background:"rgba(255,255,255,.04)",
+function Ta(props){return <textarea {...props} style={{padding:"7px 11px",borderRadius:6,background:T.card,
   border:"1px solid "+T.bd,color:T.tx,fontSize:12,fontFamily:T.m,outline:"none",width:"100%",resize:"vertical",...props.style}}/>;}
 function Sl({options,...props}){return(
-  <select {...props} style={{padding:"7px 11px",borderRadius:6,background:"rgba(255,255,255,.06)",
+  <select {...props} style={{padding:"7px 11px",borderRadius:6,background:T.cardH,
     border:"1px solid "+T.bd,color:T.tx,fontSize:11,fontFamily:T.m,outline:"none",cursor:"pointer",...props.style}}>
     {options.map(o=><option key={typeof o==="string"?o:o.v} value={typeof o==="string"?o:o.v}>{typeof o==="string"?o:o.l}</option>)}</select>);}
 function Tg({checked,onChange}){return(
   <button onClick={()=>onChange(!checked)} style={{all:"unset",cursor:"pointer",width:36,height:20,
-    borderRadius:10,background:checked?"rgba(34,197,94,.3)":"rgba(255,255,255,.08)",
+    borderRadius:10,background:checked?"rgba(34,197,94,.3)":T.cardH,
     border:"1px solid "+(checked?"rgba(34,197,94,.4)":T.bd),position:"relative",transition:"all .2s"}}>
-    <div style={{width:14,height:14,borderRadius:7,background:checked?T.gn:"#555",position:"absolute",top:2,left:checked?19:2,transition:"all .2s"}}/></button>);}
+    <div style={{width:14,height:14,borderRadius:7,background:checked?T.gn:T.mu,position:"absolute",top:2,left:checked?19:2,transition:"all .2s"}}/></button>);}
 function ModalWrap({open,onClose,title,wide,children}){if(!open)return null;return(
   <div style={{position:"fixed",inset:0,zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
-    <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.72)",backdropFilter:"blur(6px)"}}/>
+    <div style={{position:"absolute",inset:0,background:T._isDark?"rgba(0,0,0,.72)":"rgba(0,0,0,.35)",backdropFilter:"blur(6px)"}}/>
     <div onClick={e=>e.stopPropagation()} style={{position:"relative",width:wide?"min(900px,95vw)":"min(530px,95vw)",maxHeight:"92vh",
-      background:"#111214",border:"1px solid "+T.bdH,borderRadius:14,display:"flex",flexDirection:"column",animation:"mdIn .18s ease-out",overflow:"hidden"}}>
+      background:T.panel,border:"1px solid "+T.bdH,borderRadius:14,display:"flex",flexDirection:"column",animation:"mdIn .18s ease-out",overflow:"hidden"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 22px",borderBottom:"1px solid "+T.bd}}>
         <h3 style={{margin:0,fontSize:16,fontWeight:700,fontFamily:T.u,color:T.tx}}>{title}</h3>
         <button onClick={onClose} style={{all:"unset",cursor:"pointer",color:T.mu,fontSize:16,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:5,background:T.card}}>×</button></div>
@@ -212,8 +229,8 @@ function ModalWrap({open,onClose,title,wide,children}){if(!open)return null;retu
 function ConfirmDialog({open,onClose,onConfirm,title,message,confirmLabel="Delete",confirmColor=T.rd}){
   if(!open)return null;
   return(<div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
-    <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.8)",backdropFilter:"blur(4px)"}}/>
-    <div onClick={e=>e.stopPropagation()} style={{position:"relative",width:"min(400px,90vw)",background:"#111214",border:"1px solid "+T.bdH,
+    <div style={{position:"absolute",inset:0,background:T._isDark?"rgba(0,0,0,.8)":"rgba(0,0,0,.4)",backdropFilter:"blur(4px)"}}/>
+    <div onClick={e=>e.stopPropagation()} style={{position:"relative",width:"min(400px,90vw)",background:T.panel,border:"1px solid "+T.bdH,
       borderRadius:12,padding:24,animation:"mdIn .15s ease-out"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
         <div style={{width:40,height:40,borderRadius:20,background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",
@@ -243,7 +260,7 @@ function StatCard({label,value,color,sub,icon,onClick}){return(
 function Tabs({tabs,active,onChange}){return(
   <div style={{display:"flex",gap:2,marginBottom:16,borderBottom:"1px solid "+T.bd,paddingBottom:8}}>
     {tabs.map(t=><button key={t.id} onClick={()=>onChange(t.id)} style={{all:"unset",cursor:"pointer",padding:"6px 14px",borderRadius:6,
-      fontSize:11,fontWeight:active===t.id?600:400,fontFamily:T.m,background:active===t.id?"rgba(255,255,255,.08)":"transparent",
+      fontSize:11,fontWeight:active===t.id?600:400,fontFamily:T.m,background:active===t.id?T.cardH:"transparent",
       color:active===t.id?T.tx:T.mu,transition:"all .12s"}}>{t.l}{t.badge!==undefined&&<span style={{marginLeft:6,fontSize:9,
         padding:"1px 5px",borderRadius:8,background:t.badgeColor||"rgba(251,146,60,.15)",color:t.badgeColor?T.tx:T.or}}>{t.badge}</span>}</button>)}</div>);}
 function ProgressBar({value,max,color=T.bl,height=6}){return(
@@ -2194,7 +2211,7 @@ function NavSection({section,pg,setPg,collapsed,onToggle,canAccess,getBadge}){
       {visibleItems.map(n=>{const badge=getBadge(n.id);return(
         <button key={n.id} onClick={()=>setPg(n.id)} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
           padding:"6px 16px",margin:"0 8px",borderRadius:6,fontSize:11,fontWeight:pg===n.id?600:400,fontFamily:T.u,
-          background:pg===n.id?"rgba(255,255,255,.06)":"transparent",color:pg===n.id?T.tx:T.mu,transition:"all .12s",
+          background:pg===n.id?T.cardH:"transparent",color:pg===n.id?T.tx:T.mu,transition:"all .12s",
           borderLeft:pg===n.id?"2px solid "+T.bl:"2px solid transparent"}}>
           <span style={{fontSize:9,opacity:.5,fontFamily:T.m,width:12}}>{n.i}</span>{n.l}
           {badge>0&&<span style={{marginLeft:"auto",fontSize:8,fontWeight:700,color:n.id==="approvals"?T.or:T.rd,
@@ -2202,7 +2219,7 @@ function NavSection({section,pg,setPg,collapsed,onToggle,canAccess,getBadge}){
         </button>)})}</div>}</div>);}
 
 /* ═══════════ LOGIN SCREEN ═══════════ */
-function LoginScreen({personnel,onLogin}){
+function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
   const[selUser,setSelUser]=useState("");const[pin,setPin]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
   const attempt=async()=>{
     if(!selUser){setError("Select a user");return}
@@ -2214,15 +2231,20 @@ function LoginScreen({personnel,onLogin}){
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-        *{box-sizing:border-box}::selection{background:rgba(96,165,250,.3)}
-        option{background:#16171b;color:#e4e4e7}
+        *{box-sizing:border-box}::selection{background:${T._selBg}}
+        option{background:${T._optBg};color:${T._optColor}}
       `}</style>
-      <div style={{width:380,padding:36,borderRadius:16,background:T.panel,border:"1px solid "+T.bd,animation:"mdIn .25s ease-out"}}>
+      <div style={{width:380,padding:36,borderRadius:16,background:T.panel,border:"1px solid "+T.bd,animation:"mdIn .25s ease-out",position:"relative"}}>
         <style>{`@keyframes mdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+        <button onClick={toggleTheme} style={{all:"unset",cursor:"pointer",position:"absolute",top:14,right:14,
+          width:30,height:30,borderRadius:15,display:"flex",alignItems:"center",justifyContent:"center",
+          fontSize:14,background:isDark?"rgba(255,255,255,.06)":"rgba(0,0,0,.06)",border:"1px solid "+T.bd,
+          color:T.mu,transition:"all .15s"}} title={isDark?"Switch to light mode":"Switch to dark mode"}>
+          {isDark?"☀":"☾"}</button>
         <div style={{textAlign:"center",marginBottom:28}}>
           <div style={{width:56,height:56,borderRadius:28,background:"rgba(96,165,250,.1)",border:"1px solid rgba(96,165,250,.25)",
-            display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:22,fontWeight:800,color:T.bl,fontFamily:T.u}}>CG</div>
-          <div style={{fontSize:24,fontWeight:800,color:T.tx,letterSpacing:-.5}}>COCO Gear</div>
+            display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:22,fontWeight:800,color:T.bl,fontFamily:T.u}}>S</div>
+          <div style={{fontSize:24,fontWeight:800,color:T.tx,letterSpacing:-.5}}>Slate</div>
           <div style={{fontSize:11,color:T.mu,fontFamily:T.m,marginTop:4}}>Equipment Management System</div></div>
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <Fl label="User">
@@ -2251,6 +2273,8 @@ export default function App(){
   const[collapsedSections,setCollapsedSections]=useState({});
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
   const[loginUsers,setLoginUsers]=useState([]);
+  const[isDark,setIsDark]=useState(()=>localStorage.getItem("slate_theme")!=="light");
+  const toggleTheme=useCallback(()=>{setIsDark(d=>{const next=!d;applyTheme(next);return next})},[]);
 
   /* Load user list for login (public endpoint) */
   useEffect(()=>{if(!isLoggedIn){fetch('/api/personnel').then(r=>r.ok?r.json():[]).then(setLoginUsers).catch(()=>{})}}, [isLoggedIn]);
@@ -2377,10 +2401,10 @@ export default function App(){
     else if(result.type==="person"){setPg("personnel")}
     setSearchMd(false)};
 
-  if(!isLoggedIn||!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} onLogin={result=>{
-    setCurUser(result.user.id);setIsLoggedIn(true);localStorage.setItem('coco_token',result.token);localStorage.setItem('coco_user',JSON.stringify(result.user))}}/>;
+  if(!isLoggedIn||!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme} onLogin={result=>{
+    setCurUser(result.user.id);setIsLoggedIn(true);localStorage.setItem('slate_token',result.token);localStorage.setItem('slate_user',JSON.stringify(result.user))}}/>;
   if(!dataLoaded&&!loadError)return(<div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
-    <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:T.tx,marginBottom:8}}>Loading COCO Gear...</div>
+    <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:T.tx,marginBottom:8}}>Loading Slate...</div>
       <div style={{fontSize:11,color:T.mu,fontFamily:T.m}}>Connecting to server</div></div></div>);
   if(loadError)return(<div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
     <div style={{textAlign:"center",maxWidth:400}}><div style={{fontSize:18,fontWeight:700,color:T.rd,marginBottom:8}}>Connection Error</div>
@@ -2395,7 +2419,7 @@ export default function App(){
         @keyframes mdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         *{box-sizing:border-box}::selection{background:rgba(96,165,250,.3)}
         ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}
-        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.07);border-radius:3px}option{background:#16171b;color:#e4e4e7}
+        ::-webkit-scrollbar-thumb{background:${T._scrollThumb};border-radius:3px}option{background:${T._optBg};color:${T._optColor}}
       `}</style>
       
       <nav style={{width:200,flexShrink:0,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",display:"flex",flexDirection:"column",overflowY:"auto"}}>
@@ -2403,10 +2427,10 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
             <div style={{width:6,height:6,borderRadius:"50%",background:roleColor,boxShadow:"0 0 8px "+roleColor+"55"}}/>
             <span style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.5,color:roleColor,fontFamily:T.m,fontWeight:600}}>{roleLabel}</span></div>
-          <div style={{fontSize:15,fontWeight:800,fontFamily:T.u,letterSpacing:-.3}}>COCO Gear</div></div>
+          <div style={{fontSize:15,fontWeight:800,fontFamily:T.u,letterSpacing:-.3}}>Slate</div></div>
         
         <button onClick={()=>setSearchMd(true)} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
-          margin:"0 10px 10px",padding:"7px 12px",borderRadius:6,background:"rgba(255,255,255,.03)",border:"1px solid "+T.bd,
+          margin:"0 10px 10px",padding:"7px 12px",borderRadius:6,background:T.card,border:"1px solid "+T.bd,
           fontSize:10,color:T.mu,fontFamily:T.m}}>
           <span>⌕</span> Search...</button>
         
@@ -2418,10 +2442,10 @@ export default function App(){
         
         {/* Profile button */}
         <button onClick={()=>setPg("profile")} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:10,
-          margin:"0 10px 8px",padding:"10px 12px",borderRadius:8,background:pg==="profile"?"rgba(255,255,255,.06)":"rgba(255,255,255,.02)",
+          margin:"0 10px 8px",padding:"10px 12px",borderRadius:8,background:pg==="profile"?T.cardH:T.card,
           border:"1px solid "+(pg==="profile"?T.bdH:T.bd),transition:"all .12s"}}
-          onMouseEnter={e=>{if(pg!=="profile")e.currentTarget.style.background="rgba(255,255,255,.04)"}}
-          onMouseLeave={e=>{if(pg!=="profile")e.currentTarget.style.background="rgba(255,255,255,.02)"}}>
+          onMouseEnter={e=>{if(pg!=="profile")e.currentTarget.style.background=T.cardH}}
+          onMouseLeave={e=>{if(pg!=="profile")e.currentTarget.style.background=T.card}}>
           <div style={{width:28,height:28,borderRadius:14,background:roleColor+"22",border:"1px solid "+roleColor+"44",
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:roleColor,fontFamily:T.m}}>
             {user.name.split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
@@ -2429,11 +2453,19 @@ export default function App(){
             <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.name}</div>
             <div style={{fontSize:8,color:T.mu,fontFamily:T.m}}>{user.title||roleLabel}</div></div>
           <span style={{fontSize:10,color:T.dm}}>⚙</span></button>
-        
-        <div style={{padding:"10px 12px",borderTop:"1px solid "+T.bd}}>
-          <button onClick={()=>{localStorage.removeItem('coco_token');localStorage.removeItem('coco_user');setIsLoggedIn(false);setDataLoaded(false);setCurUser(null);setPg("dashboard")}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+
+        <div style={{padding:"4px 10px"}}>
+          <button onClick={toggleTheme} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
+            width:"100%",padding:"7px 12px",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:T.m,color:T.mu,
+            background:isDark?"rgba(255,255,255,.03)":"rgba(0,0,0,.04)",border:"1px solid "+T.bd,transition:"all .15s"}}
+            onMouseEnter={e=>e.currentTarget.style.background=isDark?"rgba(255,255,255,.06)":"rgba(0,0,0,.07)"}
+            onMouseLeave={e=>e.currentTarget.style.background=isDark?"rgba(255,255,255,.03)":"rgba(0,0,0,.04)"}>
+            <span style={{fontSize:13}}>{isDark?"☀":"☾"}</span>{isDark?"Light Mode":"Dark Mode"}</button></div>
+
+        <div style={{padding:"4px 12px 10px",borderTop:"1px solid "+T.bd,marginTop:4}}>
+          <button onClick={()=>{localStorage.removeItem('slate_token');localStorage.removeItem('slate_user');setIsLoggedIn(false);setDataLoaded(false);setCurUser(null);setPg("dashboard")}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
             width:"100%",padding:"7px 0",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:T.m,color:T.rd,
-            background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)",transition:"all .15s"}}
+            background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)",transition:"all .15s",marginTop:6}}
             onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,.12)"}
             onMouseLeave={e=>e.currentTarget.style.background="rgba(239,68,68,.06)"}>Sign Out</button></div></nav>
       
