@@ -1,0 +1,416 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users / Personnel ───
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  title     String?
+  role      String   @default("user") // super | admin | user
+  pin       String   // bcrypt hashed
+  deptId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department      Department?        @relation("UserDepartment", fields: [deptId], references: [id], onDelete: SetNull)
+  headOfDepts     Department[]       @relation("DeptHead")
+  kitCheckouts    IssueHistory[]     @relation("IssuedTo")
+  kitIssuedBy     IssueHistory[]     @relation("IssuedBy")
+  assetCheckouts  AssetIssueHistory[] @relation("AssetIssuedTo")
+  assetIssuedBy   AssetIssueHistory[] @relation("AssetIssuedBy")
+  checkoutRequests CheckoutRequest[] @relation("Requester")
+  resolvedRequests CheckoutRequest[] @relation("Resolver")
+  reservations    Reservation[]
+  maintenanceStarted MaintenanceHistory[] @relation("MaintStartedBy")
+  maintenanceCompleted MaintenanceHistory[] @relation("MaintCompletedBy")
+  auditLogs       AuditLog[]
+  kitsIssued      Kit[]              @relation("KitHolder")
+
+  @@index([role])
+  @@index([deptId])
+}
+
+// ─── Departments ───
+model Department {
+  id        String   @id @default(uuid())
+  name      String
+  color     String   @default("#60a5fa")
+  headId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  head      User?    @relation("DeptHead", fields: [headId], references: [id], onDelete: SetNull)
+  members   User[]   @relation("UserDepartment")
+  kits      Kit[]
+  checkoutRequests CheckoutRequest[]
+}
+
+// ─── Locations ───
+model Location {
+  id        String   @id @default(uuid())
+  name      String
+  shortCode String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  kits      Kit[]
+  assets    StandaloneAsset[]
+}
+
+// ─── Components (the library of possible kit parts) ───
+model Component {
+  id                    String   @id @default(uuid())
+  key                   String   @unique
+  label                 String
+  category              String   // Comms, Power, Cables, Cases, Optics, Other
+  serialized            Boolean  @default(false)
+  calibrationRequired   Boolean  @default(false)
+  calibrationIntervalDays Int?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  kitTypeComponents     KitTypeComponent[]
+  kitComponentStatuses  KitComponentStatus[]
+  kitSerials            KitSerial[]
+  kitCalibrationDates   KitCalibrationDate[]
+  inspectionResults     InspectionResult[]
+
+  @@index([category])
+}
+
+// ─── Kit Types (templates) ───
+model KitType {
+  id        String   @id @default(uuid())
+  name      String
+  desc      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  components KitTypeComponent[]
+  fields     KitTypeField[]
+  kits       Kit[]
+}
+
+// ─── Kit Type <-> Component (many-to-many with qty) ───
+model KitTypeComponent {
+  id          String @id @default(uuid())
+  kitTypeId   String
+  componentId String
+  quantity    Int    @default(1)
+
+  kitType   KitType   @relation(fields: [kitTypeId], references: [id], onDelete: Cascade)
+  component Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@unique([kitTypeId, componentId])
+}
+
+// ─── Kit Type custom fields ───
+model KitTypeField {
+  id        String @id @default(uuid())
+  kitTypeId String
+  key       String
+  label     String
+  type      String @default("text") // text | number | toggle
+
+  kitType   KitType @relation(fields: [kitTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([kitTypeId, key])
+}
+
+// ─── Kits (actual instances) ───
+model Kit {
+  id                String   @id @default(uuid())
+  typeId            String
+  color             String
+  locId             String
+  deptId            String?
+  issuedToId        String?
+  lastChecked       DateTime?
+  maintenanceStatus String?  // null | repair | calibration | upgrade | cleaning
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  type              KitType           @relation(fields: [typeId], references: [id])
+  location          Location          @relation(fields: [locId], references: [id])
+  department        Department?       @relation(fields: [deptId], references: [id], onDelete: SetNull)
+  issuedTo          User?             @relation("KitHolder", fields: [issuedToId], references: [id], onDelete: SetNull)
+  fieldValues       KitFieldValue[]
+  componentStatuses KitComponentStatus[]
+  serials           KitSerial[]
+  calibrationDates  KitCalibrationDate[]
+  inspections       Inspection[]
+  issueHistory      IssueHistory[]
+  maintenanceHistory MaintenanceHistory[]
+  checkoutRequests  CheckoutRequest[]
+  reservations      Reservation[]
+  photos            KitPhoto[]
+
+  @@index([typeId])
+  @@index([locId])
+  @@index([deptId])
+  @@index([issuedToId])
+  @@index([color])
+}
+
+// ─── Kit custom field values ───
+model KitFieldValue {
+  id    String @id @default(uuid())
+  kitId String
+  key   String
+  value String @default("")
+
+  kit   Kit    @relation(fields: [kitId], references: [id], onDelete: Cascade)
+
+  @@unique([kitId, key])
+}
+
+// ─── Kit component status (per-slot) ───
+model KitComponentStatus {
+  id          String @id @default(uuid())
+  kitId       String
+  componentId String
+  slotIndex   Int    @default(0) // for qty > 1
+  status      String @default("GOOD") // GOOD | MISSING | DAMAGED
+
+  kit       Kit       @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  component Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@unique([kitId, componentId, slotIndex])
+}
+
+// ─── Kit serial numbers per component slot ───
+model KitSerial {
+  id          String @id @default(uuid())
+  kitId       String
+  componentId String
+  slotIndex   Int    @default(0)
+  serial      String @default("")
+
+  kit       Kit       @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  component Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@unique([kitId, componentId, slotIndex])
+}
+
+// ─── Kit calibration dates per component slot ───
+model KitCalibrationDate {
+  id          String    @id @default(uuid())
+  kitId       String
+  componentId String
+  slotIndex   Int       @default(0)
+  calibDate   DateTime?
+
+  kit       Kit       @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  component Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@unique([kitId, componentId, slotIndex])
+}
+
+// ─── Inspections ───
+model Inspection {
+  id        String   @id @default(uuid())
+  kitId     String
+  inspector String?
+  date      DateTime @default(now())
+  notes     String?
+  createdAt DateTime @default(now())
+
+  kit     Kit                @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  results InspectionResult[]
+  photos  InspectionPhoto[]
+
+  @@index([kitId])
+  @@index([date])
+}
+
+model InspectionResult {
+  id           String @id @default(uuid())
+  inspectionId String
+  componentId  String
+  slotIndex    Int    @default(0)
+  status       String // GOOD | MISSING | DAMAGED
+  serial       String?
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  component  Component  @relation(fields: [componentId], references: [id], onDelete: Cascade)
+}
+
+model InspectionPhoto {
+  id           String @id @default(uuid())
+  inspectionId String
+  filename     String
+  originalName String
+  date         DateTime @default(now())
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+}
+
+// ─── Kit Photos ───
+model KitPhoto {
+  id       String   @id @default(uuid())
+  kitId    String
+  filename String
+  originalName String
+  date     DateTime @default(now())
+
+  kit Kit @relation(fields: [kitId], references: [id], onDelete: Cascade)
+}
+
+// ─── Issue History (checkout/return) ───
+model IssueHistory {
+  id              String    @id @default(uuid())
+  kitId           String
+  personId        String
+  issuedById      String
+  issuedDate      DateTime  @default(now())
+  returnedDate    DateTime?
+  returnNotes     String?
+  checkoutLocId   String?
+  returnLocId     String?
+  checkoutSerials Json?     // { compKey: serial }
+  returnSerials   Json?     // { compKey: serial }
+  createdAt       DateTime  @default(now())
+
+  kit      Kit  @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  person   User @relation("IssuedTo", fields: [personId], references: [id])
+  issuedBy User @relation("IssuedBy", fields: [issuedById], references: [id])
+
+  @@index([kitId])
+  @@index([personId])
+}
+
+// ─── Checkout Requests (pending approval) ───
+model CheckoutRequest {
+  id           String    @id @default(uuid())
+  kitId        String
+  personId     String
+  deptId       String?
+  status       String    @default("pending") // pending | approved | denied
+  serials      Json?
+  notes        String?
+  resolvedById String?
+  resolvedDate DateTime?
+  createdAt    DateTime  @default(now())
+
+  kit        Kit         @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  person     User        @relation("Requester", fields: [personId], references: [id])
+  department Department? @relation(fields: [deptId], references: [id], onDelete: SetNull)
+  resolvedBy User?       @relation("Resolver", fields: [resolvedById], references: [id])
+
+  @@index([status])
+}
+
+// ─── Reservations ───
+model Reservation {
+  id          String   @id @default(uuid())
+  kitId       String
+  personId    String
+  startDate   DateTime
+  endDate     DateTime
+  purpose     String?
+  status      String   @default("pending") // pending | confirmed | cancelled
+  createdAt   DateTime @default(now())
+
+  kit    Kit  @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  person User @relation(fields: [personId], references: [id])
+
+  @@index([kitId])
+  @@index([startDate, endDate])
+}
+
+// ─── Maintenance History ───
+model MaintenanceHistory {
+  id            String    @id @default(uuid())
+  kitId         String
+  type          String    // repair | calibration | upgrade | cleaning
+  reason        String?
+  notes         String?
+  startDate     DateTime  @default(now())
+  endDate       DateTime?
+  startedById   String
+  completedById String?
+  createdAt     DateTime  @default(now())
+
+  kit         Kit  @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  startedBy   User @relation("MaintStartedBy", fields: [startedById], references: [id])
+  completedBy User? @relation("MaintCompletedBy", fields: [completedById], references: [id])
+
+  @@index([kitId])
+}
+
+// ─── Consumables ───
+model Consumable {
+  id        String   @id @default(uuid())
+  name      String
+  sku       String?
+  category  String   @default("Other")
+  qty       Int      @default(0)
+  minQty    Int      @default(0)
+  unit      String   @default("ea")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Standalone Assets ───
+model StandaloneAsset {
+  id            String    @id @default(uuid())
+  name          String
+  serial        String
+  category      String    @default("Other")
+  locId         String?
+  issuedToId    String?
+  lastInspected DateTime?
+  condition     String    @default("GOOD") // GOOD | DAMAGED | MISSING
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  location      Location?          @relation(fields: [locId], references: [id], onDelete: SetNull)
+  issueHistory  AssetIssueHistory[]
+
+  @@index([category])
+}
+
+model AssetIssueHistory {
+  id           String    @id @default(uuid())
+  assetId      String
+  personId     String
+  issuedById   String
+  issuedDate   DateTime  @default(now())
+  returnedDate DateTime?
+
+  asset    StandaloneAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  person   User            @relation("AssetIssuedTo", fields: [personId], references: [id])
+  issuedBy User            @relation("AssetIssuedBy", fields: [issuedById], references: [id])
+
+  @@index([assetId])
+}
+
+// ─── Audit Log ───
+model AuditLog {
+  id       String   @id @default(uuid())
+  action   String
+  target   String   // kit | asset | consumable | user | etc
+  targetId String?
+  userId   String?
+  date     DateTime @default(now())
+  details  Json?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([date])
+  @@index([targetId])
+}
+
+// ─── System Settings ───
+model SystemSetting {
+  key   String @id
+  value Json
+}
