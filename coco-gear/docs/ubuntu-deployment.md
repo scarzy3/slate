@@ -1,891 +1,507 @@
-# Deploying COCO Gear to an Ubuntu Server — Complete Guide
+# How to Put COCO Gear on the Internet — A Complete Beginner's Guide
 
-This is a step-by-step guide to deploying the COCO Gear equipment management system on an Ubuntu server. It covers two methods — **Docker Compose** (recommended) and **manual bare-metal** — followed by reverse proxy setup, HTTPS, firewall, backups, monitoring, updates, security hardening, and troubleshooting.
+This guide will walk you through putting your COCO Gear application on a server so that anyone with the web address can use it from their browser — just like any other website. No prior experience is required. Every step is explained.
+
+We will only use the **Docker** method, which is the simplest. It packages everything the app needs into a single container, so you don't have to install each piece of software individually.
 
 ---
 
 ## Table of Contents
 
-1. [Architecture Overview](#1-architecture-overview)
-2. [Server Requirements](#2-server-requirements)
-3. [Initial Server Setup](#3-initial-server-setup)
-4. [Method A: Docker Compose Deployment](#4-method-a-docker-compose-deployment-recommended)
-5. [Method B: Manual Bare-Metal Deployment](#5-method-b-manual-bare-metal-deployment)
-6. [Reverse Proxy with Nginx](#6-reverse-proxy-with-nginx)
-7. [HTTPS with Let's Encrypt](#7-https-with-lets-encrypt)
-8. [Firewall Configuration](#8-firewall-configuration)
-9. [Database Backups and Restore](#9-database-backups-and-restore)
-10. [Updating the Application](#10-updating-the-application)
-11. [Monitoring and Logging](#11-monitoring-and-logging)
-12. [Security Hardening](#12-security-hardening)
-13. [Environment Variables Reference](#13-environment-variables-reference)
-14. [Application Architecture Reference](#14-application-architecture-reference)
-15. [Default Seed Data](#15-default-seed-data)
-16. [Troubleshooting](#16-troubleshooting)
+- [Before You Start: What You Need to Know](#before-you-start-what-you-need-to-know)
+- [Part 1: Renting a Server](#part-1-renting-a-server)
+- [Part 2: Connecting to Your Server](#part-2-connecting-to-your-server)
+- [Part 3: Preparing the Server](#part-3-preparing-the-server)
+- [Part 4: Installing Docker](#part-4-installing-docker)
+- [Part 5: Getting the App onto the Server](#part-5-getting-the-app-onto-the-server)
+- [Part 6: Setting Your Passwords](#part-6-setting-your-passwords)
+- [Part 7: Starting the App](#part-7-starting-the-app)
+- [Part 8: Making It Accessible from the Internet](#part-8-making-it-accessible-from-the-internet)
+- [Part 9: Adding a Domain Name (Optional)](#part-9-adding-a-domain-name-optional)
+- [Part 10: Setting Up HTTPS — the Padlock Icon (Optional)](#part-10-setting-up-https--the-padlock-icon-optional)
+- [Part 11: Locking Down the Server](#part-11-locking-down-the-server)
+- [Part 12: Setting Up Automatic Backups](#part-12-setting-up-automatic-backups)
+- [Part 13: Day-to-Day Management](#part-13-day-to-day-management)
+- [Part 14: Updating the App When New Versions Come Out](#part-14-updating-the-app-when-new-versions-come-out)
+- [Something Went Wrong — Troubleshooting](#something-went-wrong--troubleshooting)
+- [Glossary: What Do All These Words Mean?](#glossary-what-do-all-these-words-mean)
+- [Reference: Technical Details](#reference-technical-details)
 
 ---
 
-## 1. Architecture Overview
+## Before You Start: What You Need to Know
 
-COCO Gear is a full-stack web application with the following components:
+### What is a server?
 
-```
-┌──────────────┐      ┌───────────────────────────────────────┐      ┌──────────────┐
-│              │      │        Express.js (port 3000)         │      │              │
-│   Browser    │─────▶│  ┌──────────┐  ┌──────────────────┐  │─────▶│ PostgreSQL   │
-│              │      │  │ Static   │  │ REST API         │  │      │ (port 5432)  │
-│              │◀─────│  │ React    │  │ /api/*           │  │◀─────│              │
-│              │      │  │ frontend │  │ JWT auth         │  │      │ Database:    │
-│              │      │  │ /client/ │  │ Prisma ORM       │  │      │ cocogear     │
-│              │      │  │ dist/    │  │ File uploads     │  │      │              │
-│              │      │  └──────────┘  └──────────────────┘  │      └──────────────┘
-└──────────────┘      └───────────────────────────────────────┘
-                                       │
-                                       ▼
-                               ┌──────────────┐
-                               │  /uploads/   │
-                               │  (photos)    │
-                               └──────────────┘
-```
+A server is just a computer that's always turned on and connected to the internet. Instead of sitting under your desk, it lives in a data center somewhere. You rent one from a company (like renting storage space), and then you install your application on it.
 
-In production, a single Express server on port 3000 serves both:
-- The compiled React frontend (static files from `client/dist/`)
-- The REST API under `/api/*`
-- Uploaded photos under `/uploads/*`
+### What is a "terminal" or "command line"?
 
-The server uses Prisma ORM to connect to PostgreSQL. All non-`/api` and non-`/uploads` requests are served the React `index.html` for client-side routing.
+Instead of clicking buttons and icons, you'll be typing text commands. It looks like a black window with white text. Don't worry — you'll be copying and pasting every command from this guide. You don't need to memorize anything.
 
----
+### What is Docker?
 
-## 2. Server Requirements
+Think of Docker like a shipping container for software. Instead of installing 5 different programs and hoping they all work together, Docker packages everything into one neat box. You tell Docker "run this box" and it just works.
 
-### Minimum Hardware
+### What will we be doing?
 
-| Resource | Minimum | Recommended |
-|----------|---------|-------------|
-| CPU | 1 vCPU | 2 vCPUs |
-| RAM | 1 GB | 2 GB |
-| Disk | 10 GB | 20 GB+ (depends on photo uploads) |
-| Network | Public IP | Public IP + domain name |
+Here's the plan in plain English:
 
-### Software Requirements
+1. **Rent a server** — a computer on the internet (costs about $5-12/month)
+2. **Connect to it** — type commands into it from your own computer
+3. **Install Docker** — the tool that will run the app
+4. **Put the app on the server** — download the code
+5. **Set your passwords** — so no one else can get in
+6. **Turn it on** — start the app
+7. **Open it to the internet** — so people can visit it in their browser
+8. **Lock it down** — basic security so you're protected
+9. **Set up backups** — so you don't lose your data
 
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| Ubuntu | 22.04 LTS or 24.04 LTS | Operating system |
-| Node.js | 20.x LTS | Application runtime |
-| PostgreSQL | 16.x | Database |
-| Nginx | any | Reverse proxy (optional but recommended) |
-| Docker + Compose | 24.x+ | Container runtime (Method A only) |
-| Git | any | Cloning the repository |
-| Certbot | any | HTTPS certificates (optional) |
+### How long will this take?
 
-### Network Ports
+About 1 to 2 hours if you're following along for the first time. Most of that is waiting for things to install.
 
-| Port | Service | Exposure |
-|------|---------|----------|
-| 22 | SSH | Public (your IP only, ideally) |
-| 80 | HTTP (Nginx) | Public (redirects to 443) |
-| 443 | HTTPS (Nginx) | Public |
-| 3000 | Node.js app | Localhost only (proxied by Nginx) |
-| 5432 | PostgreSQL | Localhost only |
+### What do I need?
+
+- A computer (Mac, Windows, or Linux — any will work)
+- An internet connection
+- A credit card (to rent the server — about $6/month)
+- This guide open in your browser so you can copy/paste commands
 
 ---
 
-## 3. Initial Server Setup
+## Part 1: Renting a Server
 
-These steps apply to both deployment methods. Run them on a fresh Ubuntu server.
+You need to rent a server from a hosting company. Here are the most beginner-friendly options:
 
-### 3.1 Connect to your server
+### Option A: DigitalOcean (Recommended for Beginners)
+
+1. Go to **digitalocean.com** and create an account
+2. Once logged in, click the green **"Create"** button at the top, then **"Droplets"**
+3. Choose these settings:
+   - **Region:** Whichever city is closest to you
+   - **Image:** Click **Ubuntu**, then pick **24.04 (LTS)**. LTS means "Long Term Support" — it will get security updates for years.
+   - **Size:** Click **"Basic"**, then pick the **$6/month** option (1 GB RAM, 25 GB disk). This is plenty.
+   - **Authentication:** Choose **"Password"** (it's simpler for a first-timer). Pick a strong password and **write it down somewhere safe**. You will need this password to connect.
+4. Click **"Create Droplet"**
+5. Wait about 60 seconds. You'll see your server appear with an **IP address** — a number like `164.90.150.23`. **Write this number down.** This is your server's address.
+
+### Option B: Vultr or Linode
+
+The process is very similar — create an account, pick Ubuntu 24.04, pick the cheapest plan ($5-6/month), and note down the IP address and password they give you.
+
+### What did we just do?
+
+You now have a computer running somewhere in a data center. It has Ubuntu Linux on it (an operating system, like Windows or macOS, but for servers). It's turned on, connected to the internet, and waiting for you to tell it what to do.
+
+---
+
+## Part 2: Connecting to Your Server
+
+Now you need to "connect" to your server — this means opening a command line window on YOUR computer that controls the SERVER.
+
+### If you're on a Mac
+
+1. Open the **Terminal** app. You can find it by:
+   - Pressing **Command + Space** to open Spotlight search
+   - Typing **Terminal**
+   - Pressing **Enter**
+2. A window with a text prompt will appear. This is your terminal.
+
+### If you're on Windows
+
+1. Open **PowerShell**. You can find it by:
+   - Clicking the Start menu
+   - Typing **PowerShell**
+   - Clicking on **"Windows PowerShell"**
+2. A blue window with a text prompt will appear.
+
+### Connect to the server
+
+Now type this command, but **replace `YOUR_SERVER_IP`** with the IP address you wrote down in Part 1 (e.g., `164.90.150.23`):
 
 ```bash
-ssh root@your-server-ip
+ssh root@YOUR_SERVER_IP
 ```
 
-### 3.2 Create a non-root deploy user
+**What does this command mean?**
+- `ssh` = "Secure Shell" — a way to securely connect to another computer
+- `root` = the administrator username (every Ubuntu server starts with this)
+- `@YOUR_SERVER_IP` = the address of your server
 
-```bash
-# Create user
-adduser deploy
-# Give sudo access
-usermod -aG sudo deploy
-# Switch to the new user
-su - deploy
+**What happens next:**
+
+The first time you connect, you'll see a message like:
+
+```
+The authenticity of host '164.90.150.23' can't be established.
+Are you sure you want to continue connecting (yes/no/[fingerprint])?
 ```
 
-### 3.3 Update system packages
+Type **yes** and press **Enter**. This is normal — it's just confirming you want to connect to this server for the first time.
+
+Then it will ask for your password. **Type the password you chose when you created the server** and press Enter.
+
+**Important:** When you type your password, nothing will appear on screen — no dots, no stars, nothing. This is normal! It's a security feature. Just type it and press Enter.
+
+**If it worked,** your prompt will change to something like:
+
+```
+root@ubuntu-server:~#
+```
+
+This means you are now controlling the server. Everything you type from now on is happening on that remote computer, not on yours.
+
+### If it didn't work
+
+- Double-check the IP address — did you type it exactly right?
+- Double-check the password — remember, nothing appears while you type it
+- If you forgot the password, go back to DigitalOcean (or your hosting provider), find your server, and use their "Reset Root Password" feature
+
+---
+
+## Part 3: Preparing the Server
+
+Now we're going to update the server's software and install some basic tools. These commands might take a few minutes — that's normal.
+
+### Step 3.1: Update everything
+
+Copy and paste this entire command, then press Enter:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
 ```
 
-### 3.4 Install essential tools
+**What does this do?** It's like clicking "Check for Updates" and "Install All Updates" on your phone. `sudo` means "do this as administrator." `-y` means "yes, go ahead, don't ask me to confirm each one."
+
+**What you'll see:** Lots of text scrolling by. This is normal. Wait until it finishes and you see your prompt (`root@...:~#`) again.
+
+If it asks you about "a newer version of a configuration file" — just press **Enter** to keep the default.
+
+### Step 3.2: Install basic tools
 
 ```bash
-sudo apt install -y curl git wget gnupg2 lsb-release ca-certificates \
-  software-properties-common build-essential
+sudo apt install -y curl git wget ca-certificates gnupg lsb-release build-essential
 ```
 
-### 3.5 Set the server timezone
+**What does this do?** Installs small helper programs that we'll need in later steps. Think of these like wrenches and screwdrivers — you need them to install the bigger stuff.
+
+### Step 3.3: Set the clock
 
 ```bash
 sudo timedatectl set-timezone UTC
 ```
 
-(Use your preferred timezone. UTC is recommended for consistency in audit logs.)
-
-### 3.6 Set up SSH key authentication (if not already done)
-
-On your **local machine**:
-
-```bash
-# Generate a key if you don't have one
-ssh-keygen -t ed25519 -C "deploy@cocogear"
-
-# Copy it to the server
-ssh-copy-id deploy@your-server-ip
-```
-
-On the **server**, disable password authentication:
-
-```bash
-sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo systemctl restart sshd
-```
-
-### 3.7 Set up swap space (for 1 GB RAM servers)
-
-If your server has only 1 GB RAM, add swap to prevent out-of-memory errors during the Docker build or `npm install`:
-
-```bash
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-```
-
-Verify:
-```bash
-free -h
-# Should show ~2 GB swap
-```
+**What does this do?** Sets the server's clock to UTC (Coordinated Universal Time). This makes timestamps in the app consistent regardless of where the server is located.
 
 ---
 
-## 4. Method A: Docker Compose Deployment (Recommended)
+## Part 4: Installing Docker
 
-This method runs the Node.js app and PostgreSQL in Docker containers managed by Docker Compose.
+Docker is the tool that will run our application. Let's install it.
 
-### 4.1 Install Docker Engine
+### Step 4.1: Add Docker's download source
 
+Copy and paste these commands **one at a time**. After pasting each one, press Enter and wait for it to finish before pasting the next:
+
+**Command 1:**
 ```bash
-# Remove any old Docker packages
-sudo apt remove -y docker docker-engine docker.io containerd runc 2>/dev/null
-
-# Add Docker's official GPG key
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+```
+
+**Command 2:**
+```bash
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+```
+
+**Command 3:**
+```bash
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
+```
 
-# Add the Docker apt repository
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+**Command 4** (this is one long command — copy the whole thing):
+```bash
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+```
 
-# Install Docker Engine + Compose plugin
+**What did all that do?** We told the server where to download Docker from (Docker's official website). It's like adding a new app store so the server knows where to find Docker.
+
+### Step 4.2: Install Docker
+
+```bash
 sudo apt update
+```
+
+```bash
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Let the deploy user run Docker without sudo
-sudo usermod -aG docker deploy
 ```
 
-**Important:** Log out and log back in (or run `newgrp docker`) for the group change to take effect.
+This will take a minute or two. Wait for it to finish.
 
-Verify Docker is working:
+### Step 4.3: Check that Docker is working
+
 ```bash
-docker run --rm hello-world
+docker --version
+```
+
+**What you should see:** Something like `Docker version 27.x.x` — the exact numbers don't matter as long as it shows a version and doesn't say "command not found."
+
+```bash
 docker compose version
-# Should print "Docker Compose version v2.x.x"
 ```
 
-### 4.2 Clone the repository
+**What you should see:** Something like `Docker Compose version v2.x.x`.
+
+**If either command says "command not found":** Something went wrong with the installation. Go back to Step 4.1 and try again.
+
+---
+
+## Part 5: Getting the App onto the Server
+
+Now we'll download the COCO Gear code onto the server.
+
+### Step 5.1: Create a folder for the app
 
 ```bash
-sudo mkdir -p /opt/slate
-sudo chown deploy:deploy /opt/slate
-git clone <your-repo-url> /opt/slate
+mkdir -p /opt/slate
+```
+
+**What does this do?** Creates a folder called `/opt/slate` on the server. `/opt` is a standard place to put applications on Linux.
+
+### Step 5.2: Download the code
+
+```bash
+cd /opt/slate
+git clone YOUR_REPO_URL_HERE .
+```
+
+**Replace `YOUR_REPO_URL_HERE`** with the actual URL of your code repository. It will look something like `https://github.com/yourname/slate.git`.
+
+**What you should see:** Text about "Cloning into..." followed by progress indicators. When it's done, you'll get your prompt back.
+
+### Step 5.3: Go to the app folder
+
+```bash
 cd /opt/slate/coco-gear
 ```
 
-### 4.3 Configure production secrets
-
-The `docker-compose.yml` file contains default development credentials that **must** be changed before deploying.
-
-#### 4.3.1 Generate secrets
+Let's verify the files are there:
 
 ```bash
-# Generate a strong database password
-DB_PASS=$(openssl rand -base64 24)
-echo "Database password: $DB_PASS"
-
-# Generate a JWT signing secret
-JWT_SEC=$(openssl rand -base64 48)
-echo "JWT secret: $JWT_SEC"
+ls
 ```
 
-Save these values somewhere safe (e.g., a password manager).
+**What you should see:** A list of files and folders including `docker-compose.yml`, `Dockerfile`, `package.json`, `server`, `client`, `prisma`, and others. If you see these, the code downloaded successfully.
 
-#### 4.3.2 Create a production docker-compose override
+---
 
-Rather than editing `docker-compose.yml` directly (which would be overwritten on `git pull`), create a `docker-compose.override.yml`:
+## Part 6: Setting Your Passwords
+
+The app comes with fake default passwords for development. We **must** change them before putting this on the internet. This is the most important security step.
+
+### Step 6.1: Generate a database password
+
+Run this command to generate a strong random password:
 
 ```bash
-cat > /opt/slate/coco-gear/docker-compose.override.yml <<YAML
-version: '3.8'
-
-services:
-  db:
-    environment:
-      POSTGRES_PASSWORD: "${DB_PASS}"
-    ports: !override
-      - "127.0.0.1:5432:5432"
-
-  app:
-    environment:
-      DATABASE_URL: "postgresql://coco:${DB_PASS}@db:5432/cocogear?schema=public"
-      JWT_SECRET: "${JWT_SEC}"
-      NODE_ENV: production
-    ports: !override
-      - "127.0.0.1:3000:3000"
-YAML
+openssl rand -base64 24
 ```
 
-Alternatively, create a `.env` file that `docker-compose.yml` can reference:
+**What you'll see:** A random string of letters, numbers, and symbols — something like `k9X2mP8nQ4wR6tY1uI3oA5sD7fG0hJ`.
+
+**Copy this password and save it somewhere safe** (like a note on your phone, a password manager, or write it on paper). Label it "Database Password."
+
+### Step 6.2: Generate an app secret
+
+Run this command to generate another random string:
 
 ```bash
-cat > /opt/slate/coco-gear/.env <<EOF
-POSTGRES_PASSWORD=${DB_PASS}
-DATABASE_URL=postgresql://coco:${DB_PASS}@db:5432/cocogear?schema=public
-JWT_SECRET=${JWT_SEC}
+openssl rand -base64 48
+```
+
+**Copy this one too and save it.** Label it "JWT Secret." This is used to secure user login sessions.
+
+### Step 6.3: Create the configuration file
+
+Now we'll create a file that stores these passwords. Run this command, but **replace the two placeholders** with the passwords you just generated:
+
+```bash
+cat > /opt/slate/coco-gear/.env << 'EOF'
+POSTGRES_PASSWORD=PASTE_YOUR_DATABASE_PASSWORD_HERE
+DATABASE_URL=postgresql://coco:PASTE_YOUR_DATABASE_PASSWORD_HERE@db:5432/cocogear?schema=public
+JWT_SECRET=PASTE_YOUR_JWT_SECRET_HERE
 JWT_EXPIRES_IN=24h
 PORT=3000
 NODE_ENV=production
 UPLOAD_DIR=/app/uploads
 MAX_FILE_SIZE=10485760
 EOF
+```
 
-# Protect the file
+**IMPORTANT:** You need to replace `PASTE_YOUR_DATABASE_PASSWORD_HERE` in **two places** (the first line AND inside the `DATABASE_URL` line), and `PASTE_YOUR_JWT_SECRET_HERE` in one place. The password in both places must be exactly the same.
+
+**For example**, if your database password is `k9X2mP8nQ4` and your JWT secret is `aB3cD4eF5g`, the file should look like:
+
+```
+POSTGRES_PASSWORD=k9X2mP8nQ4
+DATABASE_URL=postgresql://coco:k9X2mP8nQ4@db:5432/cocogear?schema=public
+JWT_SECRET=aB3cD4eF5g
+...
+```
+
+### Step 6.4: Protect the file
+
+```bash
 chmod 600 /opt/slate/coco-gear/.env
 ```
 
-#### 4.3.3 Bind ports to localhost only
+**What does this do?** Makes the file readable only by the administrator. No other user on the server can see your passwords.
 
-By default, `docker-compose.yml` exposes port 3000 and 5432 on all interfaces (`0.0.0.0`). For production, bind them to `127.0.0.1` so only Nginx can reach the app, and nothing external can reach PostgreSQL directly.
+### Step 6.5: Update docker-compose.yml with your database password
 
-If you used the override file above, this is already handled. Otherwise, edit `docker-compose.yml` and change:
+We also need to put the database password in the Docker configuration. Open the file for editing:
 
-```yaml
-# BEFORE (insecure — exposed to the internet)
-ports:
-  - "3000:3000"
-
-# AFTER (only accessible from localhost)
-ports:
-  - "127.0.0.1:3000:3000"
+```bash
+nano /opt/slate/coco-gear/docker-compose.yml
 ```
 
-Do the same for the `db` service's port `5432`.
+**What is `nano`?** It's a simple text editor that runs in the terminal. It will show you the contents of the file.
 
-### 4.4 Understand what the Docker build does
+You'll see a file that looks like this:
 
-The `Dockerfile` uses a two-stage build:
+```yaml
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cocogear
+      POSTGRES_USER: coco
+      POSTGRES_PASSWORD: coco_secret     <-- CHANGE THIS
+    ...
+  app:
+    ...
+    environment:
+      DATABASE_URL: postgresql://coco:coco_secret@db:5432/cocogear?schema=public    <-- CHANGE THIS
+      JWT_SECRET: change-this-to-a-strong-random-secret     <-- CHANGE THIS
+```
 
-**Stage 1 — Builder (temporary):**
-1. Starts from `node:20-alpine`
-2. Copies `package.json` and `package-lock.json`, runs `npm install` (all dependencies including dev)
-3. Copies the Prisma schema and runs `npx prisma generate` (creates the Prisma client)
-4. Copies the `client/` directory and runs `npm run build` (Vite compiles the React app into `client/dist/`)
+**Use the arrow keys** to move your cursor to `coco_secret` on the `POSTGRES_PASSWORD` line. Delete `coco_secret` and type your database password instead.
 
-**Stage 2 — Production (final image):**
-1. Starts from a fresh `node:20-alpine`
-2. Copies `package.json` and runs `npm install --omit=dev` (production dependencies only — no Vite, no React, just Express/Prisma/bcrypt etc.)
-3. Copies the Prisma schema and re-generates the Prisma client
-4. Copies the `server/` directory (Express application code)
-5. Copies the compiled `client/dist/` from Stage 1
-6. Creates the `/app/uploads` directory
-7. Sets `NODE_ENV=production`, exposes port 3000
+Do the same for the `coco_secret` inside the `DATABASE_URL` line.
 
-The final image is lean — it only contains production Node.js dependencies, the compiled frontend, and the server code.
+And change `change-this-to-a-strong-random-secret` on the `JWT_SECRET` line to the JWT secret you generated.
 
-### 4.5 Build and start the containers
+**When you're done editing:**
+1. Press **Ctrl + O** (the letter O, not zero) to save
+2. Press **Enter** to confirm the filename
+3. Press **Ctrl + X** to exit the editor
+
+**How to check it worked:**
+
+```bash
+cat /opt/slate/coco-gear/docker-compose.yml
+```
+
+This prints the file contents. Look through it and make sure `coco_secret` no longer appears anywhere, and `change-this-to-a-strong-random-secret` is gone too.
+
+---
+
+## Part 7: Starting the App
+
+This is the moment of truth!
+
+### Step 7.1: Build and start everything
 
 ```bash
 cd /opt/slate/coco-gear
 docker compose up -d --build
 ```
 
-This command:
-1. Builds the multi-stage Docker image (takes 2–5 minutes on first run)
-2. Pulls `postgres:16-alpine` if not cached
-3. Creates named Docker volumes `pgdata` (database) and `uploads` (photos)
-4. Starts the PostgreSQL container and waits for its health check (`pg_isready`) to pass
-5. Starts the app container, which runs the startup command:
-   - `npx prisma db push --skip-generate` — creates all 20+ database tables if they don't exist
-   - `node prisma/seed.js` — populates demo data (8 users, 12 kits, locations, departments, components, etc.)
-   - `node server/index.js` — starts the Express server
+**What does this command do?**
+- `docker compose up` = "start everything defined in docker-compose.yml"
+- `-d` = "in the background" (so it keeps running after you close the terminal)
+- `--build` = "build the app from the source code first"
 
-**Note on the seed command:** The seed script runs a `deleteMany` on all tables before inserting, so running it again will reset data to defaults. In production, you may want to remove `node prisma/seed.js` from the startup command in `docker-compose.yml` after the first run to prevent data resets on container restart. Edit the `command` field:
+**What you'll see:** A LOT of text. Docker is:
+1. Downloading a base system (Node.js and PostgreSQL)
+2. Installing the app's dependencies
+3. Building the website's user interface
+4. Starting the database
+5. Creating all the database tables
+6. Loading sample data
+7. Starting the web server
 
-```yaml
-# After first successful start, change to:
-command: >
-  sh -c "npx prisma db push --skip-generate &&
-         node server/index.js"
-```
+**This will take 3 to 10 minutes** the first time, depending on your server's speed. Be patient. When it's done, you'll get your prompt back.
 
-### 4.6 Verify the deployment
+### Step 7.2: Check that everything is running
 
 ```bash
-# 1. Check both containers are running
 docker compose ps
-# Expected: both "db" and "app" show "Up" status
-
-# 2. Check the application health endpoint
-curl -s http://localhost:3000/api/health | python3 -m json.tool
-# Expected output:
-# {
-#     "status": "ok",
-#     "timestamp": "2026-02-05T12:00:00.000Z"
-# }
-
-# 3. Check the app can list users (login endpoint is public)
-curl -s http://localhost:3000/api/auth/users | python3 -m json.tool
-# Expected: JSON array of 8 user objects
-
-# 4. Test authentication by logging in
-# First, get a user ID from the users list, then:
-USER_ID="<paste-a-user-id-here>"
-curl -s -X POST http://localhost:3000/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d "{\"userId\": \"${USER_ID}\", \"pin\": \"1234\"}" | python3 -m json.tool
-# Expected: JSON with "token" field
-
-# 5. View application logs
-docker compose logs -f app
-
-# 6. View database logs
-docker compose logs -f db
 ```
 
-### 4.7 Docker Compose management commands
+**What you should see:** Two entries — `db` and `app` (or similar names) — both showing a status of **"Up"** or **"running"**. If either says "Exit" or "Restarting", something went wrong — jump to the [Troubleshooting](#something-went-wrong--troubleshooting) section.
+
+### Step 7.3: Test the app
 
 ```bash
-cd /opt/slate/coco-gear
-
-# ── Lifecycle ──
-docker compose up -d          # Start (detached)
-docker compose down            # Stop and remove containers (data preserved in volumes)
-docker compose restart         # Restart both containers
-docker compose restart app     # Restart only the app container
-docker compose stop            # Stop without removing
-docker compose start           # Start stopped containers
-
-# ── Logs ──
-docker compose logs -f         # Follow all logs
-docker compose logs -f app     # Follow app logs only
-docker compose logs --tail=100 app  # Last 100 lines
-
-# ── Rebuild after code changes ──
-docker compose up -d --build   # Rebuild image and restart
-
-# ── Shell access ──
-docker compose exec app sh     # Shell into the app container
-docker compose exec db psql -U coco cocogear  # PostgreSQL interactive shell
-
-# ── Inspect volumes ──
-docker volume ls               # List volumes
-docker volume inspect coco-gear_pgdata   # Show volume details
-
-# ── Nuclear option (destroys all data!) ──
-docker compose down -v         # Stop and delete volumes (database + uploads)
+curl http://localhost:3000/api/health
 ```
+
+**What you should see:**
+
+```json
+{"status":"ok","timestamp":"2026-02-05T12:00:00.000Z"}
+```
+
+If you see `"status":"ok"` — congratulations! The app is running! The timestamp will be different (it shows the current date and time) — that's fine.
+
+### Step 7.4: Test it in your browser
+
+Open a web browser on YOUR computer (not the server) and go to:
+
+```
+http://YOUR_SERVER_IP:3000
+```
+
+Replace `YOUR_SERVER_IP` with the IP address from Part 1 (e.g., `http://164.90.150.23:3000`).
+
+**What you should see:** The COCO Gear login page! You can log in with any of the sample users. They all use PIN **1234**.
+
+**If the page doesn't load:** The server's firewall might be blocking port 3000. Run this command on the server:
+
+```bash
+sudo ufw allow 3000
+```
+
+Then try the browser again. (We'll set up proper security in Part 11.)
 
 ---
 
-## 5. Method B: Manual Bare-Metal Deployment
+## Part 8: Making It Accessible from the Internet
 
-This method installs Node.js and PostgreSQL directly on Ubuntu, without Docker.
+Right now, people have to type `http://YOUR_IP:3000` to access the app. That works, but it's not ideal. We'll set up Nginx (pronounced "engine-X") as a front door — it sits in front of the app and handles incoming web traffic properly.
 
-### 5.1 Install Node.js 20 LTS
-
-```bash
-# Install via NodeSource
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Verify versions
-node -v    # Expected: v20.x.x
-npm -v     # Expected: 10.x.x
-```
-
-### 5.2 Install PostgreSQL 16
-
-```bash
-# Add PostgreSQL APT repository
-sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
-sudo apt update
-
-# Install PostgreSQL 16
-sudo apt install -y postgresql-16 postgresql-contrib-16
-
-# Verify it's running
-sudo systemctl status postgresql
-# Expected: "active (exited)" — this is normal, the actual process is managed by pg_ctlcluster
-```
-
-### 5.3 Configure PostgreSQL
-
-#### 5.3.1 Create the database and user
-
-```bash
-# Generate a strong password
-DB_PASS=$(openssl rand -base64 24)
-echo "Save this database password: $DB_PASS"
-
-# Create the role and database
-sudo -u postgres psql <<EOF
--- Create application user
-CREATE USER coco WITH PASSWORD '${DB_PASS}';
-
--- Create the database owned by this user
-CREATE DATABASE cocogear OWNER coco;
-
--- Grant permissions
-GRANT ALL PRIVILEGES ON DATABASE cocogear TO coco;
-
--- Connect to the new database and grant schema permissions
-\c cocogear
-GRANT ALL ON SCHEMA public TO coco;
-EOF
-```
-
-#### 5.3.2 Verify database connectivity
-
-```bash
-# Test the connection (will prompt for password)
-psql -h localhost -U coco -d cocogear -c "SELECT 'Connection successful!' AS status;"
-```
-
-If this fails with "peer authentication failed", edit PostgreSQL's auth config:
-
-```bash
-# Find and edit pg_hba.conf
-sudo nano /etc/postgresql/16/main/pg_hba.conf
-```
-
-Find the line:
-```
-local   all   all   peer
-```
-
-Change `peer` to `md5` (or `scram-sha-256`):
-```
-local   all   all   md5
-```
-
-Also ensure this line exists for TCP/IP connections from localhost:
-```
-host    all   all   127.0.0.1/32   md5
-```
-
-Restart PostgreSQL:
-```bash
-sudo systemctl restart postgresql
-```
-
-#### 5.3.3 Tune PostgreSQL for production (optional)
-
-Edit `/etc/postgresql/16/main/postgresql.conf`:
-
-```bash
-sudo nano /etc/postgresql/16/main/postgresql.conf
-```
-
-Recommended settings for a 2 GB RAM server:
-
-```ini
-# Memory
-shared_buffers = 512MB              # 25% of RAM
-effective_cache_size = 1536MB       # 75% of RAM
-work_mem = 4MB
-maintenance_work_mem = 128MB
-
-# Connections
-max_connections = 100
-
-# WAL / Checkpoints
-wal_buffers = 16MB
-checkpoint_completion_target = 0.9
-
-# Logging
-log_min_duration_statement = 1000   # Log slow queries (>1s)
-log_line_prefix = '%t [%p] %u@%d '
-```
-
-Restart PostgreSQL after changes:
-```bash
-sudo systemctl restart postgresql
-```
-
-### 5.4 Clone and install the application
-
-```bash
-# Clone the repository
-sudo mkdir -p /opt/slate
-sudo chown deploy:deploy /opt/slate
-git clone <your-repo-url> /opt/slate
-cd /opt/slate/coco-gear
-
-# Install all dependencies (including devDependencies for building)
-npm install
-```
-
-`npm install` will install these key packages:
-- **Production:** `@prisma/client`, `express`, `bcrypt`, `jsonwebtoken`, `multer`, `cors`, `dotenv`, `zod`
-- **Development (needed for build):** `vite`, `react`, `react-dom`, `@vitejs/plugin-react`, `prisma`
-
-**Note:** `bcrypt` is a native module — it compiles C++ code during install. The `build-essential` package installed earlier provides the compiler. If install fails on bcrypt, ensure `build-essential` is installed.
-
-### 5.5 Configure environment variables
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Set every variable to production values:
-
-```env
-# ── Database ──
-# Must match the user/password/database created in step 5.3
-DATABASE_URL="postgresql://coco:YOUR_DB_PASSWORD_HERE@localhost:5432/cocogear?schema=public"
-
-# ── Authentication ──
-# CRITICAL: Replace with a cryptographically random secret. Used to sign all JWT tokens.
-# If this value changes, all existing user sessions are immediately invalidated.
-JWT_SECRET="PASTE_OUTPUT_OF_openssl_rand_-base64_48_HERE"
-
-# How long login sessions last. After this duration, users must log in again.
-# Examples: "1h", "8h", "24h", "7d"
-JWT_EXPIRES_IN="24h"
-
-# ── Server ──
-PORT=3000
-NODE_ENV=production
-
-# ── File Uploads ──
-# Absolute path where uploaded photos are stored on disk.
-# This directory must exist and be writable by the service user.
-UPLOAD_DIR=/opt/slate/coco-gear/uploads
-
-# Maximum upload size per file in bytes. Default is 10 MB (10485760 bytes).
-# The app accepts up to 10 files per upload request.
-# Allowed file types: JPEG, JPG, PNG, GIF, WebP only.
-MAX_FILE_SIZE=10485760
-```
-
-Protect the file:
-```bash
-chmod 600 .env
-```
-
-### 5.6 Initialize the database
-
-```bash
-cd /opt/slate/coco-gear
-
-# Step 1: Generate the Prisma client
-# This reads prisma/schema.prisma and generates TypeScript/JS client code
-# into node_modules/@prisma/client
-npx prisma generate
-
-# Step 2: Push the schema to the database
-# This creates all 20+ tables, indexes, and constraints in PostgreSQL
-# without creating migration files. Suitable for initial deployment.
-npx prisma db push
-```
-
-Expected output from `db push`:
-```
-🚀  Your database is now in sync with your Prisma schema.
-```
-
-If you want to verify the tables were created:
-```bash
-sudo -u postgres psql -d cocogear -c "\dt"
-```
-
-You should see tables like: `User`, `Department`, `Location`, `Component`, `KitType`, `Kit`, `Inspection`, `IssueHistory`, `CheckoutRequest`, `Reservation`, `MaintenanceHistory`, `Consumable`, `StandaloneAsset`, `AuditLog`, `SystemSetting`, and the various junction/detail tables.
-
-### 5.7 Seed demo data (optional)
-
-The seed script populates the database with sample data for testing:
-
-```bash
-node prisma/seed.js
-```
-
-This creates:
-- 8 locations (DAWG, GTX, Demo, ATX, ATS, MOPS, Alpha, Maintenance Bay)
-- 3 departments (Comms, Optics, Logistics)
-- 8 users (1 super admin, 1 admin, 6 regular users) — all with PIN `1234`
-- 19 component definitions (radios, antennas, batteries, cables, cases)
-- 3 kit types (COCO Kit, Starlink Kit, NVG Set)
-- 12 kit instances with component statuses, serials, and calibration tracking
-- 6 consumable items with stock levels
-- 10 standalone assets
-- 3 reservations, 10 audit log entries
-- System settings with default values
-
-**For a clean production start (no demo data):** Skip this step. The application will work with an empty database — you'll create locations, departments, users, and kit types through the admin UI.
-
-### 5.8 Build the React frontend
-
-```bash
-npm run build
-```
-
-This runs `vite build --config client/vite.config.js`, which:
-1. Compiles all React JSX/JS files
-2. Bundles and tree-shakes the code
-3. Minifies the output
-4. Outputs static files to `client/dist/` (HTML, JS, CSS, assets)
-
-Verify the build:
-```bash
-ls -la client/dist/
-# Expected: index.html plus assets/ directory with .js and .css files
-```
-
-### 5.9 Create the uploads directory
-
-```bash
-mkdir -p /opt/slate/coco-gear/uploads
-```
-
-### 5.10 Create a dedicated system user for the service
-
-```bash
-# Create a system user with no login shell and no home directory
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin cocogear
-
-# Give ownership of the application directory
-sudo chown -R cocogear:cocogear /opt/slate/coco-gear
-
-# Ensure the uploads directory is writable
-sudo chmod 755 /opt/slate/coco-gear/uploads
-```
-
-### 5.11 Create a systemd service
-
-```bash
-sudo tee /etc/systemd/system/cocogear.service > /dev/null <<'EOF'
-[Unit]
-Description=COCO Gear Equipment Management System
-Documentation=https://github.com/your-org/slate
-After=network.target postgresql.service
-Requires=postgresql.service
-
-[Service]
-Type=simple
-User=cocogear
-Group=cocogear
-WorkingDirectory=/opt/slate/coco-gear
-ExecStart=/usr/bin/node server/index.js
-Restart=on-failure
-RestartSec=5
-StartLimitInterval=60
-StartLimitBurst=5
-
-# Load environment from file
-EnvironmentFile=/opt/slate/coco-gear/.env
-
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=cocogear
-
-# Security hardening
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-PrivateTmp=true
-ReadWritePaths=/opt/slate/coco-gear/uploads
-ReadOnlyPaths=/opt/slate/coco-gear
-
-# Resource limits
-LimitNOFILE=65536
-MemoryMax=512M
-
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-
-**What each systemd directive does:**
-
-| Directive | Purpose |
-|-----------|---------|
-| `After=postgresql.service` | Starts after PostgreSQL is up |
-| `Requires=postgresql.service` | Fails if PostgreSQL isn't running |
-| `Restart=on-failure` | Auto-restarts if the process crashes (exit code != 0) |
-| `RestartSec=5` | Waits 5 seconds between restart attempts |
-| `StartLimitInterval=60` / `StartLimitBurst=5` | Max 5 restarts per 60 seconds before giving up |
-| `EnvironmentFile` | Loads all variables from `.env` into the process |
-| `NoNewPrivileges=true` | Prevents the process from gaining additional privileges |
-| `ProtectSystem=strict` | Makes the entire filesystem read-only except explicitly allowed paths |
-| `ProtectHome=true` | Hides `/home`, `/root`, `/run/user` |
-| `PrivateTmp=true` | Gives the service its own `/tmp` |
-| `ReadWritePaths` | Allows writing to the uploads directory only |
-| `ReadOnlyPaths` | Allows reading the app code |
-| `LimitNOFILE=65536` | Allows up to 65536 open file descriptors |
-| `MemoryMax=512M` | Kills the process if it uses more than 512 MB RAM |
-
-### 5.12 Enable and start the service
-
-```bash
-# Reload systemd to pick up the new service file
-sudo systemctl daemon-reload
-
-# Enable the service to start on boot
-sudo systemctl enable cocogear
-
-# Start the service now
-sudo systemctl start cocogear
-
-# Check the status
-sudo systemctl status cocogear
-```
-
-Expected output:
-```
-● cocogear.service - COCO Gear Equipment Management System
-     Loaded: loaded (/etc/systemd/system/cocogear.service; enabled; vendor preset: enabled)
-     Active: active (running) since ...
-     Main PID: 12345 (node)
-```
-
-### 5.13 Verify the service
-
-```bash
-# Check the health endpoint
-curl -s http://localhost:3000/api/health
-# Expected: {"status":"ok","timestamp":"..."}
-
-# Check the application is serving the frontend
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/
-# Expected: 200
-
-# View real-time logs
-sudo journalctl -u cocogear -f
-
-# View recent logs
-sudo journalctl -u cocogear --since "10 minutes ago"
-```
-
----
-
-## 6. Reverse Proxy with Nginx
-
-Nginx sits in front of the Node.js app to provide HTTPS termination, gzip compression, static asset caching, and request buffering. This section applies to both deployment methods.
-
-### 6.1 Install Nginx
+### Step 8.1: Install Nginx
 
 ```bash
 sudo apt install -y nginx
 ```
 
-### 6.2 Create the site configuration
+### Step 8.2: Create the Nginx configuration
+
+This tells Nginx to forward all web traffic to the app:
 
 ```bash
-sudo tee /etc/nginx/sites-available/cocogear > /dev/null <<'NGINX'
-# Rate limiting zone: 10 requests/second per IP
-limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
-
-# Upstream definition
-upstream cocogear_backend {
-    server 127.0.0.1:3000;
-    keepalive 32;
-}
-
+sudo tee /etc/nginx/sites-available/cocogear > /dev/null << 'EOF'
 server {
     listen 80;
-    listen [::]:80;
-    server_name your-domain.com;
+    server_name _;
 
-    # ── Logging ──
-    access_log /var/log/nginx/cocogear_access.log;
-    error_log  /var/log/nginx/cocogear_error.log;
-
-    # ── File upload size ──
-    # Must match or exceed MAX_FILE_SIZE in the app (10 MB default).
-    # The app accepts up to 10 files per request, so set to 100M to be safe.
     client_max_body_size 100M;
 
-    # ── Security headers ──
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-
-    # ── Gzip compression ──
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css application/json application/javascript
-               text/xml application/xml application/xml+rss text/javascript
-               image/svg+xml;
-
-    # ── API requests ──
-    location /api/ {
-        limit_req zone=api burst=20 nodelay;
-
-        proxy_pass http://cocogear_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Timeouts
-        proxy_connect_timeout 10s;
-        proxy_send_timeout 30s;
-        proxy_read_timeout 30s;
-    }
-
-    # ── Uploaded files ──
-    location /uploads/ {
-        proxy_pass http://cocogear_backend;
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_set_header Host $host;
-
-        # Cache uploaded images in the browser for 7 days
-        proxy_hide_header Cache-Control;
-        add_header Cache-Control "public, max-age=604800, immutable";
-    }
-
-    # ── Frontend (everything else) ──
     location / {
-        proxy_pass http://cocogear_backend;
+        proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -896,121 +512,174 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 }
-NGINX
+EOF
 ```
 
-**Replace `your-domain.com`** with your actual domain name. If you don't have a domain, use the server's IP address.
+**What does this do?** When someone visits your server's IP address in their browser (on port 80 — the default web port), Nginx will forward the request to COCO Gear (running on port 3000 internally). Think of Nginx as a receptionist who directs visitors to the right office.
 
-### 6.3 Enable the site
+### Step 8.3: Enable the configuration
 
 ```bash
-# Create symlink to enable the site
 sudo ln -sf /etc/nginx/sites-available/cocogear /etc/nginx/sites-enabled/
-
-# Remove the default Nginx placeholder site
 sudo rm -f /etc/nginx/sites-enabled/default
+```
 
-# Test the configuration for syntax errors
+**What does this do?** Activates our configuration and removes the default "Welcome to Nginx" placeholder page.
+
+### Step 8.4: Check for typos and restart Nginx
+
+```bash
 sudo nginx -t
-# Expected: "syntax is ok" and "test is successful"
+```
 
-# Reload Nginx to apply
+**What you should see:** `syntax is ok` and `test is successful`. If it says there's an error, go back to Step 8.2 and make sure you copied the entire command.
+
+```bash
 sudo systemctl reload nginx
 ```
 
-### 6.4 Test through Nginx
+### Step 8.5: Test it
 
-```bash
-# If using a domain:
-curl -s http://your-domain.com/api/health
+Open your browser and go to:
 
-# If using an IP address:
-curl -s http://your-server-ip/api/health
 ```
+http://YOUR_SERVER_IP
+```
+
+Notice there's **no `:3000` this time** — just the plain IP address. Nginx is handling port 80 (the default) and forwarding to port 3000 behind the scenes.
+
+**You should see the COCO Gear login page.** If you do, Nginx is working!
 
 ---
 
-## 7. HTTPS with Let's Encrypt
+## Part 9: Adding a Domain Name (Optional)
 
-**Prerequisite:** Your domain's DNS A record must point to this server's public IP address.
+Instead of telling people to visit `http://164.90.150.23`, you can buy a domain name like `gear.yourcompany.com`. This part is optional — the app works fine with just an IP address.
 
-### 7.1 Install Certbot
+### Step 9.1: Buy a domain name
 
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-```
+You can buy a domain from any registrar — Namecheap, Google Domains, Cloudflare, GoDaddy, etc. Costs about $10-15/year.
 
-### 7.2 Obtain and install the certificate
+### Step 9.2: Point the domain to your server
 
-```bash
-sudo certbot --nginx -d your-domain.com
-```
+In your domain registrar's DNS settings, create an **A record**:
+- **Name/Host:** `@` (or your subdomain, like `gear`)
+- **Type:** A
+- **Value:** Your server's IP address (e.g., `164.90.150.23`)
+- **TTL:** 300 (or "5 minutes" or "Automatic")
 
-Certbot will:
-1. Prove you control the domain via an HTTP challenge
-2. Obtain a certificate from Let's Encrypt
-3. Automatically modify your Nginx config to add SSL directives
-4. Set up a redirect from HTTP (port 80) to HTTPS (port 443)
+**What does this do?** It tells the internet "when someone types `gear.yourcompany.com`, send them to this IP address." It can take up to 30 minutes for this to start working (though it's usually faster).
 
-### 7.3 Verify HTTPS
-
-```bash
-curl -s https://your-domain.com/api/health
-```
-
-### 7.4 Verify auto-renewal
-
-Let's Encrypt certificates expire every 90 days. Certbot installs a systemd timer for auto-renewal.
-
-```bash
-# Check the renewal timer is active
-sudo systemctl status certbot.timer
-
-# Test renewal (dry run — doesn't actually renew)
-sudo certbot renew --dry-run
-```
-
-### 7.5 (Optional) Harden the SSL configuration
-
-After Certbot configures SSL, you can further harden it by editing the Nginx config to add HSTS:
+### Step 9.3: Update Nginx with your domain name
 
 ```bash
 sudo nano /etc/nginx/sites-available/cocogear
 ```
 
-Add inside the `server` block listening on 443:
-```nginx
-# HTTP Strict Transport Security — tells browsers to always use HTTPS
-# max-age=63072000 = 2 years
-add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+Find the line that says:
+```
+    server_name _;
 ```
 
-Reload:
+Change `_` to your domain name:
+```
+    server_name gear.yourcompany.com;
+```
+
+Save and exit (Ctrl+O, Enter, Ctrl+X), then reload Nginx:
+
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+### Step 9.4: Test it
+
+Wait a few minutes for DNS to propagate, then open your browser and go to `http://gear.yourcompany.com`. You should see the COCO Gear login page.
+
 ---
 
-## 8. Firewall Configuration
+## Part 10: Setting Up HTTPS — the Padlock Icon (Optional)
 
-### 8.1 Enable UFW
+**Requires:** A domain name (Part 9). You cannot get HTTPS with just an IP address.
+
+HTTPS encrypts the connection between the browser and the server. It's what gives you the padlock icon in the browser. Without it, login PINs are sent in plain text, which is a security risk.
+
+### Step 10.1: Install Certbot
+
+Certbot is a free tool that gets you an HTTPS certificate from Let's Encrypt (a free certificate authority).
 
 ```bash
-# Allow SSH (important — do this first or you'll lock yourself out!)
-sudo ufw allow OpenSSH
-
-# Allow HTTP and HTTPS (Nginx)
-sudo ufw allow 'Nginx Full'
-
-# Enable the firewall
-sudo ufw enable
-
-# Verify the rules
-sudo ufw status verbose
+sudo apt install -y certbot python3-certbot-nginx
 ```
 
-Expected output:
+### Step 10.2: Get the certificate
+
+```bash
+sudo certbot --nginx -d gear.yourcompany.com
+```
+
+**Replace `gear.yourcompany.com`** with your actual domain name.
+
+**What happens:**
+- Certbot will ask for your email address — enter it (this is for expiry reminders)
+- It will ask if you agree to the terms of service — type **Y** and Enter
+- It will ask about sharing your email — type **N** (or Y, up to you)
+- It will automatically verify you own the domain, get a certificate, and configure Nginx
+
+**When it's done,** you'll see a message like "Congratulations! Your certificate and chain have been saved."
+
+### Step 10.3: Test it
+
+Open your browser and go to `https://gear.yourcompany.com` (note: **https**, not http).
+
+You should see:
+- The padlock icon in the browser's address bar
+- The COCO Gear login page
+
+**The certificate renews automatically.** Certbot set up a background task that renews it before it expires (every 90 days). You don't need to do anything.
+
+---
+
+## Part 11: Locking Down the Server
+
+Right now, all the server's ports are wide open. Let's close everything except what we need.
+
+### Step 11.1: Enable the firewall
+
+**Run these commands in this exact order.** The first one is critical — it makes sure you don't lock yourself out:
+
+```bash
+sudo ufw allow OpenSSH
+```
+
+```bash
+sudo ufw allow 'Nginx Full'
+```
+
+```bash
+sudo ufw deny 3000
+```
+
+```bash
+sudo ufw enable
+```
+
+It will ask `Command may disrupt existing SSH connections. Proceed with operation (y|n)?` — type **y** and press Enter.
+
+**What did we just do?**
+- Allowed SSH (port 22) — so you can still connect to the server
+- Allowed Nginx (ports 80 and 443) — so people can visit the website
+- Blocked port 3000 — so people can't bypass Nginx and access the app directly
+- Turned the firewall on
+
+### Step 11.2: Verify the firewall
+
+```bash
+sudo ufw status
+```
+
+**What you should see:**
+
 ```
 Status: active
 
@@ -1018,556 +687,435 @@ To                         Action      From
 --                         ------      ----
 OpenSSH                    ALLOW       Anywhere
 Nginx Full                 ALLOW       Anywhere
-OpenSSH (v6)               ALLOW       Anywhere (v6)
-Nginx Full (v6)            ALLOW       Anywhere (v6)
+3000                       DENY        Anywhere
+...
 ```
 
-**What is NOT exposed:**
-- Port 3000 (Node.js) — only accessible from localhost via Nginx proxy
-- Port 5432 (PostgreSQL) — only accessible from localhost (or within Docker network)
-
-### 8.2 (Optional) Restrict SSH to your IP
+### Step 11.3: Enable automatic security updates
 
 ```bash
-# Replace with your public IP
-sudo ufw delete allow OpenSSH
-sudo ufw allow from YOUR_PUBLIC_IP to any port 22 proto tcp
-```
-
----
-
-## 9. Database Backups and Restore
-
-### 9.1 Manual backup
-
-#### Docker method:
-```bash
-docker compose -f /opt/slate/coco-gear/docker-compose.yml \
-  exec -T db pg_dump -U coco --format=custom cocogear \
-  > /opt/backups/cocogear_$(date +%Y%m%d_%H%M%S).dump
-```
-
-#### Bare-metal method:
-```bash
-sudo -u postgres pg_dump --format=custom cocogear \
-  > /opt/backups/cocogear_$(date +%Y%m%d_%H%M%S).dump
-```
-
-The `--format=custom` flag creates a compressed binary dump that supports selective restore.
-
-### 9.2 Set up automated daily backups
-
-```bash
-# Create the backup directory
-sudo mkdir -p /opt/backups
-sudo chown deploy:deploy /opt/backups
-
-# Create the backup script
-sudo tee /opt/backups/backup-cocogear.sh > /dev/null <<'SCRIPT'
-#!/bin/bash
-set -euo pipefail
-
-BACKUP_DIR="/opt/backups"
-RETENTION_DAYS=30
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="${BACKUP_DIR}/cocogear_${TIMESTAMP}.dump"
-
-# ── Create the backup ──
-# Uncomment the method you're using:
-
-# Docker method:
-docker compose -f /opt/slate/coco-gear/docker-compose.yml \
-  exec -T db pg_dump -U coco --format=custom cocogear > "$BACKUP_FILE"
-
-# Bare-metal method:
-# sudo -u postgres pg_dump --format=custom cocogear > "$BACKUP_FILE"
-
-# ── Verify the backup is not empty ──
-if [ ! -s "$BACKUP_FILE" ]; then
-  echo "ERROR: Backup file is empty!" >&2
-  rm -f "$BACKUP_FILE"
-  exit 1
-fi
-
-# ── Delete backups older than retention period ──
-find "$BACKUP_DIR" -name "cocogear_*.dump" -mtime +${RETENTION_DAYS} -delete
-
-echo "Backup successful: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
-SCRIPT
-
-chmod +x /opt/backups/backup-cocogear.sh
-```
-
-Add to cron — runs daily at 2:00 AM:
-```bash
-(crontab -l 2>/dev/null; echo "0 2 * * * /opt/backups/backup-cocogear.sh >> /opt/backups/backup.log 2>&1") | crontab -
-```
-
-Verify the cron entry:
-```bash
-crontab -l
-```
-
-### 9.3 Restore from backup
-
-#### Docker method:
-```bash
-# Stop the app first
-docker compose -f /opt/slate/coco-gear/docker-compose.yml stop app
-
-# Restore (replace the filename with your backup)
-docker compose -f /opt/slate/coco-gear/docker-compose.yml \
-  exec -T db pg_restore -U coco -d cocogear --clean --if-exists \
-  < /opt/backups/cocogear_20260205_020000.dump
-
-# Restart the app
-docker compose -f /opt/slate/coco-gear/docker-compose.yml start app
-```
-
-#### Bare-metal method:
-```bash
-# Stop the app
-sudo systemctl stop cocogear
-
-# Restore
-sudo -u postgres pg_restore -d cocogear --clean --if-exists \
-  /opt/backups/cocogear_20260205_020000.dump
-
-# Restart the app
-sudo systemctl start cocogear
-```
-
-### 9.4 Back up uploaded photos
-
-The database backup does not include uploaded photos. Back up the uploads directory separately:
-
-```bash
-# Docker: find where the volume is mounted
-docker volume inspect coco-gear_uploads
-# Look for the "Mountpoint" — e.g., /var/lib/docker/volumes/coco-gear_uploads/_data
-
-# Tar the uploads
-sudo tar czf /opt/backups/uploads_$(date +%Y%m%d).tar.gz \
-  -C /var/lib/docker/volumes/coco-gear_uploads/_data .
-
-# Bare-metal:
-tar czf /opt/backups/uploads_$(date +%Y%m%d).tar.gz \
-  -C /opt/slate/coco-gear/uploads .
-```
-
----
-
-## 10. Updating the Application
-
-### 10.1 Docker method
-
-```bash
-cd /opt/slate/coco-gear
-
-# Pull latest code
-git pull origin main
-
-# Rebuild and restart (zero-downtime is not built in — expect ~30s of downtime)
-docker compose up -d --build
-
-# The startup command will auto-run prisma db push to apply any schema changes.
-# Watch the logs:
-docker compose logs -f app
-```
-
-### 10.2 Bare-metal method
-
-```bash
-cd /opt/slate/coco-gear
-
-# Pull latest code
-git pull origin main
-
-# Install any new dependencies
-npm install
-
-# Regenerate the Prisma client (in case schema changed)
-npx prisma generate
-
-# Apply any schema changes
-npx prisma db push
-
-# Rebuild the frontend
-npm run build
-
-# Fix ownership after build
-sudo chown -R cocogear:cocogear /opt/slate/coco-gear
-
-# Restart the service
-sudo systemctl restart cocogear
-
-# Check logs
-sudo journalctl -u cocogear -f --since "1 minute ago"
-```
-
-### 10.3 Rolling back
-
-If an update breaks the application:
-
-```bash
-# Check git log for the previous working commit
-git log --oneline -10
-
-# Roll back to a specific commit
-git checkout <commit-hash> .
-
-# Then rebuild and restart using the steps above
-```
-
----
-
-## 11. Monitoring and Logging
-
-### 11.1 Application health check
-
-The app exposes `GET /api/health` which queries the database (`SELECT 1`) and returns:
-- `200 {"status": "ok", "timestamp": "..."}` — everything is working
-- `503 {"status": "error", "message": "Database unavailable"}` — database connection lost
-
-Use this for uptime monitoring (e.g., UptimeRobot, Pingdom, or a simple cron curl):
-
-```bash
-# Simple monitoring script
-sudo tee /opt/slate/health-check.sh > /dev/null <<'SCRIPT'
-#!/bin/bash
-RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health)
-if [ "$RESPONSE" != "200" ]; then
-  echo "$(date): COCO Gear health check failed with HTTP $RESPONSE" >> /opt/slate/health.log
-  # Optional: send notification here (email, Slack webhook, etc.)
-fi
-SCRIPT
-
-chmod +x /opt/slate/health-check.sh
-
-# Run every 5 minutes
-(crontab -l 2>/dev/null; echo "*/5 * * * * /opt/slate/health-check.sh") | crontab -
-```
-
-### 11.2 Log locations
-
-| Method | Log type | Command |
-|--------|----------|---------|
-| Docker | App logs | `docker compose logs -f app` |
-| Docker | DB logs | `docker compose logs -f db` |
-| Bare-metal | App logs | `sudo journalctl -u cocogear -f` |
-| Bare-metal | DB logs | `sudo journalctl -u postgresql -f` |
-| Both | Nginx access | `sudo tail -f /var/log/nginx/cocogear_access.log` |
-| Both | Nginx errors | `sudo tail -f /var/log/nginx/cocogear_error.log` |
-
-### 11.3 Disk usage monitoring
-
-Photos accumulate in the uploads directory. Monitor disk usage:
-
-```bash
-# Check overall disk usage
-df -h
-
-# Check uploads directory size
-du -sh /opt/slate/coco-gear/uploads/        # Bare-metal
-docker compose exec app du -sh /app/uploads  # Docker
-```
-
----
-
-## 12. Security Hardening
-
-### 12.1 Pre-deployment security checklist
-
-| Item | How to verify |
-|------|---------------|
-| `JWT_SECRET` changed from default | `grep JWT_SECRET .env` should not contain "change-this" |
-| Database password changed from default | `grep POSTGRES_PASSWORD docker-compose.yml` should not contain "coco_secret" |
-| `.env` file is not readable by others | `ls -la .env` should show `rw-------` (600) |
-| Port 3000 not exposed to the internet | `sudo ufw status` should not show 3000; `curl http://your-server-ip:3000` should timeout |
-| Port 5432 not exposed to the internet | `sudo ufw status` should not show 5432 |
-| SSH password auth disabled | `grep PasswordAuthentication /etc/ssh/sshd_config` should show "no" |
-| Default PINs changed | Log in as Super Admin and update all user PINs in Personnel management |
-| HTTPS enabled | `curl -I https://your-domain.com` returns 200 |
-| Seed script removed from startup | Docker: `command` in `docker-compose.yml` should not include `seed.js` after initial setup |
-
-### 12.2 Application-level security features (already built-in)
-
-The application already includes:
-- **JWT authentication** — all API routes except `/api/auth/users`, `/api/auth/login`, and `/api/health` require a valid Bearer token
-- **Role-based access control** — three role levels (super > admin > user) with configurable admin permissions stored in `SystemSetting`
-- **bcrypt password hashing** — PINs are hashed with 10 salt rounds
-- **File upload validation** — only `jpeg`, `jpg`, `png`, `gif`, `webp` file types are accepted; MIME type and extension are both checked
-- **File size limits** — configurable via `MAX_FILE_SIZE` (default 10 MB), max 10 files per request
-- **Parameterized queries** — Prisma ORM prevents SQL injection
-- **Input validation** — Zod schemas validate request bodies
-- **Audit logging** — all significant actions (checkout, return, inspect, maintenance) are logged with user ID and timestamp
-- **JSON body limit** — Express limits JSON payloads to 10 MB (`express.json({ limit: '10mb' })`)
-
-### 12.3 Automatic security updates
-
-```bash
-# Install unattended-upgrades
 sudo apt install -y unattended-upgrades
-
-# Enable automatic security updates
 sudo dpkg-reconfigure --priority=low unattended-upgrades
 ```
 
----
-
-## 13. Environment Variables Reference
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes | (none) | PostgreSQL connection string. Format: `postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public` |
-| `JWT_SECRET` | Yes | `dev-secret-change-in-production` | Secret key for signing JWT tokens. Must be random and kept secret. If changed, all active sessions are invalidated. |
-| `JWT_EXPIRES_IN` | No | `24h` | Token expiration duration. Accepts `ms`-compatible strings: `1h`, `8h`, `24h`, `7d`. |
-| `PORT` | No | `3000` | Port the Express server listens on. |
-| `NODE_ENV` | No | `development` | Set to `production` to: disable CORS, serve static frontend, hide detailed errors. |
-| `UPLOAD_DIR` | No | `./uploads` (relative to server/) | Absolute path for storing uploaded photos. Must be writable. |
-| `MAX_FILE_SIZE` | No | `10485760` (10 MB) | Maximum file size in bytes per uploaded file. |
+When asked, select **Yes**. This means Ubuntu will automatically install security patches so you don't have to remember to do it.
 
 ---
 
-## 14. Application Architecture Reference
+## Part 12: Setting Up Automatic Backups
 
-### Directory structure
+If the server crashes or you accidentally delete something, you'll want a backup of your data. Let's set up automatic daily backups.
 
-```
-coco-gear/
-├── prisma/
-│   ├── schema.prisma          # Database schema (20+ models)
-│   └── seed.js                # Demo data seeder
-├── server/
-│   ├── index.js               # Express entry point — routes, middleware, static serving
-│   ├── middleware/
-│   │   ├── auth.js            # JWT generation, verification, optional auth
-│   │   └── rbac.js            # Role checks: requireRole(), requireSuper(), requireAdminPerm()
-│   ├── routes/
-│   │   ├── auth.js            # Login, user listing, profile
-│   │   ├── kits.js            # Kit CRUD, checkout, return, inspect
-│   │   ├── types.js           # Kit type templates
-│   │   ├── components.js      # Component definitions
-│   │   ├── locations.js       # Location management
-│   │   ├── departments.js     # Department management
-│   │   ├── personnel.js       # User management (admin)
-│   │   ├── consumables.js     # Consumable inventory
-│   │   ├── assets.js          # Standalone asset tracking
-│   │   ├── reservations.js    # Kit reservations
-│   │   ├── maintenance.js     # Maintenance workflows
-│   │   ├── audit.js           # Audit log viewer (super admin)
-│   │   ├── settings.js        # System settings (super admin)
-│   │   └── reports.js         # Fleet, checkout, inspection, personnel reports
-│   └── utils/
-│       ├── auditLogger.js     # Helper to create AuditLog entries
-│       └── validation.js      # Zod schemas for request validation
-├── client/
-│   ├── index.html             # React SPA entry point
-│   ├── vite.config.js         # Vite build config (proxy in dev, output to dist/)
-│   └── src/
-│       ├── index.jsx          # React DOM mount, AuthProvider wrapper
-│       ├── App.jsx            # Main application (~222 KB — all UI views in one file)
-│       ├── api.js             # API client with JWT token injection
-│       └── auth.jsx           # AuthContext provider + useAuth hook
-├── uploads/                   # Runtime: uploaded photos stored here
-├── Dockerfile                 # Multi-stage build (builder → production)
-├── docker-compose.yml         # PostgreSQL + app orchestration
-├── package.json               # Dependencies and scripts
-├── .env.example               # Environment variable template
-└── .gitignore                 # Excludes node_modules, dist, uploads/*, .env
+### Step 12.1: Create a backups folder
+
+```bash
+sudo mkdir -p /opt/backups
 ```
 
-### API endpoints summary
+### Step 12.2: Create the backup script
 
-All endpoints are prefixed with `/api`. All except auth and health require a `Bearer` token.
+```bash
+sudo tee /opt/backups/backup-cocogear.sh > /dev/null << 'SCRIPT'
+#!/bin/bash
 
-| Method | Path | Auth | Role | Description |
-|--------|------|------|------|-------------|
-| GET | `/auth/users` | No | Any | List users for login screen |
-| POST | `/auth/login` | No | Any | Authenticate with userId + PIN → JWT |
-| GET | `/auth/me` | Yes | Any | Current user profile |
-| PUT | `/auth/me` | Yes | Any | Update own profile |
-| GET | `/kits` | Yes | Any | List all kits |
-| POST | `/kits` | Yes | Admin+ | Create a kit |
-| GET | `/kits/:id` | Yes | Any | Get kit details |
-| PUT | `/kits/:id` | Yes | Admin+ | Update a kit |
-| DELETE | `/kits/:id` | Yes | Admin+ | Delete a kit |
-| POST | `/kits/:id/checkout` | Yes | Varies | Check out a kit |
-| POST | `/kits/:id/return` | Yes | Varies | Return a kit |
-| POST | `/kits/:id/inspect` | Yes | Varies | Record an inspection |
-| GET | `/types` | Yes | Any | List kit types |
-| POST | `/types` | Yes | Admin+ | Create kit type |
-| GET | `/components` | Yes | Any | List components |
-| POST | `/components` | Yes | Admin+ | Create component |
-| GET | `/locations` | Yes | Any | List locations |
-| GET | `/departments` | Yes | Any | List departments |
-| GET | `/personnel` | Yes | Admin+ | List all users |
-| POST | `/personnel` | Yes | Admin+ | Create user |
-| GET | `/consumables` | Yes | Any | List consumables |
-| GET | `/assets` | Yes | Any | List standalone assets |
-| GET | `/reservations` | Yes | Any | List reservations |
-| GET | `/maintenance` | Yes | Any | List maintenance records |
-| GET | `/audit` | Yes | Super | View audit logs |
-| GET | `/settings` | Yes | Admin+ | Read system settings |
-| PUT | `/settings` | Yes | Super | Update system settings |
-| GET | `/reports/*` | Yes | Admin+ | Various reports |
-| POST | `/upload` | Yes | Any | Upload photos (max 10 files) |
-| GET | `/health` | No | Any | Health check (DB connectivity) |
+# Create a backup of the database
+BACKUP_FILE="/opt/backups/cocogear_$(date +%Y%m%d_%H%M%S).dump"
+docker compose -f /opt/slate/coco-gear/docker-compose.yml exec -T db pg_dump -U coco --format=custom cocogear > "$BACKUP_FILE"
+
+# Check the backup isn't empty
+if [ ! -s "$BACKUP_FILE" ]; then
+    echo "$(date): BACKUP FAILED - file is empty" >> /opt/backups/backup.log
+    rm -f "$BACKUP_FILE"
+    exit 1
+fi
+
+# Delete backups older than 30 days (so they don't fill up the disk)
+find /opt/backups -name "cocogear_*.dump" -mtime +30 -delete
+
+echo "$(date): Backup successful - $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))" >> /opt/backups/backup.log
+SCRIPT
+
+sudo chmod +x /opt/backups/backup-cocogear.sh
+```
+
+### Step 12.3: Test the backup script
+
+```bash
+sudo /opt/backups/backup-cocogear.sh
+```
+
+Check that a backup file was created:
+
+```bash
+ls -la /opt/backups/
+```
+
+**What you should see:** A file like `cocogear_20260205_143022.dump` — the numbers are today's date and time. If you see it, backups are working.
+
+### Step 12.4: Schedule automatic daily backups
+
+```bash
+(sudo crontab -l 2>/dev/null; echo "0 2 * * * /opt/backups/backup-cocogear.sh") | sudo crontab -
+```
+
+**What does this do?** Tells the server to run the backup script every night at 2:00 AM. `crontab` is like a task scheduler — similar to setting an alarm clock.
+
+Verify the schedule was saved:
+
+```bash
+sudo crontab -l
+```
+
+**What you should see:** A line containing `0 2 * * * /opt/backups/backup-cocogear.sh`.
+
+### How to restore from a backup (if you ever need to)
+
+If you need to restore your data from a backup:
+
+```bash
+# Step 1: Stop the app
+cd /opt/slate/coco-gear
+docker compose stop app
+
+# Step 2: Restore the backup (replace the filename with your backup file)
+docker compose exec -T db pg_restore -U coco -d cocogear --clean --if-exists < /opt/backups/cocogear_20260205_020000.dump
+
+# Step 3: Start the app again
+docker compose start app
+```
 
 ---
 
-## 15. Default Seed Data
+## Part 13: Day-to-Day Management
 
-After running `node prisma/seed.js`, the following data exists:
+Here are the commands you'll use to manage the app on an ongoing basis. Keep this page bookmarked.
 
-### Users (all PINs: `1234`)
+### Checking if the app is running
 
-| Name | Role | Department | Title |
-|------|------|------------|-------|
-| Jordan Martinez | Super Admin | (none) | Operations Director |
-| Taylor Nguyen | Admin | (none) | Team Lead |
-| Riley Chen | User | Comms | Field Technician |
-| Drew Williams | User | Comms | Project Manager |
-| Kim Thompson | User | Optics | Engineer |
-| Morgan Davis | User | Logistics | Analyst |
-| Lee Garcia | User | Optics | Technician |
-| Ash Patel | User | Logistics | Support Specialist |
+```bash
+cd /opt/slate/coco-gear
+docker compose ps
+```
 
-### Locations
+Both `db` and `app` should say "Up" or "running."
 
-DAWG (VB), FTX - GTX, GTX - Demo, ATX BL7, ATS, MOPS Trailer, Field Site Alpha, Maintenance Bay
+### Viewing the app's logs (to see what it's doing or find errors)
 
-### Departments
+```bash
+cd /opt/slate/coco-gear
+docker compose logs -f app
+```
 
-Comms (blue), Optics (purple), Logistics (teal)
+This shows a live stream of what the app is doing. **Press Ctrl + C to stop watching** — this does NOT stop the app, it just stops showing you the logs.
 
-### Kits
+### Restarting the app (if something seems stuck)
 
-12 COCO Kits in various colors (PINK, RED, ORANGE, YELLOW, PURPLE, GREEN, WHITE, BLUE, BROWN, CHECKER, RWB, GOLD) with different statuses — some checked out, some available, one in maintenance.
+```bash
+cd /opt/slate/coco-gear
+docker compose restart
+```
+
+### Stopping the app
+
+```bash
+cd /opt/slate/coco-gear
+docker compose down
+```
+
+### Starting the app again after stopping
+
+```bash
+cd /opt/slate/coco-gear
+docker compose up -d
+```
+
+### Checking how much disk space is being used
+
+```bash
+df -h
+```
+
+Look at the row for `/` — the "Use%" column shows how full the disk is. If it's over 80%, you might need to clean up old backups or upgrade your server's disk.
 
 ---
 
-## 16. Troubleshooting
+## Part 14: Updating the App When New Versions Come Out
 
-### Application won't start
+When the development team releases a new version of COCO Gear, here's how to update your server:
 
-**Symptom:** `systemctl status cocogear` shows "failed" or the container exits immediately.
+### Step 14.1: Make a backup first (always!)
 
-**Diagnosis:**
 ```bash
-# Bare-metal — check logs
-sudo journalctl -u cocogear --since "5 minutes ago" --no-pager
-
-# Docker — check logs
-docker compose logs --tail=50 app
+sudo /opt/backups/backup-cocogear.sh
 ```
 
-**Common causes:**
-
-| Error message | Cause | Fix |
-|---------------|-------|-----|
-| `Can't reach database server` | PostgreSQL not running or wrong `DATABASE_URL` | Check `sudo systemctl status postgresql` or `docker compose ps db`. Verify `DATABASE_URL` credentials. |
-| `P1001: Can't reach database` | Same as above | Same as above |
-| `EADDRINUSE: address already in use :::3000` | Another process on port 3000 | Run `sudo lsof -i :3000` to find it. Stop it or change `PORT` in `.env`. |
-| `Error: Cannot find module '@prisma/client'` | Prisma client not generated | Run `npx prisma generate` |
-| `EACCES: permission denied` on uploads | Upload dir not writable | Run `sudo chown -R cocogear:cocogear /opt/slate/coco-gear/uploads` |
-| `FATAL: password authentication failed for user "coco"` | Wrong DB password | Verify `DATABASE_URL` password matches what was set in PostgreSQL |
-
-### Database connection issues
+### Step 14.2: Download the latest code
 
 ```bash
-# Test PostgreSQL is listening
-sudo ss -tlnp | grep 5432
-
-# Test connection directly
-psql -h localhost -U coco -d cocogear -c "SELECT 1;"
-
-# Docker: check DB container health
-docker compose ps db
-docker compose logs db
-
-# Check pg_hba.conf allows local connections (bare-metal)
-sudo cat /etc/postgresql/16/main/pg_hba.conf | grep -v "^#" | grep -v "^$"
+cd /opt/slate
+git pull origin main
 ```
 
-### Nginx returns 502 Bad Gateway
-
-This means Nginx is running but cannot reach the Node.js app on port 3000.
+### Step 14.3: Rebuild and restart
 
 ```bash
-# Is the app running?
-sudo systemctl status cocogear     # Bare-metal
-docker compose ps                   # Docker
-
-# Is port 3000 open?
-curl -s http://localhost:3000/api/health
-
-# Check Nginx error log
-sudo tail -20 /var/log/nginx/cocogear_error.log
+cd /opt/slate/coco-gear
+docker compose up -d --build
 ```
 
-### Prisma migration issues
+This will rebuild the app with the new code and restart it. It takes a few minutes. The app will be briefly unavailable during this time.
+
+### Step 14.4: Verify it's working
 
 ```bash
-# View current database state
-npx prisma db pull    # Reads actual DB schema
-npx prisma studio     # Opens a web UI to browse data (dev only)
-
-# Force reset (WARNING: destroys all data)
-npx prisma db push --force-reset
-
-# If tables exist but are out of sync
-npx prisma db push --accept-data-loss
+docker compose ps
+curl http://localhost:3000/api/health
 ```
 
-### Uploaded photos not displaying
+Check that both containers are "Up" and the health check returns `"status":"ok"`.
+
+---
+
+## Something Went Wrong — Troubleshooting
+
+### "I can't connect to the server with SSH"
+
+- Double-check you're using the correct IP address
+- Make sure you're typing `ssh root@YOUR_IP` exactly
+- Your hosting provider may have a "Console" button on their website — try that as a backup way to connect
+- If you enabled the firewall and can't connect, use the hosting provider's console to run `sudo ufw allow OpenSSH`
+
+### "docker compose up" shows errors
+
+First, check the logs:
 
 ```bash
-# Check the uploads directory exists and has files
-ls -la /opt/slate/coco-gear/uploads/        # Bare-metal
-docker compose exec app ls -la /app/uploads  # Docker
-
-# Check permissions
-stat /opt/slate/coco-gear/uploads/
-
-# Test serving a file directly
-curl -I http://localhost:3000/uploads/<filename>
-
-# Check Nginx is proxying /uploads/
-curl -I http://your-domain.com/uploads/<filename>
+cd /opt/slate/coco-gear
+docker compose logs
 ```
 
-### Out of memory during Docker build
+Scroll up and look for red text or lines that say "error" or "ERROR."
 
-On servers with 1 GB RAM, the Vite build may run out of memory:
+**If it mentions "database" or "password":**
+Your database password in `docker-compose.yml` doesn't match the `.env` file. Go back to Part 6 and make sure the passwords are identical in both places.
 
+**If it mentions "port already in use":**
+Something else is already using port 3000 or 5432. Run:
 ```bash
-# Add swap (see section 3.7)
+docker compose down
+docker compose up -d
+```
+
+**If it seems to hang or the app container keeps restarting:**
+The server might not have enough memory. Run:
+```bash
+free -h
+```
+If "available" memory is very low (under 200M), add swap space:
+```bash
 sudo fallocate -l 2G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
-
-# Then retry
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+Then try again:
+```bash
+cd /opt/slate/coco-gear
+docker compose down
 docker compose up -d --build
 ```
 
-### Resetting everything to start fresh
+### "The app loads but I see a white screen"
 
-#### Docker:
+This usually means the frontend build failed. Check:
 ```bash
 cd /opt/slate/coco-gear
-docker compose down -v           # Stops containers, deletes volumes (all data!)
-docker compose up -d --build     # Rebuild and start fresh
+docker compose logs app
+```
+Look for errors related to "build" or "vite". Try rebuilding:
+```bash
+docker compose up -d --build
 ```
 
-#### Bare-metal:
+### "I can see the app at IP:3000 but not at the plain IP"
+
+Nginx isn't working. Check:
 ```bash
-sudo systemctl stop cocogear
-sudo -u postgres psql -c "DROP DATABASE cocogear;"
-sudo -u postgres psql -c "CREATE DATABASE cocogear OWNER coco;"
-cd /opt/slate/coco-gear
-npx prisma db push
-node prisma/seed.js              # Optional: re-seed demo data
-sudo systemctl start cocogear
+sudo nginx -t
 ```
+If it says there's an error, there's a typo in the config file. Re-do Part 8.
+
+If the test passes, make sure Nginx is running:
+```bash
+sudo systemctl restart nginx
+```
+
+### "The page loads but login doesn't work"
+
+Check the app logs:
+```bash
+cd /opt/slate/coco-gear
+docker compose logs app
+```
+
+If you see "invalid token" or JWT errors, your `JWT_SECRET` might have special characters that got mangled. Generate a new one using only letters and numbers:
+```bash
+openssl rand -hex 32
+```
+Then update it in both `docker-compose.yml` and `.env`, and restart:
+```bash
+docker compose down
+docker compose up -d
+```
+
+### "I forgot my passwords"
+
+**Server password:** Use your hosting provider's "Reset Root Password" feature from their website.
+
+**App passwords (JWT_SECRET, Database):** You can see them by looking at the config files:
+```bash
+cat /opt/slate/coco-gear/.env
+cat /opt/slate/coco-gear/docker-compose.yml
+```
+
+### "I want to start over completely"
+
+This will erase ALL data (kits, users, everything) and start fresh:
+
+```bash
+cd /opt/slate/coco-gear
+docker compose down -v
+docker compose up -d --build
+```
+
+The `-v` flag deletes all stored data. Only do this if you really want to start over.
+
+---
+
+## Glossary: What Do All These Words Mean?
+
+| Term | What It Means |
+|------|---------------|
+| **Server** | A computer on the internet that's always running, hosting your app |
+| **SSH** | A way to securely connect to another computer and type commands on it |
+| **Terminal** | The program on your computer where you type commands (black window, white text) |
+| **Ubuntu** | A version of Linux (an operating system, like Windows or macOS, but free and popular for servers) |
+| **Docker** | A tool that packages an app and everything it needs into a container, making it easy to run anywhere |
+| **Docker Compose** | A tool for running multiple Docker containers together (our app needs two: the app itself and the database) |
+| **Container** | A packaged, isolated instance of an application — like a virtual computer inside your computer |
+| **Nginx** | A web server that sits in front of your app, handling incoming internet traffic and forwarding it to the app |
+| **Port** | Like a numbered doorway on a computer. Web traffic uses port 80 (HTTP) or 443 (HTTPS). Our app uses port 3000 internally. |
+| **IP Address** | A numeric address for a computer on the internet (like `164.90.150.23`) |
+| **Domain Name** | A human-readable address (like `gear.yourcompany.com`) that points to an IP address |
+| **HTTPS / SSL / TLS** | Encryption that protects data sent between the browser and server (the padlock icon) |
+| **Let's Encrypt** | A free service that provides HTTPS certificates |
+| **Certbot** | A program that gets certificates from Let's Encrypt and installs them |
+| **Firewall (UFW)** | Software that blocks unwanted network connections, like a bouncer at a door |
+| **PostgreSQL** | The database where the app stores all its data (users, kits, inspections, etc.) |
+| **Git** | A tool for downloading and managing code |
+| **API** | The part of the app that handles data requests — the backend brain behind the web page |
+| **Environment variables** | Settings stored in a file (`.env`) that the app reads when it starts — like passwords and configuration |
+| **JWT** | "JSON Web Token" — a secure way the app remembers that you're logged in |
+| **Backup / pg_dump** | A saved copy of all your database data that you can restore from if something goes wrong |
+| **cron / crontab** | A scheduler that runs commands automatically at set times (like an alarm clock for commands) |
+| **sudo** | "Super User Do" — run a command as the administrator |
+| **nano** | A simple text editor that works in the terminal |
+| **curl** | A command that fetches a web page — useful for testing if the app is responding |
+
+---
+
+## Reference: Technical Details
+
+This section is for anyone who wants to understand what's happening under the hood. You don't need to read this to get the app running.
+
+### What the app is made of
+
+COCO Gear has three main parts:
+
+1. **The frontend** (what users see in their browser) — built with React 19 and Vite. In production, it's compiled into static HTML/CSS/JavaScript files that live in `client/dist/`.
+
+2. **The backend** (the server-side brain) — built with Express.js (Node.js). Handles the REST API (`/api/*`), file uploads (`/uploads/*`), authentication (JWT tokens), and serves the frontend files. Runs on port 3000.
+
+3. **The database** (where data is stored) — PostgreSQL 16. Managed through Prisma ORM. Contains 20+ tables for users, departments, locations, kits, inspections, maintenance, audit logs, and more.
+
+### Architecture diagram
+
+```
+Internet
+   |
+   v
+[Nginx - port 80/443] -- forwards all requests to -->  [Express.js - port 3000]  <-->  [PostgreSQL - port 5432]
+                                                               |
+                                                        [/uploads/ directory]
+                                                         (uploaded photos)
+```
+
+### Environment variables
+
+| Variable | What It Does |
+|----------|-------------|
+| `DATABASE_URL` | The address and password for connecting to PostgreSQL |
+| `JWT_SECRET` | A secret key used to create secure login tokens. If you change this, everyone gets logged out. |
+| `JWT_EXPIRES_IN` | How long a login session lasts before the user has to log in again (default: 24 hours) |
+| `PORT` | Which port the app listens on (default: 3000) |
+| `NODE_ENV` | Set to `production` so the app serves the website and hides technical error messages |
+| `UPLOAD_DIR` | Where uploaded photos are stored on disk |
+| `MAX_FILE_SIZE` | Maximum photo upload size in bytes (default: 10 MB = 10485760) |
+
+### Default sample data
+
+After the first startup, the app is loaded with sample data for testing:
+
+**8 sample users** (all use PIN **1234**):
+
+| Name | Role | Department |
+|------|------|------------|
+| Jordan Martinez | Super Admin | — |
+| Taylor Nguyen | Admin | — |
+| Riley Chen | User | Comms |
+| Drew Williams | User | Comms |
+| Kim Thompson | User | Optics |
+| Morgan Davis | User | Logistics |
+| Lee Garcia | User | Optics |
+| Ash Patel | User | Logistics |
+
+Plus: 8 locations, 3 departments, 12 kits, 19 component types, 6 consumables, 10 standalone assets, and system settings.
+
+**Important:** After you've set up real data, you'll want to prevent the sample data from being reloaded if the server restarts. Edit docker-compose.yml and change the `command` section:
+
+```bash
+nano /opt/slate/coco-gear/docker-compose.yml
+```
+
+Find this section:
+```yaml
+    command: >
+      sh -c "npx prisma db push --skip-generate &&
+             node prisma/seed.js &&
+             node server/index.js"
+```
+
+Remove the `node prisma/seed.js &&` line so it looks like:
+```yaml
+    command: >
+      sh -c "npx prisma db push --skip-generate &&
+             node server/index.js"
+```
+
+Save (Ctrl+O, Enter, Ctrl+X), then restart:
+```bash
+cd /opt/slate/coco-gear
+docker compose down
+docker compose up -d
+```
+
+### Security features already built into the app
+
+- **PIN-based login** with bcrypt hashing (PINs are never stored in plain text)
+- **Role-based access control** — Super Admin > Admin > User — each level has different permissions
+- **JWT authentication** — secure, stateless login sessions
+- **File upload restrictions** — only image files (JPEG, PNG, GIF, WebP), max 10 MB each, max 10 per request
+- **SQL injection protection** — all database queries go through Prisma ORM
+- **Input validation** — Zod library validates all incoming data
+- **Audit logging** — every checkout, return, inspection, and maintenance action is logged with who did it and when
