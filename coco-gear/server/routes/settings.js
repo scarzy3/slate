@@ -21,6 +21,7 @@ const DEFAULT_SETTINGS = {
   enableReservations: true,
   enableMaintenance: true,
   enableConsumables: true,
+  enableQR: true,
   adminPerms: {
     analytics: true,
     reports: true,
@@ -51,8 +52,8 @@ function mergeSettings(dbSettings) {
   return merged;
 }
 
-// GET / - get all settings (admin+)
-router.get('/', authMiddleware, requireRole('admin'), async (req, res) => {
+// GET / - get all settings (any authenticated user — needed for feature flags)
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const dbSettings = await prisma.systemSetting.findMany();
     const settings = mergeSettings(dbSettings);
