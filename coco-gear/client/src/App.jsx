@@ -1217,9 +1217,136 @@ function MaintenancePage({kits,setKits,types,locs,personnel,addLog,curUserId,onS
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt>
           <Bt v="warn" onClick={()=>sendToMaint(fm.kitId)} disabled={!fm.kitId}>Send to Maintenance</Bt></div></div></ModalWrap></div>);}
 
+/* ═══════════ TRIPS PAGE ═══════════ */
+function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,curUserId,onRefreshTrips,onRefreshKits}){
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",description:"",startDate:"",endDate:"",status:"planning"});
+  const[selTrip,setSelTrip]=useState(null);const[assignMd,setAssignMd]=useState(false);const[assignKits,setAssignKits]=useState([]);
+  const[tab,setTab]=useState("active");
+  const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric"}):"";
+  const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
+  const statusLabels={planning:"Planning",active:"Active",completed:"Completed",cancelled:"Cancelled"};
+  const filtered=tab==="all"?trips:tab==="active"?trips.filter(t=>t.status==="planning"||t.status==="active"):trips.filter(t=>t.status===tab);
+  const activeTrip=selTrip?trips.find(t=>t.id===selTrip):null;
+  const tripKits=activeTrip?kits.filter(k=>k.tripId===activeTrip.id):[];
+  const availableForAssign=kits.filter(k=>!k.tripId||k.tripId===activeTrip?.id);
+  const tripRes=activeTrip?reservations.filter(r=>r.tripId===activeTrip.id):[];
+
+  const saveTrip=async()=>{if(!fm.name.trim()||!fm.startDate||!fm.endDate)return;
+    try{if(md==="add"){const created=await api.trips.create({name:fm.name.trim(),description:fm.description.trim(),startDate:fm.startDate,endDate:fm.endDate,status:fm.status});
+      setSelTrip(created.id)}
+    else{await api.trips.update(md,{name:fm.name.trim(),description:fm.description.trim(),startDate:fm.startDate,endDate:fm.endDate,status:fm.status})}
+    await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}setMd(null)};
+  const deleteTrip=async(id)=>{if(!confirm("Delete this trip?"))return;try{await api.trips.delete(id);setSelTrip(null);await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}};
+  const doAssign=async()=>{if(!activeTrip||!assignKits.length)return;
+    try{await api.trips.assignKits(activeTrip.id,assignKits);await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}setAssignMd(false);setAssignKits([])};
+  const removeFromTrip=async(kitId)=>{if(!activeTrip)return;
+    try{await api.trips.removeKit(activeTrip.id,kitId);await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}};
+
+  return(<div>
+    <SH title="Trips" sub={trips.filter(t=>t.status==="active").length+" active | "+trips.length+" total"}
+      action={isAdmin&&<Bt v="primary" onClick={()=>{setFm({name:"",description:"",startDate:"",endDate:"",status:"planning"});setMd("add")}}>+ New Trip</Bt>}/>
+
+    <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+      {["active","planning","completed","cancelled","all"].map(t=>
+        <button key={t} onClick={()=>setTab(t)} style={{all:"unset",cursor:"pointer",padding:"5px 12px",borderRadius:5,fontSize:10,fontFamily:T.m,fontWeight:600,
+          background:tab===t?"rgba(96,165,250,.12)":"rgba(255,255,255,.03)",border:"1px solid "+(tab===t?"rgba(96,165,250,.3)":T.bd),
+          color:tab===t?T.bl:T.mu,textTransform:"capitalize"}}>{t}</button>)}</div>
+
+    <div className="slate-grid-side" style={{display:"grid",gridTemplateColumns:selTrip?"1fr 380px":"1fr",gap:20}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:10}}>
+        {filtered.length===0&&<div style={{padding:20,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No trips found</div>}
+        {filtered.map(t=>{const isSelected=selTrip===t.id;return(
+          <div key={t.id} onClick={()=>setSelTrip(isSelected?null:t.id)} style={{padding:16,borderRadius:10,background:isSelected?"rgba(96,165,250,.04)":T.card,
+            border:"1px solid "+(isSelected?"rgba(96,165,250,.25)":T.bd),cursor:"pointer",transition:"all .12s"}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
+              <div><div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>{t.name}</div>
+                {t.description&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:2}}>{t.description}</div>}</div>
+              <Bg color={statusColors[t.status]} bg={statusColors[t.status]+"18"}>{statusLabels[t.status]}</Bg></div>
+            <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginBottom:8}}>{fmtD(t.startDate)} → {fmtD(t.endDate)}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <Bg color={T.ind} bg="rgba(129,140,248,.1)">{t.kits.length} kits</Bg>
+              {t.reservationCount>0&&<Bg color={T.pu} bg="rgba(168,85,247,.1)">{t.reservationCount} reservations</Bg>}
+              {t.kits.length>0&&<div style={{display:"flex",gap:2,alignItems:"center",marginLeft:4}}>
+                {t.kits.slice(0,5).map(k=><div key={k.id} style={{width:14,height:14,borderRadius:7,background:CM[k.color]||"#888",border:"1px solid rgba(0,0,0,.2)"}} title={k.color}/>)}
+                {t.kits.length>5&&<span style={{fontSize:8,color:T.dm}}>+{t.kits.length-5}</span>}</div>}</div></div>)})}</div>
+
+      {/* Detail panel */}
+      {activeTrip&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{padding:18,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+            <div><div style={{fontSize:16,fontWeight:800,fontFamily:T.u,color:T.tx}}>{activeTrip.name}</div>
+              <Bg color={statusColors[activeTrip.status]} bg={statusColors[activeTrip.status]+"18"}>{statusLabels[activeTrip.status]}</Bg></div>
+            {isAdmin&&<div style={{display:"flex",gap:4}}>
+              <Bt v="ghost" sm onClick={()=>{setFm({name:activeTrip.name,description:activeTrip.description,startDate:activeTrip.startDate?.slice(0,10)||"",endDate:activeTrip.endDate?.slice(0,10)||"",status:activeTrip.status});setMd(activeTrip.id)}}>Edit</Bt>
+              <Bt v="ghost" sm onClick={()=>deleteTrip(activeTrip.id)} style={{color:T.rd}}>Del</Bt></div>}</div>
+          {activeTrip.description&&<div style={{fontSize:11,color:T.mu,fontFamily:T.m,marginBottom:10}}>{activeTrip.description}</div>}
+          <div style={{fontSize:10,color:T.dm,fontFamily:T.m}}>{fmtD(activeTrip.startDate)} → {fmtD(activeTrip.endDate)}</div></div>
+
+        {/* Trip kits */}
+        <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>Assigned Kits ({tripKits.length})</div>
+            {isAdmin&&(activeTrip.status==="planning"||activeTrip.status==="active")&&<Bt v="ind" sm onClick={()=>{
+              setAssignKits(tripKits.map(k=>k.id));setAssignMd(true)}}>+ Assign</Bt>}</div>
+          {tripKits.length===0?<div style={{fontSize:10,color:T.dm,fontFamily:T.m,textAlign:"center",padding:10}}>No kits assigned</div>:
+            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+              {tripKits.map(k=>{const ty=types.find(t=>t.id===k.typeId);const holder=k.issuedTo?personnel.find(p=>p.id===k.issuedTo):null;return(
+                <div key={k.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:6,
+                  background:"rgba(255,255,255,.02)",border:"1px solid "+T.bd}}>
+                  <Sw color={k.color} size={20}/><div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k.color} <span style={{color:T.dm}}>({ty?.name})</span></div>
+                    {holder&&<div style={{fontSize:9,color:T.am,fontFamily:T.m}}>Issued: {holder.name}</div>}</div>
+                  {isAdmin&&<Bt v="ghost" sm onClick={e=>{e.stopPropagation();removeFromTrip(k.id)}} style={{color:T.rd,fontSize:9}}>×</Bt>}</div>)})}</div>}</div>
+
+        {/* Trip reservations */}
+        {tripRes.length>0&&<div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+          <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:10}}>Reservations ({tripRes.length})</div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {tripRes.map(r=>{const k=kits.find(x=>x.id===r.kitId);const p=personnel.find(x=>x.id===r.personId);return(
+              <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:6,background:"rgba(255,255,255,.02)"}}>
+                {k&&<Sw color={k.color} size={14}/>}<div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:10,color:T.tx,fontFamily:T.m}}>{p?.name} — {k?.color}</div>
+                  <div style={{fontSize:8,color:T.dm,fontFamily:T.m}}>{fmtD(r.startDate)} → {fmtD(r.endDate)}</div></div>
+                <Bg color={r.status==="confirmed"?T.gn:r.status==="pending"?T.or:T.rd} bg={(r.status==="confirmed"?T.gn:r.status==="pending"?T.or:T.rd)+"18"}>{r.status}</Bg></div>)})}</div></div>}
+      </div>}
+    </div>
+
+    {/* Create/Edit trip modal */}
+    <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"New Trip":"Edit Trip"}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <Fl label="Trip Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))} placeholder="e.g. Operation Sunrise"/></Fl>
+        <Fl label="Description"><In value={fm.description} onChange={e=>setFm(p=>({...p,description:e.target.value}))} placeholder="Brief description..."/></Fl>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Fl label="Start Date"><In type="date" value={fm.startDate?.slice(0,10)||fm.startDate} onChange={e=>setFm(p=>({...p,startDate:e.target.value}))}/></Fl>
+          <Fl label="End Date"><In type="date" value={fm.endDate?.slice(0,10)||fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl></div>
+        <Fl label="Status"><Sl options={[{v:"planning",l:"Planning"},{v:"active",l:"Active"},{v:"completed",l:"Completed"},{v:"cancelled",l:"Cancelled"}]}
+          value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt>
+          <Bt v="primary" onClick={saveTrip} disabled={!fm.name.trim()||!fm.startDate||!fm.endDate}>{md==="add"?"Create":"Save"}</Bt></div></div></ModalWrap>
+
+    {/* Assign kits modal */}
+    <ModalWrap open={assignMd} onClose={()=>setAssignMd(false)} title="Assign Kits to Trip" wide>
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Select kits to assign to <b>{activeTrip?.name}</b></div>
+        <div style={{maxHeight:350,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
+          {availableForAssign.map(k=>{const ty=types.find(t=>t.id===k.typeId);const isChecked=assignKits.includes(k.id);return(
+            <div key={k.id} onClick={()=>setAssignKits(p=>isChecked?p.filter(x=>x!==k.id):[...p,k.id])}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,cursor:"pointer",
+                background:isChecked?"rgba(129,140,248,.06)":"rgba(255,255,255,.02)",border:"1px solid "+(isChecked?"rgba(129,140,248,.25)":T.bd)}}>
+              <div style={{width:18,height:18,borderRadius:4,border:"1.5px solid "+(isChecked?T.ind:T.bd),background:isChecked?T.ind:"transparent",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:700}}>{isChecked?"✓":""}</div>
+              <Sw color={k.color} size={18}/><div style={{flex:1}}>
+                <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k.color}</div>
+                <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{ty?.name}</div></div>
+              {k.tripId&&k.tripId!==activeTrip?.id&&<Bg color={T.am} bg="rgba(251,191,36,.1)">On other trip</Bg>}
+              {k.issuedTo&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">Issued</Bg>}</div>)})}</div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <Bt onClick={()=>setAssignMd(false)}>Cancel</Bt>
+          <Bt v="primary" onClick={doAssign}>{assignKits.length} kits selected — Assign</Bt></div></div></ModalWrap></div>);}
+
 /* ═══════════ RESERVATIONS PAGE ═══════════ */
-function ReservationsPage({reservations,setReservations,kits,personnel,curUserId,isAdmin,addLog,onRefreshReservations}){
-  const[md,setMd]=useState(null);const[fm,setFm]=useState({kitId:"",startDate:"",endDate:"",purpose:""});
+function ReservationsPage({reservations,setReservations,kits,personnel,trips,curUserId,isAdmin,addLog,onRefreshReservations}){
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({kitId:"",tripId:"",startDate:"",endDate:"",purpose:""});
   const[viewDate,setViewDate]=useState(()=>new Date());const[selectedDay,setSelectedDay]=useState(null);
   const pending=reservations.filter(r=>r.status==="pending");
   const active=reservations.filter(r=>r.status==="confirmed"||r.status==="pending");
@@ -1229,11 +1356,12 @@ function ReservationsPage({reservations,setReservations,kits,personnel,curUserId
     return reservations.some(r=>r.id!==excludeId&&r.kitId===kitId&&r.status!=="cancelled"&&
       new Date(r.startDate)<=new Date(end)&&new Date(r.endDate)>=new Date(start))};
   
+  const activeTrips=(trips||[]).filter(t=>t.status==="planning"||t.status==="active");
   const createRes=async()=>{
     if(checkConflict(fm.kitId,fm.startDate,fm.endDate)){alert("Conflict with existing reservation");return}
-    try{await api.reservations.create({kitId:fm.kitId,startDate:fm.startDate,endDate:fm.endDate,purpose:fm.purpose});
+    try{await api.reservations.create({kitId:fm.kitId,tripId:fm.tripId||null,startDate:fm.startDate,endDate:fm.endDate,purpose:fm.purpose});
     await onRefreshReservations()}catch(e){alert(e.message)}
-    setMd(null);setFm({kitId:"",startDate:"",endDate:"",purpose:""})};
+    setMd(null);setFm({kitId:"",tripId:"",startDate:"",endDate:"",purpose:""})};
 
   const approveRes=async(id)=>{try{await api.reservations.approve(id);await onRefreshReservations()}catch(e){alert(e.message)}};
   const cancelRes=async(id)=>{try{await api.reservations.cancel(id);await onRefreshReservations()}catch(e){alert(e.message)}};
@@ -1312,6 +1440,7 @@ function ReservationsPage({reservations,setReservations,kits,personnel,curUserId
                   {isMine&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">Mine</Bg>}</div>
                 <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{p?.name}</div>
                 <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:4}}>{r.startDate} → {r.endDate}</div>
+                {r.tripName&&<div style={{fontSize:9,color:T.pu,fontFamily:T.m,marginTop:3}}>▸ {r.tripName}</div>}
                 {r.purpose&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,fontStyle:"italic",marginTop:4}}>{r.purpose}</div>}
                 {(isMine||isAdmin)&&<div style={{display:"flex",gap:4,marginTop:8}}>
                   {isAdmin&&r.status==="pending"&&<Bt v="success" sm onClick={()=>approveRes(r.id)}>Approve</Bt>}
@@ -1346,6 +1475,8 @@ function ReservationsPage({reservations,setReservations,kits,personnel,curUserId
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fl label="Start Date"><In type="date" value={fm.startDate} onChange={e=>setFm(p=>({...p,startDate:e.target.value}))}/></Fl>
           <Fl label="End Date"><In type="date" value={fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl></div>
+        {activeTrips.length>0&&<Fl label="Trip (optional)"><Sl options={[{v:"",l:"-- No Trip --"},...activeTrips.map(t=>({v:t.id,l:t.name}))]}
+          value={fm.tripId} onChange={e=>setFm(p=>({...p,tripId:e.target.value}))}/></Fl>}
         <Fl label="Purpose"><In value={fm.purpose} onChange={e=>setFm(p=>({...p,purpose:e.target.value}))} placeholder="Project, event, etc."/></Fl>
         {fm.kitId&&fm.startDate&&fm.endDate&&checkConflict(fm.kitId,fm.startDate,fm.endDate)&&
           <div style={{padding:10,borderRadius:6,background:"rgba(239,68,68,.1)",color:T.rd,fontSize:11,fontFamily:T.m}}>⚠ Conflicts with existing reservation</div>}
@@ -1618,8 +1749,8 @@ function CompAdmin({comps,setComps,types,onRefreshComps}){
       title="Delete Component?" message={`Are you sure you want to delete "${deleteConfirm?.label}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ KIT TYPES ═══════════ */
-function TypeAdmin({types,setTypes,comps,kits,onRefreshTypes}){
-  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",desc:"",compIds:[],compQtys:{},fields:[]});const[fd,setFd]=useState({key:"",label:"",type:"text"});
+function TypeAdmin({types,setTypes,comps,kits,depts,onRefreshTypes}){
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",desc:"",compIds:[],compQtys:{},fields:[],deptIds:[]});const[fd,setFd]=useState({key:"",label:"",type:"text"});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const grouped=useMemo(()=>{const g={};comps.forEach(c=>{(g[c.cat]=g[c.cat]||[]).push(c)});return g},[comps]);
   const togC=cid=>{setFm(p=>{if(p.compIds.includes(cid)){const nq={...p.compQtys};delete nq[cid];return{...p,compIds:p.compIds.filter(x=>x!==cid),compQtys:nq}}return{...p,compIds:[...p.compIds,cid]}})};
@@ -1628,28 +1759,29 @@ function TypeAdmin({types,setTypes,comps,kits,onRefreshTypes}){
     setFm(p=>({...p,fields:[...p.fields,{key:k,label:fd.label.trim(),type:fd.type}]}));setFd({key:"",label:"",type:"text"})};
   const totalExpanded=(ids,qtys)=>ids.reduce((s,id)=>s+(qtys[id]||1),0);
   const save=async()=>{if(!fm.name.trim())return;
-    try{if(md==="add"){await api.types.create({name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields})}
-    else{await api.types.update(md,{name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields})}
+    try{if(md==="add"){await api.types.create({name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields,deptIds:fm.deptIds||[]})}
+    else{await api.types.update(md,{name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields,deptIds:fm.deptIds||[]})}
     await onRefreshTypes()}catch(e){alert(e.message)}setMd(null)};
   const confirmDelete=(type)=>{const n=kits?.filter(k=>k.typeId===type.id).length||0;
     if(n>0){alert("Cannot delete: "+n+" kit(s) use this type");return}
     setDeleteConfirm(type)};
   const doDelete=async()=>{if(deleteConfirm){try{await api.types.delete(deleteConfirm.id);await onRefreshTypes()}catch(e){alert(e.message)}}};
   return(<div>
-    <SH title="Kit Types" sub={types.length+" templates"} action={<Bt v="primary" onClick={()=>{setFm({name:"",desc:"",compIds:[],compQtys:{},fields:[]});setMd("add")}}>+ Add</Bt>}/>
+    <SH title="Kit Types" sub={types.length+" templates"} action={<Bt v="primary" onClick={()=>{setFm({name:"",desc:"",compIds:[],compQtys:{},fields:[],deptIds:[]});setMd("add")}}>+ Add</Bt>}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:12}}>
       {types.map(t=>{const sc=t.compIds.filter(id=>comps.find(c=>c.id===id&&c.ser)).length;const inUse=kits?.filter(k=>k.typeId===t.id).length||0;const tc=totalExpanded(t.compIds,t.compQtys||{});return(
         <div key={t.id} style={{padding:18,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
             <div><div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>{t.name}</div>
               <div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:2}}>{t.desc||"No description"}</div></div>
-            <div style={{display:"flex",gap:4}}><Bt v="ghost" sm onClick={()=>{setFm({name:t.name,desc:t.desc,compIds:[...t.compIds],compQtys:{...(t.compQtys||{})},fields:t.fields.map(f=>({...f}))});setMd(t.id)}}>Edit</Bt>
+            <div style={{display:"flex",gap:4}}><Bt v="ghost" sm onClick={()=>{setFm({name:t.name,desc:t.desc,compIds:[...t.compIds],compQtys:{...(t.compQtys||{})},fields:t.fields.map(f=>({...f})),deptIds:[...(t.deptIds||[])]});setMd(t.id)}}>Edit</Bt>
               <Bt v="ghost" sm onClick={()=>confirmDelete(t)} style={{color:T.rd}} disabled={inUse>0}>Del</Bt></div></div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             <Bg color={T.ind} bg="rgba(129,140,248,.1)">{tc} items ({t.compIds.length} types)</Bg>
             {sc>0&&<Bg color={T.am} bg="rgba(251,191,36,.08)">{sc} serialized</Bg>}
             <Bg color={T.tl} bg="rgba(45,212,191,.1)">{t.fields.length} fields</Bg>
-            {inUse>0&&<Bg color={T.pk} bg="rgba(244,114,182,.08)">{inUse} kits</Bg>}</div></div>)})}</div>
+            {inUse>0&&<Bg color={T.pk} bg="rgba(244,114,182,.08)">{inUse} kits</Bg>}
+            {(t.deptIds||[]).map(did=>{const dept=depts.find(d=>d.id===did);return dept?<Bg key={did} color={dept.color} bg={dept.color+"18"}>{dept.name}</Bg>:null})}</div></div>)})}</div>
     <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Create Kit Type":"Edit Kit Type"} wide>
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -1677,6 +1809,13 @@ function TypeAdmin({types,setTypes,comps,kits,onRefreshTypes}){
             <Fl label="Label"><In value={fd.label} onChange={e=>setFd(p=>({...p,label:e.target.value}))} style={{width:180}}/></Fl>
             <Fl label="Type"><Sl options={["text","number","toggle"]} value={fd.type} onChange={e=>setFd(p=>({...p,type:e.target.value}))}/></Fl>
             <Bt v="ind" sm onClick={addField}>+ Add</Bt></div></div>
+        {depts.length>0&&<div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:8}}>Departments ({(fm.deptIds||[]).length} assigned)</div>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {depts.map(d=>{const s=(fm.deptIds||[]).includes(d.id);return(
+              <button key={d.id} onClick={()=>setFm(p=>({...p,deptIds:s?(p.deptIds||[]).filter(x=>x!==d.id):[...(p.deptIds||[]),d.id]}))}
+                style={{all:"unset",cursor:"pointer",padding:"4px 12px",borderRadius:5,fontSize:10,fontFamily:T.m,
+                  background:s?d.color+"22":"rgba(255,255,255,.02)",border:"1px solid "+(s?d.color+"55":T.bd),color:s?d.color:T.mu}}>
+                {s?"✓ ":""}{d.name}</button>)})}</div></div>}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Create":"Save"}</Bt></div></div></ModalWrap>
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
       title="Delete Kit Type?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This template will no longer be available for new kits.`}/></div>);}
@@ -1994,14 +2133,18 @@ function MyProfile({user,personnel,setPersonnel,kits,assets,depts,onRefreshPerso
 
 /* ═══════════ KIT ISSUANCE ═══════════ */
 function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,curUserId,settings,requests,setRequests,addLog,onNavigateToKit,reservations}){
-  const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[view,setView]=useState("all");
+  const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
+  const hasDept=!!userDeptId;const defaultView=hasDept&&!isSuper?"dept":"all";
+  const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[view,setView]=useState(defaultView);
   const filt=useMemo(()=>{let list=kits;
+    if(view==="dept"&&userDeptId)list=list.filter(k=>k.deptId===userDeptId);
     if(view==="issued")list=list.filter(k=>k.issuedTo);if(view==="available")list=list.filter(k=>!k.issuedTo&&!k.maintenanceStatus);
     if(view==="mine")list=list.filter(k=>k.issuedTo===curUserId);
     if(search){const q=search.toLowerCase();list=list.filter(k=>{const p=k.issuedTo?personnel.find(x=>x.id===k.issuedTo):null;const lo=locs.find(l=>l.id===k.locId);
       return k.color.toLowerCase().includes(q)||(p&&p.name.toLowerCase().includes(q))||(lo&&lo.name.toLowerCase().includes(q))});}
-    return list},[kits,view,search,personnel,locs,curUserId]);
-  const issuedCt=kits.filter(k=>k.issuedTo).length;const myCt=kits.filter(k=>k.issuedTo===curUserId).length;
+    return list},[kits,view,search,personnel,locs,curUserId,userDeptId]);
+  const deptName=userDeptId?depts.find(d=>d.id===userDeptId)?.name:"";
+  const issuedCt=kits.filter(k=>k.issuedTo).length;const myCt=kits.filter(k=>k.issuedTo===curUserId).length;const deptCt=userDeptId?kits.filter(k=>k.deptId===userDeptId).length:0;
   const needsApproval=kit=>{if(!settings.requireDeptApproval||!kit.deptId||isSuper||isAdmin)return false;
     const dept=depts.find(d=>d.id===kit.deptId);return!(dept&&dept.headId===curUserId)};
   const doCheckout=async(kitId,data)=>{const kit=kits.find(k=>k.id===kitId);
@@ -2019,9 +2162,10 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
         {(isAdmin||isSuper)&&<Bt v="primary" onClick={()=>setMd("adminIssue")}>Admin Issue</Bt>}</div>}/>
     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
       <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:200,maxWidth:"100%"}}/>
-      {["all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
+      {[...(hasDept?["dept"]:[]),"all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="dept"?deptCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
+        const label=v==="dept"?deptName||"My Dept":v;
         return <button key={v} onClick={()=>setView(v)} style={{all:"unset",cursor:"pointer",padding:"5px 12px",borderRadius:5,fontSize:10,fontFamily:T.m,fontWeight:600,
-          background:view===v?"rgba(255,255,255,.08)":"transparent",color:view===v?T.tx:T.mu,border:"1px solid "+(view===v?T.bdH:T.bd)}}>{v} ({ct})</button>})}</div>
+          background:view===v?"rgba(255,255,255,.08)":"transparent",color:view===v?T.tx:T.mu,border:"1px solid "+(view===v?T.bdH:T.bd)}}>{label} ({ct})</button>})}</div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(320px,100%),1fr))",gap:8}}>
       {filt.map(kit=>{const person=kit.issuedTo?personnel.find(p=>p.id===kit.issuedTo):null;const lo=locs.find(l=>l.id===kit.locId);const ty=types.find(t=>t.id===kit.typeId);
         const st=stMeta(kit.lastChecked);const isMine=kit.issuedTo===curUserId;const dept=kit.deptId?depts.find(d=>d.id===kit.deptId):null;const na=needsApproval(kit);const inMaint=kit.maintenanceStatus;
@@ -2043,6 +2187,9 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
           :<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(34,197,94,.03)",border:"1px solid rgba(34,197,94,.1)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.gn}}/><span style={{fontSize:10,color:T.gn,fontFamily:T.m,flex:1}}>Available</span>
             {(settings.allowUserCheckout||isAdmin||isSuper)&&<Bt v={na?"orange":"primary"} sm onClick={()=>setMd("checkout:"+kit.id)}>{na?"Request":"Checkout"}</Bt>}</div>}
+          {kit._trip&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:6,background:"rgba(168,85,247,.04)",border:"1px solid rgba(168,85,247,.12)",marginTop:6}}>
+            <span style={{fontSize:10,color:T.pu,fontFamily:T.m,fontWeight:600}}>▸</span>
+            <span style={{fontSize:9,color:T.pu,fontFamily:T.m,flex:1}}>Trip: {kit._trip.name}</span></div>}
           {upcoming.length>0&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:6,background:"rgba(251,146,60,.04)",border:"1px solid rgba(251,146,60,.12)",marginTop:6}}>
             <span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600}}>!</span>
             <span style={{fontSize:9,color:T.or,fontFamily:T.m,flex:1}}>Reserved: {upcoming.map(r=>{const who=personnel.find(p=>p.id===r.personId);return(who?.name||"?")+" "+fmtDate(r.startDate)}).join(", ")}</span></div>}
@@ -2069,7 +2216,9 @@ function AdminIssuePicker({kits,types,locs,personnel,allC,settings,onIssue,onCan
 
 /* ═══════════ KIT INVENTORY ═══════════ */
 function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics,onRefreshKits,initialSelectedKit,onClearSelectedKit}){
+  const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
   const[selId,setSelId]=useState(initialSelectedKit||null);const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[lf,setLf]=useState("ALL");
+  const[df,setDf]=useState(()=>userDeptId&&!isSuper?userDeptId:"ALL");
   const[statusFilter,setStatusFilter]=useState(initialFilter);
   const[kf,setKf]=useState(null);const sel=kits.find(k=>k.id===selId);
   
@@ -2099,11 +2248,13 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
     if(statusFilter==="available"&&(k.issuedTo||k.maintenanceStatus))return false;
     if(statusFilter==="maintenance"&&!k.maintenanceStatus)return false;
     if(statusFilter==="overdue"&&!overdueIds.has(k.id))return false;
+    /* Department filter */
+    if(df!=="ALL"&&k.deptId!==df)return false;
     /* Location filter */
     if(lf!=="ALL"&&k.locId!==lf)return false;
     /* Search filter */
     if(!search)return true;const q=search.toLowerCase();const lo=locs.find(l=>l.id===k.locId);
-    return k.color.toLowerCase().includes(q)||(lo?.name||"").toLowerCase().includes(q)||Object.values(k.fields).some(v=>String(v).toLowerCase().includes(q))||Object.values(k.serials).some(v=>v?.toLowerCase().includes(q))}),[kits,lf,search,locs,statusFilter,overdueIds]);
+    return k.color.toLowerCase().includes(q)||(lo?.name||"").toLowerCase().includes(q)||Object.values(k.fields).some(v=>String(v).toLowerCase().includes(q))||Object.values(k.serials).some(v=>v?.toLowerCase().includes(q))}),[kits,lf,df,search,locs,statusFilter,overdueIds]);
   const lc=useMemo(()=>{const c={};kits.forEach(k=>{c[k.locId]=(c[k.locId]||0)+1});return c},[kits]);
   const cType=kf?types.find(t=>t.id===kf.typeId):null;const canInspect=settings.allowUserInspect||isAdmin||isSuper;
   const toggleFav=id=>setFavorites(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
@@ -2133,7 +2284,12 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
         <button onClick={()=>setLf("ALL")} style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:5,fontSize:9,fontFamily:T.m,fontWeight:600,
           background:lf==="ALL"?"rgba(255,255,255,.08)":"transparent",color:lf==="ALL"?T.tx:T.mu,border:"1px solid "+(lf==="ALL"?T.bdH:T.bd)}}>ALL ({kits.length})</button>
         {locs.map(l=><button key={l.id} onClick={()=>setLf(lf===l.id?"ALL":l.id)} style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:5,fontSize:9,fontFamily:T.m,
-          background:lf===l.id?"rgba(255,255,255,.08)":"transparent",color:lf===l.id?T.tx:T.mu,border:"1px solid "+(lf===l.id?T.bdH:T.bd)}}>{l.sc} ({lc[l.id]||0})</button>)}</div></div>
+          background:lf===l.id?"rgba(255,255,255,.08)":"transparent",color:lf===l.id?T.tx:T.mu,border:"1px solid "+(lf===l.id?T.bdH:T.bd)}}>{l.sc} ({lc[l.id]||0})</button>)}</div>
+      {depts.length>1&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+        <button onClick={()=>setDf("ALL")} style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:5,fontSize:9,fontFamily:T.m,fontWeight:600,
+          background:df==="ALL"?"rgba(255,255,255,.08)":"transparent",color:df==="ALL"?T.tx:T.mu,border:"1px solid "+(df==="ALL"?T.bdH:T.bd)}}>All Depts</button>
+        {depts.map(d=>{const ct=kits.filter(k=>k.deptId===d.id).length;return <button key={d.id} onClick={()=>setDf(df===d.id?"ALL":d.id)} style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:5,fontSize:9,fontFamily:T.m,
+          background:df===d.id?d.color+"22":"transparent",color:df===d.id?d.color:T.mu,border:"1px solid "+(df===d.id?d.color+"55":T.bd)}}>{d.name} ({ct})</button>})}</div>}</div>
     <div className="slate-grid-side" style={{display:"grid",gridTemplateColumns:sel?"1fr 360px":"1fr",gap:0}}>
       <div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(240px,100%),1fr))",gap:8}}>
         {filt.map(kit=>{const st=stMeta(kit.lastChecked);const ty=types.find(t=>t.id===kit.typeId);const lo=locs.find(l=>l.id===kit.locId);
@@ -2151,7 +2307,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
             <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
               {ty&&<Bg color={T.ind} bg="rgba(129,140,248,.08)">{ty.name}</Bg>}
               {kit.maintenanceStatus?<Bg color={T.am} bg="rgba(251,191,36,.08)">Maint</Bg>:person?<Bg color={T.pk} bg="rgba(244,114,182,.06)">{person.title}</Bg>:<Bg color={T.gn} bg="rgba(34,197,94,.05)">Avail</Bg>}
-              {dept&&<DeptBg dept={dept}/>}</div>
+              {dept&&<DeptBg dept={dept}/>}{kit._trip&&<Bg color={T.pu} bg="rgba(168,85,247,.08)">▸ {kit._trip.name}</Bg>}</div>
             {cEx.length>0&&<div style={{display:"flex",gap:1}}>{cEx.map(e=>{const s=cSty[kit.comps[e.key]||"GOOD"];return <div key={e.key} style={{flex:1,height:2.5,borderRadius:1,background:s.fg,opacity:.55}}/>})}</div>}</button>)})}</div>
         {!filt.length&&<div style={{padding:40,textAlign:"center",color:T.dm,fontFamily:T.m}}>No kits</div>}</div>
       {sel&&(()=>{const ty=types.find(t=>t.id===sel.typeId);const lo=locs.find(l=>l.id===sel.locId);const st=stMeta(sel.lastChecked);
@@ -2332,6 +2488,7 @@ const NAV_SECTIONS=[
     {id:"issuance",l:"Checkout",i:"↔",access:"all"},
   ]},
   {id:"tools",label:"Tools",items:[
+    {id:"trips",l:"Trips",i:"▸",access:"all"},
     {id:"reservations",l:"Reservations",i:"◷",access:"all",setting:"enableReservations"},
     {id:"approvals",l:"Approvals",i:"✓",access:"approver"},
     {id:"maintenance",l:"Maintenance",i:"⚙",access:"admin",perm:"maintenance",setting:"enableMaintenance"},
@@ -2530,7 +2687,7 @@ export default function App(){
   const[kits,setKits]=useState([]);
   const[curUser,setCurUser]=useState(null);const[mustChangePw,setMustChangePw]=useState(false);const[settings,setSettings]=useState(DEF_SETTINGS);
   const[requests,setRequests]=useState([]);const[logs,setLogs]=useState([]);
-  const[reservations,setReservations]=useState([]);
+  const[reservations,setReservations]=useState([]);const[trips,setTrips]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[favorites,setFavorites]=useState([]);
   const[searchMd,setSearchMd]=useState(false);const[scanMd,setScanMd]=useState(null);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);
   const[collapsedSections,setCollapsedSections]=useState({});
@@ -2553,19 +2710,24 @@ export default function App(){
     return{id:t.id,name:t.name,desc:t.desc||"",
       compIds:tComps.map(c=>c.componentId||c.component?.id),
       compQtys:Object.fromEntries(tComps.filter(c=>c.quantity>1).map(c=>[c.componentId||c.component?.id,c.quantity])),
-      fields:(t.fields||[]).map(f=>({key:f.key,label:f.label,type:f.type||"text"}))}};
+      fields:(t.fields||[]).map(f=>({key:f.key,label:f.label,type:f.type||"text"})),
+      deptIds:(t.departments||[]).map(d=>d.deptId||d.department?.id).filter(Boolean)}};
   const xformLoc=l=>({id:l.id,name:l.name,sc:l.shortCode});
-  const xformDept=d=>({id:d.id,name:d.name,color:d.color||"#60a5fa",headId:d.headId||d.head?.id||null});
+  const xformDept=d=>({id:d.id,name:d.name,color:d.color||"#60a5fa",headId:d.headId||d.head?.id||null,
+    kitTypeIds:(d.kitTypes||[]).map(kt=>kt.kitTypeId||kt.kitType?.id).filter(Boolean)});
+  const xformTrip=t=>({id:t.id,name:t.name,description:t.description||"",startDate:t.startDate,endDate:t.endDate,
+    status:t.status,kits:(t.kits||[]).map(k=>({id:k.id,color:k.color,typeId:k.typeId,typeName:k.type?.name})),
+    reservationCount:t._count?.reservations||0});
   const xformPerson=p=>({id:p.id,name:p.name,title:p.title||"",role:p.role,deptId:p.deptId});
   const xformKit=(k)=>({
-    id:k.id,typeId:k.typeId,color:k.color,locId:k.locId,deptId:k.deptId,
+    id:k.id,typeId:k.typeId,color:k.color,locId:k.locId,deptId:k.deptId,tripId:k.tripId||null,
     fields:k.fields||{},lastChecked:k.lastChecked,comps:k.comps||{},serials:k.serials||{},calibrationDates:k.calibrationDates||{},
     inspections:k.inspections||[],issuedTo:k.issuedTo,issueHistory:k.issueHistory||[],
     maintenanceStatus:k.maintenanceStatus,maintenanceHistory:k.maintenanceHistory||[],photos:k.photos||[],reservations:k.reservations||[],
-    _type:k._type,_location:k._location,_department:k._department,_issuedTo:k._issuedTo,
+    _type:k._type,_location:k._location,_department:k._department,_issuedTo:k._issuedTo,_trip:k._trip||null,
   });
   const xformLog=l=>({id:l.id,action:l.action,target:l.target,targetId:l.targetId,by:l.userId,date:l.date,details:l.details||{}});
-  const xformReservation=r=>({id:r.id,kitId:r.kitId,personId:r.personId,startDate:r.startDate,endDate:r.endDate,purpose:r.purpose||"",status:r.status,createdDate:r.createdAt});
+  const xformReservation=r=>({id:r.id,kitId:r.kitId,personId:r.personId,tripId:r.tripId||null,tripName:r.trip?.name||null,startDate:r.startDate,endDate:r.endDate,purpose:r.purpose||"",status:r.status,createdDate:r.createdAt});
   const xformConsumable=c=>({id:c.id,name:c.name,sku:c.sku||"",category:c.category,qty:c.qty,minQty:c.minQty,unit:c.unit||"ea"});
   const xformAsset=a=>({id:a.id,name:a.name,serial:a.serial,category:a.category,locId:a.locId,issuedTo:a.issuedToId||null,
     issueHistory:(a.issueHistory||[]).map(h=>({id:h.id,personId:h.personId,issuedDate:h.issuedDate,returnedDate:h.returnedDate,issuedBy:h.issuedById})),
@@ -2574,14 +2736,15 @@ export default function App(){
   /* Load all data from API */
   const loadData=useCallback(async()=>{
     try{
-      const[compsD,typesD,locsD,deptsD,persD,kitsD,consD,assetsD,resD]=await Promise.all([
+      const[compsD,typesD,locsD,deptsD,persD,kitsD,consD,assetsD,resD,tripsD]=await Promise.all([
         api.components.list(),api.types.list(),api.locations.list(),api.departments.list(),
-        api.personnel.list(),api.kits.list(),api.consumables.list(),api.assets.list(),api.reservations.list(),
+        api.personnel.list(),api.kits.list(),api.consumables.list(),api.assets.list(),api.reservations.list(),api.trips.list(),
       ]);
       const mappedComps=compsD.map(xformComp);
       setComps(mappedComps);setTypes(typesD.map(t=>xformType(t,mappedComps)));setLocs(locsD.map(xformLoc));
       setDepts(deptsD.map(xformDept));setPersonnel(persD.map(xformPerson));setKits(kitsD.map(xformKit));
       setConsumables(consD.map(xformConsumable));setAssets(assetsD.map(xformAsset));setReservations(resD.map(xformReservation));
+      setTrips((tripsD||[]).map(xformTrip));
       try{const logsD=await api.audit.list({limit:500});setLogs((logsD.logs||[]).map(xformLog))}catch(e){}
       try{const sett=await api.settings.get();setSettings(s=>({...s,...sett}))}catch(e){}
       setDataLoaded(true);setLoadError("");
@@ -2603,6 +2766,7 @@ export default function App(){
   const refreshConsumables=async()=>{try{const d=await api.consumables.list();setConsumables(d.map(xformConsumable))}catch(e){}};
   const refreshAssets=async()=>{try{const d=await api.assets.list();setAssets(d.map(xformAsset))}catch(e){}};
   const refreshReservations=async()=>{try{const d=await api.reservations.list();setReservations(d.map(xformReservation))}catch(e){}};
+  const refreshTrips=async()=>{try{const d=await api.trips.list();setTrips((d||[]).map(xformTrip))}catch(e){}};
   const refreshPersonnel=async()=>{try{const d=await api.personnel.list();setPersonnel(d.map(xformPerson))}catch(e){}};
   const refreshComps=async()=>{try{const d=await api.components.list();setComps(d.map(xformComp))}catch(e){}};
   const refreshTypes=async()=>{try{const d=await api.types.list();setTypes(d.map(t=>xformType(t,comps)))}catch(e){}};
@@ -2800,15 +2964,17 @@ export default function App(){
         {pg==="reports"&&canAccess({access:"admin",perm:"reports"})&&<ReportsPage kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs} logs={logs} analytics={analytics}/>}
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}
           personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} addLog={addLog} onRefreshKits={refreshKits}/>}
+        {pg==="trips"&&<TripsPage trips={trips} kits={kits} types={types} depts={depts} personnel={personnel} reservations={reservations}
+          isAdmin={isAdmin} curUserId={curUser} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits}/>}
         {pg==="reservations"&&settings.enableReservations&&<ReservationsPage reservations={reservations} setReservations={setReservations}
-          kits={kits} personnel={personnel} curUserId={curUser} isAdmin={isAdmin} addLog={addLog} onRefreshReservations={refreshReservations}/>}
+          kits={kits} personnel={personnel} trips={trips} curUserId={curUser} isAdmin={isAdmin} addLog={addLog} onRefreshReservations={refreshReservations}/>}
         {pg==="maintenance"&&canAccess({access:"admin",perm:"maintenance",setting:"enableMaintenance"})&&settings.enableMaintenance&&<MaintenancePage kits={kits} setKits={setKits} types={types} locs={locs}
           personnel={personnel} addLog={addLog} curUserId={curUser} onSendMaint={apiSendMaint} onReturnMaint={apiReturnMaint}/>}
         {pg==="consumables"&&canAccess({access:"admin",perm:"consumables",setting:"enableConsumables"})&&settings.enableConsumables&&<ConsumablesPage consumables={consumables} setConsumables={setConsumables}
           assets={assets} setAssets={setAssets} personnel={personnel} locs={locs} addLog={addLog} curUserId={curUser} isAdmin={isAdmin}
           onRefreshConsumables={refreshConsumables} onRefreshAssets={refreshAssets}/>}
         {pg==="auditlog"&&isSuper&&<AuditLogPage logs={logs} kits={kits} personnel={personnel}/>}
-        {pg==="types"&&canAccess({access:"admin",perm:"types"})&&<TypeAdmin types={types} setTypes={setTypes} comps={comps} kits={kits} onRefreshTypes={refreshTypes}/>}
+        {pg==="types"&&canAccess({access:"admin",perm:"types"})&&<TypeAdmin types={types} setTypes={setTypes} comps={comps} kits={kits} depts={depts} onRefreshTypes={refreshTypes}/>}
         {pg==="components"&&canAccess({access:"admin",perm:"components"})&&<CompAdmin comps={comps} setComps={setComps} types={types} onRefreshComps={refreshComps}/>}
         {pg==="locations"&&canAccess({access:"admin",perm:"locations"})&&<LocAdmin locs={locs} setLocs={setLocs} kits={kits} onRefreshLocs={refreshLocs}/>}
         {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} onRefreshDepts={refreshDepts}/>}

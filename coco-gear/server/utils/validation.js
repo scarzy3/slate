@@ -102,9 +102,19 @@ export const assetSchema = z.object({
   notes: z.string().max(1000).optional().default(''),
 });
 
+// ─── Trip ───
+export const tripSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(1000).optional().default(''),
+  startDate: z.string().refine(d => !isNaN(Date.parse(d))),
+  endDate: z.string().refine(d => !isNaN(Date.parse(d))),
+  status: z.enum(['planning', 'active', 'completed', 'cancelled']).optional().default('planning'),
+});
+
 // ─── Reservation ───
 export const reservationSchema = z.object({
   kitId: z.string().uuid(),
+  tripId: z.string().uuid().nullable().optional(),
   startDate: z.string().refine(d => !isNaN(Date.parse(d))),
   endDate: z.string().refine(d => !isNaN(Date.parse(d))),
   purpose: z.string().max(500).optional().default(''),

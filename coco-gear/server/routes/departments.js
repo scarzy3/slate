@@ -14,6 +14,7 @@ router.get('/', authMiddleware, async (req, res) => {
     const departments = await prisma.department.findMany({
       include: {
         head: { select: { id: true, name: true, title: true } },
+        kitTypes: { include: { kitType: { select: { id: true, name: true } } } },
         _count: { select: { members: true, kits: true } },
       },
       orderBy: { name: 'asc' },
