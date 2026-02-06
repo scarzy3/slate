@@ -159,6 +159,7 @@ export const settingsSchema = z.object({
   enableReservations: z.boolean().optional(),
   enableMaintenance: z.boolean().optional(),
   enableConsumables: z.boolean().optional(),
+  enableQR: z.boolean().optional(),
   adminPerms: z.object({
     analytics: z.boolean().optional(),
     reports: z.boolean().optional(),
