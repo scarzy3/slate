@@ -2578,7 +2578,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
   const doCheckout=async(kitId,data)=>{const kit=kits.find(k=>k.id===kitId);
     try{await apiCheckout(kitId,curUserId,data.serials,data.notes)}catch(e){/* apiCheckout shows alert */}
     setMd(null)};
-  const doAdminIssue=async(kitId,personId,data)=>{
+  const doIssueTo=async(kitId,personId,data)=>{
     try{await apiCheckout(kitId,personId,data.serials,data.notes)}catch(e){/* apiCheckout shows alert */}
     setMd(null)};
   const doReturn=async(kitId,data)=>{
@@ -2587,7 +2587,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
   return(<div>
     <SH title="Checkout / Return" sub={issuedCt+" out | "+(kits.length-issuedCt)+" available | "+myCt+" mine"}
       action={<div style={{display:"flex",gap:6}}>
-        <Bt v="primary" onClick={()=>setMd("adminIssue")}>Issue To...</Bt></div>}/>
+        <Bt v="primary" onClick={()=>setMd("issueTo")}>Issue To...</Bt></div>}/>
     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
       <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:200,maxWidth:"100%"}}/>
       {[...(hasDept?["dept"]:[]),"all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="dept"?deptCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
@@ -2629,11 +2629,11 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     <ModalWrap open={String(md).startsWith("return:")} onClose={()=>setMd(null)} title="Return Kit" wide>
       {String(md).startsWith("return:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
         if(!k||!ty)return null;return <SerialEntryForm kit={k} type={ty} allC={allC} existingSerials={k.serials} mode="return" onDone={data=>doReturn(kid,data)} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
-    <ModalWrap open={md==="adminIssue"} onClose={()=>setMd(null)} title="Admin Issue" wide>
-      {md==="adminIssue"&&<AdminIssuePicker kits={kits} types={types} locs={locs} personnel={personnel} allC={allC} settings={settings} onIssue={(kid,pid,data)=>doAdminIssue(kid,pid,data)} onCancel={()=>setMd(null)}/>}</ModalWrap>
+    <ModalWrap open={md==="issueTo"} onClose={()=>setMd(null)} title="Issue Kit To..." wide>
+      {md==="issueTo"&&<IssueToPicker kits={kits} types={types} locs={locs} personnel={personnel} allC={allC} settings={settings} onIssue={(kid,pid,data)=>doIssueTo(kid,pid,data)} onCancel={()=>setMd(null)}/>}</ModalWrap>
     </div>);}
 
-function AdminIssuePicker({kits,types,locs,personnel,allC,settings,onIssue,onCancel}){
+function IssueToPicker({kits,types,locs,personnel,allC,settings,onIssue,onCancel}){
   const[selKit,setSelKit]=useState("");const[selPerson,setSelPerson]=useState("");const[phase,setPhase]=useState("pick");
   const availKits=kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus);const kit=kits.find(k=>k.id===selKit);const ty=kit?types.find(t=>t.id===kit.typeId):null;
   if(phase==="serials"&&kit&&ty)return <SerialEntryForm kit={kit} type={ty} allC={allC} existingSerials={kit.serials} mode="checkout" onDone={data=>onIssue(selKit,selPerson,data)} onCancel={()=>setPhase("pick")} settings={settings}/>;
