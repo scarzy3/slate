@@ -32,6 +32,9 @@ model User {
   maintenanceCompleted MaintenanceHistory[] @relation("MaintCompletedBy")
   auditLogs       AuditLog[]
   kitsIssued      Kit[]              @relation("KitHolder")
+  tripAssignments TripPersonnel[]    @relation("TripAssignment")
+  tripsLed        Trip[]             @relation("TripLead")
+  tripNotes       TripNote[]         @relation("TripNoteAuthor")
 
   @@index([role])
   @@index([deptId])
@@ -181,17 +184,56 @@ model Trip {
   id          String   @id @default(uuid())
   name        String
   description String?
+  location    String?
+  objectives  String?
+  leadId      String?
   startDate   DateTime
   endDate     DateTime
   status      String   @default("planning") // planning | active | completed | cancelled
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  lead         User?            @relation("TripLead", fields: [leadId], references: [id], onDelete: SetNull)
   kits         Kit[]
   reservations Reservation[]
+  personnel    TripPersonnel[]
+  notes        TripNote[]
 
   @@index([status])
   @@index([startDate, endDate])
+  @@index([leadId])
+}
+
+// ─── Trip Personnel (who is assigned to a trip) ───
+model TripPersonnel {
+  id        String   @id @default(uuid())
+  tripId    String
+  userId    String
+  role      String   @default("member") // lead | comms | driver | medic | member | other
+  notes     String?
+  createdAt DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation("TripAssignment", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+  @@index([tripId])
+  @@index([userId])
+}
+
+// ─── Trip Notes / Log ───
+model TripNote {
+  id        String   @id @default(uuid())
+  tripId    String
+  authorId  String
+  content   String
+  category  String   @default("general") // general | logistics | safety | comms | after-action
+  createdAt DateTime @default(now())
+
+  trip   Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  author User @relation("TripNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 // ─── Kit custom field values ───
