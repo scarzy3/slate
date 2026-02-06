@@ -2262,7 +2262,7 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
   const attempt=async()=>{
     if(!selUser){setError("Select a user");return}
     setLoading(true);setError("");
-    try{const result=await api.auth.login(selUser,pin);onLogin(result)}
+    try{await onLogin(selUser,pin)}
     catch(e){setError(e.message||"Login failed")}
     finally{setLoading(false)}};
   return(
@@ -2471,8 +2471,8 @@ export default function App(){
     else if(result.type==="person"){setPg("personnel")}
     setSearchMd(false)};
 
-  if(!isLoggedIn||!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme} onLogin={result=>{
-    setCurUser(result.user.id);setIsLoggedIn(true);localStorage.setItem('slate_token',result.token);localStorage.setItem('slate_user',JSON.stringify(result.user))}}/>;
+  if(!isLoggedIn||!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme} onLogin={async(userId,pin)=>{
+    const userData=await authCtx.login(userId,pin);setCurUser(userData.id);setIsLoggedIn(true)}}/>;
   if(!dataLoaded&&!loadError)return(<div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
     <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:T.tx,marginBottom:8}}>Loading Slate...</div>
       <div style={{fontSize:11,color:T.mu,fontFamily:T.m}}>Connecting to server</div></div></div>);
