@@ -337,7 +337,7 @@ router.delete('/:id/personnel/:personnelId', requireRole('admin'), async (req, r
 router.post('/:id/personnel/bulk', requireRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { userIds, role = 'member' } = req.body;
+    const { userIds, role = 'specialist' } = req.body;
 
     if (!Array.isArray(userIds) || !userIds.length) {
       return res.status(400).json({ error: 'userIds array required' });
@@ -401,7 +401,7 @@ router.delete('/:id/notes/:noteId', async (req, res) => {
     if (!note) return res.status(404).json({ error: 'Note not found' });
 
     // Only author or admin can delete
-    if (note.authorId !== req.user.id && req.user.role !== 'super' && req.user.role !== 'admin') {
+    if (note.authorId !== req.user.id && !['director','super','engineer','manager','admin'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Not authorized to delete this note' });
     }
 

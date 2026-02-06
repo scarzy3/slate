@@ -110,11 +110,11 @@ router.put('/:id', authMiddleware, requireAdminPerm('personnel'), validate(perso
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Protect primary super admin from demotion
-    if (existing.role === 'super' && role && role !== 'super') {
-      const superCount = await prisma.user.count({ where: { role: 'super' } });
-      if (superCount <= 1) {
-        return res.status(403).json({ error: 'Cannot demote the only super admin' });
+    // Protect primary director from demotion
+    if (['director','super','engineer'].includes(existing.role) && role && !['director','super','engineer'].includes(role)) {
+      const directorCount = await prisma.user.count({ where: { role: { in: ['director', 'super', 'engineer'] } } });
+      if (directorCount <= 1) {
+        return res.status(403).json({ error: 'Cannot demote the only director' });
       }
     }
 
@@ -166,11 +166,11 @@ router.delete('/:id', authMiddleware, requireAdminPerm('personnel'), async (req,
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Cannot delete the last super admin
-    if (user.role === 'super') {
-      const superCount = await prisma.user.count({ where: { role: 'super' } });
-      if (superCount <= 1) {
-        return res.status(403).json({ error: 'Cannot delete the only super admin' });
+    // Cannot delete the last director
+    if (['director','super','engineer'].includes(user.role)) {
+      const directorCount = await prisma.user.count({ where: { role: { in: ['director', 'super', 'engineer'] } } });
+      if (directorCount <= 1) {
+        return res.status(403).json({ error: 'Cannot delete the only director' });
       }
     }
 

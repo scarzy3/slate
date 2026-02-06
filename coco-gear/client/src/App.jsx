@@ -55,6 +55,8 @@ const CM={
 };
 const uid=()=>crypto.randomUUID();
 const CATS=["Comms","Power","Cables","Cases","Optics","Other"];
+const SYS_ROLE_LABELS={director:"Director",super:"Director",engineer:"Engineer",manager:"Manager",admin:"Manager",lead:"Lead",user:"Operator"};
+const sysRoleColor=r=>({director:T.rd,super:T.rd,engineer:T.rd,manager:T.am,admin:T.am,lead:T.or,user:T.bl}[r]||T.bl);
 const td=()=>new Date().toISOString().slice(0,10);
 const now=()=>new Date().toISOString();
 const daysAgo=d=>{if(!d)return null;return Math.floor((Date.now()-new Date(d).getTime())/864e5)};
@@ -1231,8 +1233,8 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
   const fmtDT=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
   const statusLabels={planning:"Planning",active:"Active",completed:"Completed",cancelled:"Cancelled"};
-  const roleColors={lead:T.rd,comms:T.bl,driver:T.or,medic:T.gn,member:T.mu,other:T.pu};
-  const roleLabels={lead:"Lead",comms:"Comms",driver:"Driver",medic:"Medic",member:"Member",other:"Other"};
+  const roleColors={director:T.rd,manager:T.am,"senior-spec":T.or,specialist:T.bl,engineer:T.tl,other:T.pu};
+  const roleLabels={director:"Director",manager:"Manager","senior-spec":"Senior Specialist",specialist:"Specialist",engineer:"Engineer",other:"Other"};
   const noteCatColors={general:T.mu,logistics:T.bl,safety:T.rd,comms:T.ind,["after-action"]:T.am};
   const filtered=tab==="all"?trips:tab==="active"?trips.filter(t=>t.status==="planning"||t.status==="active"):trips.filter(t=>t.status===tab);
   const searchFiltered=search.trim()?filtered.filter(t=>t.name.toLowerCase().includes(search.toLowerCase())||t.location?.toLowerCase().includes(search.toLowerCase())):filtered;
@@ -1259,7 +1261,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
   const removeFromTrip=async(kitId)=>{if(!activeTrip)return;
     try{await api.trips.removeKit(activeTrip.id,kitId);await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}};
   const doAddPersonnel=async()=>{if(!activeTrip||!addPersonIds.length)return;
-    try{await api.trips.addPersonnelBulk(activeTrip.id,addPersonIds,addPersonRole);await onRefreshTrips()}catch(e){alert(e.message)}setAddPersonMd(false);setAddPersonIds([]);setAddPersonRole("member")};
+    try{await api.trips.addPersonnelBulk(activeTrip.id,addPersonIds,addPersonRole);await onRefreshTrips()}catch(e){alert(e.message)}setAddPersonMd(false);setAddPersonIds([]);setAddPersonRole("specialist")};
   const removePerson=async(pId)=>{if(!activeTrip)return;
     try{await api.trips.removePersonnel(activeTrip.id,pId);await onRefreshTrips()}catch(e){alert(e.message)}};
   const updatePersonRole=async(pId,role)=>{if(!activeTrip)return;
@@ -1322,7 +1324,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
           <Fl label="End Date"><In type="date" value={fm.endDate?.slice(0,10)||fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl>
           <Fl label="Status"><Sl options={[{v:"planning",l:"Planning"},{v:"active",l:"Active"},{v:"completed",l:"Completed"},{v:"cancelled",l:"Cancelled"}]}
             value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl></div>
-        <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>p.role==="super"||p.role==="admin").map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
+        <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
           } value={fm.leadId} onChange={e=>setFm(p=>({...p,leadId:e.target.value}))}/></Fl>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt>
           <Bt v="primary" onClick={saveTrip} disabled={!fm.name.trim()||!fm.startDate||!fm.endDate}>{md==="add"?"Create Trip":"Save Changes"}</Bt></div></div></ModalWrap></div>);
@@ -1420,7 +1422,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
     {/* ── PERSONNEL TAB ── */}
     {detailTab==="personnel"&&<div>
       {isAdmin&&editable&&<div style={{display:"flex",gap:8,marginBottom:16}}>
-        <Bt v="primary" onClick={()=>{setAddPersonIds([]);setAddPersonRole("member");setAddPersonMd(true)}}>+ Add Personnel</Bt></div>}
+        <Bt v="primary" onClick={()=>{setAddPersonIds([]);setAddPersonRole("specialist");setAddPersonMd(true)}}>+ Add Personnel</Bt></div>}
 
       {tripPers.length===0?<div style={{padding:30,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No personnel assigned to this trip yet</div>:
         <div>
@@ -1528,7 +1530,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
           <Fl label="End Date"><In type="date" value={fm.endDate?.slice(0,10)||fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl>
           <Fl label="Status"><Sl options={[{v:"planning",l:"Planning"},{v:"active",l:"Active"},{v:"completed",l:"Completed"},{v:"cancelled",l:"Cancelled"}]}
             value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl></div>
-        <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>p.role==="super"||p.role==="admin").map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
+        <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
           } value={fm.leadId} onChange={e=>setFm(p=>({...p,leadId:e.target.value}))}/></Fl>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt>
           <Bt v="primary" onClick={saveTrip} disabled={!fm.name.trim()||!fm.startDate||!fm.endDate}>{md==="add"?"Create Trip":"Save Changes"}</Bt></div></div></ModalWrap>
@@ -1572,7 +1574,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   {p.title&&<span style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{p.title}</span>}
                   {dept&&<Bg color={dept.color||T.mu} bg={(dept.color||T.mu)+"18"}>{dept.name}</Bg>}</div></div>
-              <Bg color={p.role==="super"?T.rd:p.role==="admin"?T.am:T.mu} bg={(p.role==="super"?T.rd:p.role==="admin"?T.am:T.mu)+"18"}>{p.role}</Bg></div>)})}</div>
+              <Bg color={sysRoleColor(p.role)} bg={sysRoleColor(p.role)+"18"}>{SYS_ROLE_LABELS[p.role]||p.role}</Bg></div>)})}</div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <Bt onClick={()=>setAddPersonMd(false)}>Cancel</Bt>
           <Bt v="primary" onClick={doAddPersonnel} disabled={!addPersonIds.length}>{addPersonIds.length} people — Add to Trip</Bt></div></div></ModalWrap>
@@ -2128,14 +2130,14 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",title:"",role:"user",deptId:"",pin:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
 
-  /* First super admin is protected and cannot be deleted */
-  const primarySuper=personnel.find(p=>p.role==="super");
-  const isPrimarySuper=(id)=>primarySuper?.id===id;
+  /* First director is protected and cannot be deleted */
+  const primaryDirector=personnel.find(p=>p.role==="director"||p.role==="super"||p.role==="engineer");
+  const isPrimarySuper=(id)=>primaryDirector?.id===id;
 
   const save=async()=>{if(!fm.name.trim())return;
     try{if(md==="add"){await api.personnel.create({name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||"password"})}
     else{
-      if(isPrimarySuper(md)&&fm.role!=="super"){alert("Cannot change role of primary administrator");return}
+      if(isPrimarySuper(md)&&!["director","super","engineer"].includes(fm.role)){alert("Cannot change role of primary director");return}
       const data={name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null};
       if(fm.pin)data.pin=fm.pin;
       await api.personnel.update(md,data)}
@@ -2150,7 +2152,7 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
 
   const doDelete=async()=>{if(deleteConfirm){try{await api.personnel.delete(deleteConfirm.id);await onRefreshPersonnel()}catch(e){alert(e.message)}}};
   
-  const rc={super:T.rd,admin:T.am,user:T.bl};
+  const rc={director:T.rd,super:T.rd,engineer:T.rd,manager:T.am,admin:T.am,lead:T.or,user:T.bl};
   const grouped=useMemo(()=>{const g={"Unassigned":[]};depts.forEach(d=>{g[d.name]=[]});
     personnel.forEach(p=>{const d=p.deptId?depts.find(x=>x.id===p.deptId):null;(g[d?.name||"Unassigned"]=g[d?.name||"Unassigned"]||[]).push(p)});return g},[personnel,depts]);
   return(<div>
@@ -2168,23 +2170,23 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
               {isProtected&&<span style={{fontSize:8,color:T.rd,fontFamily:T.m}}>★ PRIMARY</span>}</div>
               <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{p.title||"No title"}</div>
               <div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}}>
-                <Bg color={rc[p.role]} bg={(rc[p.role])+"18"}>{p.role}</Bg>
+                <Bg color={rc[p.role]||T.bl} bg={(rc[p.role]||T.bl)+"18"}>{SYS_ROLE_LABELS[p.role]||p.role}</Bg>
                 {ik.length>0&&<Bg color={T.pk} bg="rgba(244,114,182,.08)">{ik.length} kit{ik.length>1?"s":""}</Bg>}</div></div>
             <Bt v="ghost" sm onClick={()=>{setFm({name:p.name,title:p.title||"",role:p.role,deptId:p.deptId||"",pin:p.pin||""});setMd(p.id)}}>Edit</Bt>
             <Bt v="ghost" sm onClick={()=>confirmDelete(p)} style={{color:T.rd}} disabled={ik.length>0||isProtected}
-              title={isProtected?"Primary admin cannot be deleted":ik.length>0?"Has kits checked out":""}>Del</Bt></div>)})}</div></div>)})}
+              title={isProtected?"Primary director cannot be deleted":ik.length>0?"Has kits checked out":""}>Del</Bt></div>)})}</div></div>)})}
     
     <ModalWrap open={!!md&&md!=="delete"} onClose={()=>setMd(null)} title={md==="add"?"Add Person":"Edit Person"}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))}/></Fl>
         <Fl label="Title"><In value={fm.title} onChange={e=>setFm(p=>({...p,title:e.target.value}))} placeholder="e.g. Project Manager, Engineer"/></Fl>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          <Fl label="Role"><Sl options={[{v:"user",l:"User"},{v:"admin",l:"Admin"},{v:"super",l:"Super Admin"}]} value={fm.role} onChange={e=>setFm(p=>({...p,role:e.target.value}))}
+          <Fl label="Role"><Sl options={[{v:"user",l:"Operator"},{v:"lead",l:"Lead"},{v:"manager",l:"Manager"},{v:"engineer",l:"Engineer"},{v:"director",l:"Director"}]} value={fm.role} onChange={e=>setFm(p=>({...p,role:e.target.value}))}
             disabled={isPrimarySuper(md)}/></Fl>
           <Fl label="Department"><Sl options={[{v:"",l:"-- None --"},...depts.map(d=>({v:d.id,l:d.name}))] } value={fm.deptId} onChange={e=>setFm(p=>({...p,deptId:e.target.value}))}/></Fl>
           <Fl label="Password"><In type="password" value={fm.pin} onChange={e=>setFm(p=>({...p,pin:e.target.value}))} placeholder={md==="add"?"password":"unchanged"}/></Fl></div>
         {isPrimarySuper(md)&&<div style={{padding:10,borderRadius:6,background:"rgba(239,68,68,.05)",border:"1px solid rgba(239,68,68,.1)"}}>
-          <div style={{fontSize:10,color:T.rd,fontFamily:T.m}}>This is the primary administrator. Role cannot be changed.</div></div>}
+          <div style={{fontSize:10,color:T.rd,fontFamily:T.m}}>This is the primary director. Role cannot be changed.</div></div>}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add":"Save"}</Bt></div></div></ModalWrap>
     
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
@@ -2268,8 +2270,8 @@ function MyProfile({user,personnel,setPersonnel,kits,assets,depts,onRefreshPerso
   const myKits=kits.filter(k=>k.issuedTo===user.id);
   const myAssets=assets.filter(a=>a.issuedTo===user.id);
   const myDept=user.deptId?depts.find(d=>d.id===user.deptId):null;
-  const roleColor=user.role==="super"?T.rd:user.role==="admin"?T.am:T.bl;
-  const roleLabel=user.role==="super"?"Super Admin":user.role==="admin"?"Admin":"User";
+  const roleColor=sysRoleColor(user.role);
+  const roleLabel=SYS_ROLE_LABELS[user.role]||"Operator";
   
   return(<div>
     <SH title="My Profile" sub="Your account settings"/>
@@ -2636,9 +2638,9 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
 
 /* ═══════════ APPROVALS ═══════════ */
 function ApprovalsPage({requests,setRequests,kits,setKits,personnel,depts,allC,types,curUserId,addLog,onRefreshKits}){
-  const user=personnel.find(p=>p.id===curUserId);const isSuper=user?.role==="super";
+  const user=personnel.find(p=>p.id===curUserId);const isDir=["director","super","engineer","manager","admin","lead"].includes(user?.role);
   const headOf=depts.filter(d=>d.headId===curUserId).map(d=>d.id);
-  const visible=requests.filter(r=>isSuper||headOf.includes(r.deptId));
+  const visible=requests.filter(r=>isDir||headOf.includes(r.deptId));
   const pending=visible.filter(r=>r.status==="pending");const resolved=visible.filter(r=>r.status!=="pending");
   const approve=async reqId=>{const req=requests.find(r=>r.id===reqId);if(!req)return;
     try{await api.kits.checkout({kitId:req.kitId,personId:req.personId,serials:req.serials,notes:req.notes});
@@ -2665,41 +2667,59 @@ function ApprovalsPage({requests,setRequests,kits,setKits,personnel,depts,allC,t
           <Bg color={req.status==="approved"?T.gn:T.rd} bg={req.status==="approved"?"rgba(34,197,94,.1)":"rgba(239,68,68,.1)"}>{req.status}</Bg></div>)})}</div>}</div>);}
 
 /* ═══════════ DASHBOARD ═══════════ */
-function Dash({kits,types,locs,personnel,depts,requests,analytics,logs,settings,curUserId,favorites,setFavorites,onNavigate,onAction,onFilterKits}){
-  const nev=kits.filter(k=>!k.lastChecked).length;const issuedCt=kits.filter(k=>k.issuedTo).length;const pendCt=requests.filter(r=>r.status==="pending").length;
+function Dash({kits,types,locs,comps,personnel,depts,trips,requests,analytics,logs,settings,curUserId,userRole,favorites,setFavorites,onNavigate,onAction,onFilterKits}){
+  const issuedCt=kits.filter(k=>k.issuedTo).length;const pendCt=requests.filter(r=>r.status==="pending").length;
   const myKits=kits.filter(k=>k.issuedTo===curUserId);
   const availCt=kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
   const maintCt=analytics.inMaintenance.length;const overdueCt=analytics.overdueReturns.length;
-  return(<div>
-    <SH title="Dashboard" sub="Fleet overview"/>
-    {/* Stats Row */}
+  const inspDueCt=analytics.overdueInspection.length;const calDueCt=analytics.calibrationDue.length;
+  const tier=["director","super","engineer"].includes(userRole)?"director":["manager","admin"].includes(userRole)?"manager":userRole==="lead"?"lead":"user";
+  const activeTrips=(trips||[]).filter(t=>t.status==="active"||t.status==="planning");
+  const myDeptId=personnel.find(p=>p.id===curUserId)?.deptId;
+  const myDeptKits=myDeptId?kits.filter(k=>k.deptId===myDeptId):[];
+
+  /* ── DIRECTOR / MANAGER dashboard: analytics + planning ── */
+  if(tier==="director"||tier==="manager")return(<div>
+    <SH title="Dashboard" sub={tier==="director"?"Director overview":"Manager overview"}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:10,marginBottom:24}}>
       <StatCard label="Total Kits" value={kits.length} color={T.bl} onClick={()=>onFilterKits("all")}/>
       <StatCard label="Checked Out" value={issuedCt} color={issuedCt?T.pk:T.gn} onClick={()=>onFilterKits("issued")}/>
       <StatCard label="Available" value={availCt} color={T.gn} onClick={()=>onFilterKits("available")}/>
       <StatCard label="Maintenance" value={maintCt} color={maintCt?T.am:T.gn} onClick={()=>onFilterKits("maintenance")}/>
       <StatCard label="Overdue" value={overdueCt} color={overdueCt?T.rd:T.gn} onClick={()=>onFilterKits("overdue")}/>
-      <StatCard label="Pending" value={pendCt} color={pendCt?T.or:T.gn} onClick={pendCt?()=>onNavigate("approvals"):undefined}/></div>
-    
+      <StatCard label="Pending" value={pendCt} color={pendCt?T.or:T.gn} onClick={pendCt?()=>onNavigate("approvals"):undefined}/>
+      <StatCard label="Active Trips" value={activeTrips.length} color={T.ind} onClick={()=>onNavigate("trips")}/></div>
+
     <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
-      {/* Alerts */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
           <span style={{color:T.rd}}>⚠</span> Needs Attention</div>
         <AlertsPanel analytics={analytics} kits={kits} settings={settings} onNavigate={onNavigate} onFilterKits={onFilterKits}/></div>
-      
-      {/* Quick Actions */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
-        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Quick Actions</div>
-        <QuickActions kits={kits} curUserId={curUserId} personnel={personnel} onAction={onAction} favorites={favorites} onToggleFav={id=>setFavorites(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id])}/></div>
-      
-      {/* Recent Activity */}
+        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Department Health</div>
+        {analytics.deptStats.map(d=><div key={d.dept.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,background:"rgba(255,255,255,.015)",marginBottom:4}}>
+          <div style={{width:4,height:24,borderRadius:2,background:d.dept.color}}/>
+          <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>{d.dept.name}</div>
+            <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{d.kitCount} kits | {d.issuedCount} out | {Math.round(d.compliance*100)}% inspected</div></div>
+          <ProgressBar value={d.compliance*100} max={100} color={d.compliance>.8?T.gn:d.compliance>.5?T.am:T.rd} height={6}/></div>)}</div>
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Recent Activity</div>
         <ActivityFeed logs={logs} kits={kits} personnel={personnel} limit={8}/></div></div>
-    
-    {/* Location breakdown */}
+
     <div className="slate-resp" style={{marginTop:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      {/* Active Trips */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u}}>Active Trips</div>
+          <Bt v="ghost" sm onClick={()=>onNavigate("trips")}>View all →</Bt></div>
+        {activeTrips.length===0?<div style={{fontSize:10,color:T.dm,fontFamily:T.m,textAlign:"center",padding:10}}>No active trips</div>:
+          activeTrips.slice(0,5).map(t=><div key={t.id} onClick={()=>onNavigate("trips")} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,
+            background:"rgba(255,255,255,.015)",marginBottom:4,cursor:"pointer"}}>
+            <div style={{width:4,height:24,borderRadius:2,background:t.status==="active"?T.gn:T.bl}}/>
+            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>{t.name}</div>
+              <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{t.kits?.length||0} kits · {t.personnelCount||t.personnel?.length||0} personnel · {fmtDate(t.startDate)}</div></div>
+            <Bg color={t.status==="active"?T.gn:T.bl} bg={(t.status==="active"?T.gn:T.bl)+"18"}>{t.status}</Bg></div>)}</div>
+      {/* By Location */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>By Location</div>
         {locs.map(l=>{const lk=kits.filter(k=>k.locId===l.id);if(!lk.length)return null;return(
@@ -2708,15 +2728,88 @@ function Dash({kits,types,locs,personnel,depts,requests,analytics,logs,settings,
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:T.tl,fontFamily:T.m}}>{l.sc.slice(0,3)}</div>
             <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>{l.name}</div></div>
             <Bg color={T.bl} bg="rgba(96,165,250,.1)">{lk.length}</Bg>
-            {lk.filter(k=>k.issuedTo).length>0&&<Bg color={T.pk} bg="rgba(244,114,182,.08)">{lk.filter(k=>k.issuedTo).length} out</Bg>}</div>)})}</div>
-      
+            {lk.filter(k=>k.issuedTo).length>0&&<Bg color={T.pk} bg="rgba(244,114,182,.08)">{lk.filter(k=>k.issuedTo).length} out</Bg>}</div>)})}</div></div></div>);
+
+  /* ── LEAD dashboard: operations + inventory focus ── */
+  if(tier==="lead")return(<div>
+    <SH title="Dashboard" sub="Operations overview"/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:10,marginBottom:24}}>
+      <StatCard label="Total Kits" value={kits.length} color={T.bl} onClick={()=>onFilterKits("all")}/>
+      <StatCard label="Checked Out" value={issuedCt} color={issuedCt?T.pk:T.gn} onClick={()=>onFilterKits("issued")}/>
+      <StatCard label="Available" value={availCt} color={T.gn} onClick={()=>onFilterKits("available")}/>
+      <StatCard label="Inspections Due" value={inspDueCt} color={inspDueCt?T.am:T.gn} onClick={()=>onFilterKits("overdue")}/>
+      <StatCard label="Maintenance" value={maintCt} color={maintCt?T.am:T.gn} onClick={()=>onFilterKits("maintenance")}/>
+      <StatCard label="Overdue Returns" value={overdueCt} color={overdueCt?T.rd:T.gn} onClick={()=>onFilterKits("overdue")}/>
+      <StatCard label="Pending" value={pendCt} color={pendCt?T.or:T.gn} onClick={pendCt?()=>onNavigate("approvals"):undefined}/></div>
+
+    <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+      {/* Alerts */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
-        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Department Health</div>
-        {analytics.deptStats.map(d=><div key={d.dept.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,background:"rgba(255,255,255,.015)",marginBottom:4}}>
-          <div style={{width:4,height:24,borderRadius:2,background:d.dept.color}}/>
-          <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>{d.dept.name}</div>
-            <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{d.kitCount} kits | {Math.round(d.compliance*100)}% compliant</div></div>
-          <ProgressBar value={d.compliance*100} max={100} color={d.compliance>.8?T.gn:d.compliance>.5?T.am:T.rd} height={6}/></div>)}</div></div></div>);}
+        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
+          <span style={{color:T.rd}}>⚠</span> Needs Attention</div>
+        <AlertsPanel analytics={analytics} kits={kits} settings={settings} onNavigate={onNavigate} onFilterKits={onFilterKits}/></div>
+      {/* Quick Actions */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Quick Actions</div>
+        <QuickActions kits={kits} curUserId={curUserId} personnel={personnel} onAction={onAction} favorites={favorites} onToggleFav={id=>setFavorites(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id])}/></div>
+      {/* Recent Activity */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Recent Activity</div>
+        <ActivityFeed logs={logs} kits={kits} personnel={personnel} limit={8}/></div></div>
+
+    <div className="slate-resp" style={{marginTop:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      {/* Inspection queue */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Inspections Due ({inspDueCt})</div>
+        {analytics.overdueInspection.length===0?<div style={{fontSize:10,color:T.dm,fontFamily:T.m,textAlign:"center",padding:10}}>All kits inspected</div>:
+          analytics.overdueInspection.slice(0,8).map(k=>{const ty=types.find(t=>t.id===k.typeId);const d=daysAgo(k.lastChecked);return(
+            <div key={k.id} onClick={()=>onFilterKits("overdue")} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:6,background:"rgba(255,255,255,.015)",marginBottom:4,cursor:"pointer"}}>
+              <Sw color={k.color} size={16}/><div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k.color} <span style={{color:T.dm}}>({ty?.name})</span></div></div>
+              <Bg color={d===null?T.rd:d>60?T.rd:T.am} bg={(d===null?T.rd:d>60?T.rd:T.am)+"18"}>{d===null?"Never":d+"d ago"}</Bg></div>)})}</div>
+      {/* Maintenance queue */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>In Maintenance ({maintCt})</div>
+        {analytics.inMaintenance.length===0?<div style={{fontSize:10,color:T.dm,fontFamily:T.m,textAlign:"center",padding:10}}>No kits in maintenance</div>:
+          analytics.inMaintenance.map(k=>{const ty=types.find(t=>t.id===k.typeId);return(
+            <div key={k.id} onClick={()=>onNavigate("maintenance")} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:6,background:"rgba(255,255,255,.015)",marginBottom:4,cursor:"pointer"}}>
+              <Sw color={k.color} size={16}/><div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k.color} <span style={{color:T.dm}}>({ty?.name})</span></div></div>
+              <Bg color={T.am} bg="rgba(251,191,36,.1)">{k.maintenanceStatus}</Bg></div>)})}</div></div></div>);
+
+  /* ── USER (Operator) dashboard: personal focus ── */
+  return(<div>
+    <SH title="Dashboard" sub="Your equipment"/>
+
+    {/* My Kits */}
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:13,fontWeight:700,color:T.tx,fontFamily:T.u,marginBottom:12}}>My Checked Out Kits ({myKits.length})</div>
+      {myKits.length===0?<div style={{padding:20,borderRadius:10,background:T.card,border:"1px solid "+T.bd,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No kits checked out to you</div>:
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(260px,100%),1fr))",gap:10}}>
+          {myKits.map(k=>{const ty=types.find(t=>t.id===k.typeId);const lo=locs.find(l=>l.id===k.locId);const h=k.issueHistory[k.issueHistory.length-1];
+            const dOut=h?daysAgo(h.issuedDate):0;return(
+            <div key={k.id} style={{padding:14,borderRadius:10,background:T.card,border:"1px solid "+T.bd,cursor:"pointer"}} onClick={()=>onFilterKits("issued")}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                <Sw color={k.color} size={24}/>
+                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:T.tx,fontFamily:T.u}}>{k.color}</div>
+                  <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{ty?.name} · {lo?.name}</div></div>
+                <Bg color={dOut>14?T.rd:dOut>7?T.am:T.gn} bg={(dOut>14?T.rd:dOut>7?T.am:T.gn)+"18"}>{dOut}d</Bg></div>
+              {k._trip&&<div style={{fontSize:9,color:T.ind,fontFamily:T.m}}>▸ Trip: {k._trip.name}</div>}</div>)})}</div>}</div>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:10,marginBottom:20}}>
+      <StatCard label="My Kits" value={myKits.length} color={T.bl}/>
+      <StatCard label="Available" value={availCt} color={T.gn} onClick={()=>onFilterKits("available")}/>
+      <StatCard label="Total Fleet" value={kits.length} color={T.mu} onClick={()=>onFilterKits("all")}/></div>
+
+    <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      {/* Quick Actions */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Quick Actions</div>
+        <QuickActions kits={kits} curUserId={curUserId} personnel={personnel} onAction={onAction} favorites={favorites} onToggleFav={id=>setFavorites(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id])}/></div>
+      {/* Recent Activity */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Recent Activity</div>
+        <ActivityFeed logs={logs} kits={kits} personnel={personnel} limit={6}/></div></div></div>);}
 
 /* ═══════════ ROOT APP ═══════════ */
 /* Navigation structure with sections */
@@ -2730,21 +2823,21 @@ const NAV_SECTIONS=[
     {id:"trips",l:"Trips",i:"▸",access:"all"},
     {id:"reservations",l:"Reservations",i:"◷",access:"all",setting:"enableReservations"},
     {id:"approvals",l:"Approvals",i:"✓",access:"approver"},
-    {id:"maintenance",l:"Maintenance",i:"⚙",access:"admin",perm:"maintenance",setting:"enableMaintenance"},
-    {id:"consumables",l:"Inventory",i:"◨",access:"admin",perm:"consumables",setting:"enableConsumables"},
+    {id:"maintenance",l:"Maintenance",i:"⚙",access:"lead",setting:"enableMaintenance"},
+    {id:"consumables",l:"Supplies",i:"◨",access:"lead",setting:"enableConsumables"},
   ]},
   {id:"insights",label:"Insights",items:[
-    {id:"analytics",l:"Analytics",i:"◔",access:"admin",perm:"analytics"},
-    {id:"reports",l:"Reports",i:"◫",access:"admin",perm:"reports"},
-    {id:"auditlog",l:"Audit Log",i:"≡",access:"super"},
+    {id:"analytics",l:"Analytics",i:"◔",access:"manager",perm:"analytics"},
+    {id:"reports",l:"Reports",i:"◫",access:"manager",perm:"reports"},
+    {id:"auditlog",l:"Audit Log",i:"≡",access:"director"},
   ]},
   {id:"config",label:"Configuration",items:[
-    {id:"types",l:"Kit Types",i:"+",access:"admin",perm:"types"},
-    {id:"components",l:"Components",i:":",access:"admin",perm:"components"},
-    {id:"locations",l:"Locations",i:"⌖",access:"admin",perm:"locations"},
-    {id:"departments",l:"Departments",i:"▣",access:"admin",perm:"departments"},
-    {id:"personnel",l:"Personnel",i:"◎",access:"admin",perm:"personnel"},
-    {id:"settings",l:"Settings",i:"⚙",access:"super"},
+    {id:"types",l:"Kit Types",i:"+",access:"manager",perm:"types"},
+    {id:"components",l:"Components",i:":",access:"manager",perm:"components"},
+    {id:"locations",l:"Locations",i:"⌖",access:"manager",perm:"locations"},
+    {id:"departments",l:"Departments",i:"▣",access:"manager",perm:"departments"},
+    {id:"personnel",l:"Personnel",i:"◎",access:"manager",perm:"personnel"},
+    {id:"settings",l:"Settings",i:"⚙",access:"director"},
   ]},
 ];
 
@@ -3020,10 +3113,11 @@ export default function App(){
   const saveSettings=async(s)=>{try{await api.settings.update(s)}catch(e){console.error("Settings save error:",e)}};
 
   const user=curUser?personnel.find(p=>p.id===curUser):authCtx.user?personnel.find(p=>p.id===authCtx.user.id):personnel[0];
-  const isSuper=user?.role==="super";const isAdmin=user?.role==="admin"||isSuper;
+  const isDirector=user?.role==="director"||user?.role==="super"||user?.role==="engineer";const isManager=user?.role==="manager"||user?.role==="admin"||isDirector;
+  const isLead=user?.role==="lead"||isManager;const isSuper=isDirector;const isAdmin=isManager;
   const analytics=useAnalytics(kits,personnel,depts,comps,types,logs,reservations);
   const headOf=depts.filter(d=>d.headId===(curUser||authCtx.user?.id)).map(d=>d.id);
-  const isApprover=isAdmin||isSuper||headOf.length>0;
+  const isApprover=isLead||headOf.length>0;
 
   const addLog=(action,target,targetId,by,date,details={})=>{setLogs(p=>[...p,{id:uid(),action,target,targetId,by,date,details}]);refreshLogs()};
 
@@ -3050,11 +3144,12 @@ export default function App(){
   const canAccess=(item)=>{
     if(item.setting&&!settings[item.setting])return false;
     if(item.access==="all")return true;
-    if(item.access==="super")return isSuper;
+    if(item.access==="super"||item.access==="director")return isDirector;
     if(item.access==="approver")return isApprover;
-    if(item.access==="admin"){
-      if(isSuper)return true;
-      if(!isAdmin)return false;
+    if(item.access==="lead")return isLead;
+    if(item.access==="admin"||item.access==="manager"){
+      if(isDirector)return true;
+      if(!isManager)return false;
       if(item.perm&&settings.adminPerms?.[item.perm]===false)return false;
       return true;
     }
@@ -3066,13 +3161,14 @@ export default function App(){
   const currentItem=allItems.find(i=>i.id===pg);
   if(currentItem&&!canAccess(currentItem))setPg("dashboard");
   
-  const pendCt=requests.filter(r=>r.status==="pending"&&(isSuper||headOf.includes(r.deptId))).length;
+  const pendCt=requests.filter(r=>r.status==="pending"&&(isLead||headOf.includes(r.deptId))).length;
   const lowStock=consumables.filter(c=>c.qty<=c.minQty).length;
   const getBadge=(id)=>id==="approvals"?pendCt:id==="consumables"?lowStock:0;
   
   const toggleSection=(id)=>setCollapsedSections(p=>({...p,[id]:!p[id]}));
   
-  const roleColor=isSuper?T.rd:isAdmin?T.am:T.bl;const roleLabel=isSuper?"Super Admin":isAdmin?"Admin":"User";
+  const roleColor=sysRoleColor(user?.role);
+  const roleLabel=SYS_ROLE_LABELS[user?.role]||"Operator";
 
   const handleQuickAction=(action,kitId)=>{
     if(action==="return"||action==="checkout"||action==="inspect"){setPg("issuance")}
@@ -3195,8 +3291,8 @@ export default function App(){
         {navContent}</nav>}
 
       <main style={{flex:1,padding:isMobile?"14px 12px":"20px 26px",overflowY:"auto",overflowX:"hidden"}}>
-        {pg==="dashboard"&&<Dash kits={kits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts} requests={requests}
-          analytics={analytics} logs={logs} settings={settings} curUserId={curUser} favorites={favorites} setFavorites={setFavorites} onNavigate={handleNavigate} onAction={handleQuickAction} onFilterKits={handleFilterKits}/>}
+        {pg==="dashboard"&&<Dash kits={kits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts} trips={trips} requests={requests}
+          analytics={analytics} logs={logs} settings={settings} curUserId={curUser} userRole={user?.role} favorites={favorites} setFavorites={setFavorites} onNavigate={handleNavigate} onAction={handleQuickAction} onFilterKits={handleFilterKits}/>}
         {pg==="kits"&&<KitInv kits={kits} setKits={setKits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} settings={settings} favorites={favorites} setFavorites={setFavorites} addLog={addLog} curUserId={curUser}
           initialFilter={kitFilter} onFilterChange={setKitFilter} analytics={analytics} onRefreshKits={refreshKits}

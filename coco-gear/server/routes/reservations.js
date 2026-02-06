@@ -81,7 +81,7 @@ router.post('/', authMiddleware, validate(reservationSchema), async (req, res) =
     }
 
     // Admin/super auto-confirms; regular users create pending
-    const isAdmin = req.user.role === 'admin' || req.user.role === 'super';
+    const isAdmin = ['director','super','engineer','manager','admin','lead'].includes(req.user.role);
     const status = isAdmin ? 'confirmed' : 'pending';
 
     const reservation = await prisma.reservation.create({
@@ -203,7 +203,7 @@ router.put('/:id/cancel', authMiddleware, async (req, res) => {
 
     // Only the owner or admin/super can cancel
     const isOwner = reservation.personId === req.user.id;
-    const isAdmin = req.user.role === 'admin' || req.user.role === 'super';
+    const isAdmin = ['director','super','engineer','manager','admin','lead'].includes(req.user.role);
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ error: 'Only the reservation owner or an admin can cancel' });
     }
