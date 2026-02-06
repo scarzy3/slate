@@ -2326,6 +2326,7 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
             background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)"}}>{error}</div>}
           <Bt v="primary" onClick={attempt} disabled={loading} style={{justifyContent:"center",padding:"11px 0",fontSize:13}}>{loading?"Signing in...":"Sign In"}</Bt>
           <div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>Default PIN: 1234</div>
+          <div style={{fontSize:8,color:T.dm,fontFamily:T.m,textAlign:"center",opacity:.5,marginTop:4}}>build 2026-02-06</div>
         </div></div></div>);}
 
 export default function App(){

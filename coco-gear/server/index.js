@@ -107,9 +107,17 @@ app.get('/api/health', async (req, res) => {
 // ─── Serve frontend in production ───
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
-  app.use(express.static(clientDist));
+  app.use(express.static(clientDist, {
+    maxAge: '7d',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      }
+    },
+  }));
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(clientDist, 'index.html'));
     }
   });
