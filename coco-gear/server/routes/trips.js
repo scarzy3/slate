@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
-import { requireRole } from '../middleware/rbac.js';
+import { requirePerm } from '../middleware/rbac.js';
 import { validate, tripSchema, tripPersonnelSchema, tripNoteSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
@@ -108,7 +108,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST / - create trip (admin+)
-router.post('/', requireRole('admin'), validate(tripSchema), async (req, res) => {
+router.post('/', requirePerm('trips'), validate(tripSchema), async (req, res) => {
   try {
     const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus } = req.validated;
 
@@ -148,7 +148,7 @@ router.post('/', requireRole('admin'), validate(tripSchema), async (req, res) =>
 });
 
 // PUT /:id - update trip (admin+)
-router.put('/:id', requireRole('admin'), async (req, res) => {
+router.put('/:id', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus } = req.body;
@@ -189,7 +189,7 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
 });
 
 // DELETE /:id - delete trip (admin+)
-router.delete('/:id', requireRole('admin'), async (req, res) => {
+router.delete('/:id', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
     const trip = await prisma.trip.findUnique({ where: { id } });
@@ -213,7 +213,7 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
 // ─── Kit Assignment ───
 
 // POST /:id/kits - assign kits to trip
-router.post('/:id/kits', requireRole('admin'), async (req, res) => {
+router.post('/:id/kits', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
     const { kitIds } = req.body;
@@ -248,7 +248,7 @@ router.post('/:id/kits', requireRole('admin'), async (req, res) => {
 });
 
 // DELETE /:id/kits/:kitId - remove kit from trip
-router.delete('/:id/kits/:kitId', requireRole('admin'), async (req, res) => {
+router.delete('/:id/kits/:kitId', requirePerm('trips'), async (req, res) => {
   try {
     const { id, kitId } = req.params;
 
@@ -273,7 +273,7 @@ router.delete('/:id/kits/:kitId', requireRole('admin'), async (req, res) => {
 // ─── Personnel Assignment ───
 
 // POST /:id/personnel - add person to trip
-router.post('/:id/personnel', requireRole('admin'), validate(tripPersonnelSchema), async (req, res) => {
+router.post('/:id/personnel', requirePerm('trips'), validate(tripPersonnelSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { userId, role, notes } = req.validated;
@@ -303,7 +303,7 @@ router.post('/:id/personnel', requireRole('admin'), validate(tripPersonnelSchema
 });
 
 // PUT /:id/personnel/:personnelId - update person's trip role
-router.put('/:id/personnel/:personnelId', requireRole('admin'), async (req, res) => {
+router.put('/:id/personnel/:personnelId', requirePerm('trips'), async (req, res) => {
   try {
     const { personnelId } = req.params;
     const { role, notes } = req.body;
@@ -328,7 +328,7 @@ router.put('/:id/personnel/:personnelId', requireRole('admin'), async (req, res)
 });
 
 // DELETE /:id/personnel/:personnelId - remove person from trip
-router.delete('/:id/personnel/:personnelId', requireRole('admin'), async (req, res) => {
+router.delete('/:id/personnel/:personnelId', requirePerm('trips'), async (req, res) => {
   try {
     const { id, personnelId } = req.params;
 
@@ -342,7 +342,7 @@ router.delete('/:id/personnel/:personnelId', requireRole('admin'), async (req, r
 });
 
 // POST /:id/personnel/bulk - add multiple people at once
-router.post('/:id/personnel/bulk', requireRole('admin'), async (req, res) => {
+router.post('/:id/personnel/bulk', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
     const { userIds, role = 'specialist' } = req.body;
@@ -424,7 +424,7 @@ router.delete('/:id/notes/:noteId', async (req, res) => {
 // ─── Boat Assignment ───
 
 // POST /:id/boats - assign boats to trip
-router.post('/:id/boats', requireRole('admin'), async (req, res) => {
+router.post('/:id/boats', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
     const { boatIds, role = 'primary' } = req.body;
@@ -460,7 +460,7 @@ router.post('/:id/boats', requireRole('admin'), async (req, res) => {
 });
 
 // PUT /:id/boats/:tripBoatId - update boat role on trip
-router.put('/:id/boats/:tripBoatId', requireRole('admin'), async (req, res) => {
+router.put('/:id/boats/:tripBoatId', requirePerm('trips'), async (req, res) => {
   try {
     const { tripBoatId } = req.params;
     const { role, notes } = req.body;
@@ -483,7 +483,7 @@ router.put('/:id/boats/:tripBoatId', requireRole('admin'), async (req, res) => {
 });
 
 // DELETE /:id/boats/:tripBoatId - remove boat from trip
-router.delete('/:id/boats/:tripBoatId', requireRole('admin'), async (req, res) => {
+router.delete('/:id/boats/:tripBoatId', requirePerm('trips'), async (req, res) => {
   try {
     const { id, tripBoatId } = req.params;
 

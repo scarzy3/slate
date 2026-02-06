@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
-import { requireRole } from '../middleware/rbac.js';
+import { requirePerm } from '../middleware/rbac.js';
 import { validate, boatSchema, boatUpdateSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST / - create boat (manager+)
-router.post('/', requireRole('manager'), validate(boatSchema), async (req, res) => {
+router.post('/', requirePerm('boats'), validate(boatSchema), async (req, res) => {
   try {
     const { name, type, hullId, length, homePort, status: boatStatus, notes } = req.validated;
 
@@ -53,7 +53,7 @@ router.post('/', requireRole('manager'), validate(boatSchema), async (req, res) 
 });
 
 // PUT /:id - update boat (manager+)
-router.put('/:id', requireRole('manager'), validate(boatUpdateSchema), async (req, res) => {
+router.put('/:id', requirePerm('boats'), validate(boatUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await prisma.boat.findUnique({ where: { id } });
@@ -73,7 +73,7 @@ router.put('/:id', requireRole('manager'), validate(boatUpdateSchema), async (re
 });
 
 // DELETE /:id - delete boat (manager+)
-router.delete('/:id', requireRole('manager'), async (req, res) => {
+router.delete('/:id', requirePerm('boats'), async (req, res) => {
   try {
     const { id } = req.params;
     const boat = await prisma.boat.findUnique({ where: { id } });

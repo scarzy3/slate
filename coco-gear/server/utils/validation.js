@@ -190,6 +190,21 @@ export const maintenanceStartSchema = z.object({
   notes: z.string().max(1000).optional().default(''),
 });
 
+// ─── Per-role permission schema ───
+const rolePermSchema = z.object({
+  trips: z.boolean().optional(),
+  maintenance: z.boolean().optional(),
+  consumables: z.boolean().optional(),
+  analytics: z.boolean().optional(),
+  reports: z.boolean().optional(),
+  types: z.boolean().optional(),
+  components: z.boolean().optional(),
+  locations: z.boolean().optional(),
+  departments: z.boolean().optional(),
+  personnel: z.boolean().optional(),
+  boats: z.boolean().optional(),
+}).optional();
+
 // ─── Settings ───
 export const settingsSchema = z.object({
   requireDeptApproval: z.boolean().optional(),
@@ -215,6 +230,10 @@ export const settingsSchema = z.object({
     locations: z.boolean().optional(),
     departments: z.boolean().optional(),
     personnel: z.boolean().optional(),
+  }).optional(),
+  rolePerms: z.object({
+    lead: rolePermSchema,
+    manager: rolePermSchema,
   }).optional(),
 });
 
