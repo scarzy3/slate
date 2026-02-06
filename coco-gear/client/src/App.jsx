@@ -188,6 +188,8 @@ const DEF_SETTINGS={
   allowUserInspect:true,allowUserCheckout:true,
   inspectionDueThreshold:30,overdueReturnThreshold:14,
   enableReservations:true,enableMaintenance:true,enableConsumables:true,enableQR:true,
+  boatFields:{type:true,hullId:true,length:true,homePort:true,notes:true},
+  autoReserveOnTrip:true,
   /* Admin permissions - what admins can access (legacy, kept for compat) */
   adminPerms:{
     analytics:true,reports:true,maintenance:true,consumables:true,
@@ -1228,7 +1230,7 @@ function MaintenancePage({kits,setKits,types,locs,personnel,addLog,curUserId,onS
           <Bt v="warn" onClick={()=>sendToMaint(fm.kitId)} disabled={!fm.kitId}>Send to Maintenance</Bt></div></div></ModalWrap></div>);}
 
 /* ═══════════ TRIPS PAGE — Full Planning Hub ═══════════ */
-function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,isSuper,curUserId,onRefreshTrips,onRefreshKits,onRefreshPersonnel,onRefreshBoats}){
+function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,isSuper,curUserId,settings,onRefreshTrips,onRefreshKits,onRefreshPersonnel,onRefreshBoats,onRefreshReservations}){
   const[md,setMd]=useState(null);
   const[fm,setFm]=useState({name:"",description:"",location:"",objectives:"",leadId:"",startDate:"",endDate:"",status:"planning"});
   const[selTrip,setSelTrip]=useState(null);const[assignMd,setAssignMd]=useState(false);const[assignKits,setAssignKits]=useState([]);
@@ -1266,11 +1268,11 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
       await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}setMd(null)};
   const deleteTrip=async()=>{if(!confirmDel)return;try{await api.trips.delete(confirmDel);setSelTrip(null);await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}setConfirmDel(null)};
   const doAssign=async()=>{if(!activeTrip||!assignKits.length)return;
-    try{await api.trips.assignKits(activeTrip.id,assignKits);await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}setAssignMd(false);setAssignKits([])};
+    try{const autoReserve=settings?.autoReserveOnTrip!==false;await api.trips.assignKits(activeTrip.id,assignKits,autoReserve);await onRefreshTrips();await onRefreshKits();if(autoReserve&&onRefreshReservations)await onRefreshReservations()}catch(e){alert(e.message)}setAssignMd(false);setAssignKits([])};
   const removeFromTrip=async(kitId)=>{if(!activeTrip)return;
     try{await api.trips.removeKit(activeTrip.id,kitId);await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}};
   const doAddPersonnel=async()=>{if(!activeTrip||!addPersonIds.length)return;
-    try{await api.trips.addPersonnelBulk(activeTrip.id,addPersonIds,addPersonRole);await onRefreshTrips()}catch(e){alert(e.message)}setAddPersonMd(false);setAddPersonIds([]);setAddPersonRole("specialist")};
+    try{await api.trips.addPersonnelBulk(activeTrip.id,addPersonIds,addPersonRole);await onRefreshTrips();await onRefreshPersonnel()}catch(e){alert(e.message)}setAddPersonMd(false);setAddPersonIds([]);setAddPersonRole("specialist")};
   const removePerson=async(pId)=>{if(!activeTrip)return;
     try{await api.trips.removePersonnel(activeTrip.id,pId);await onRefreshTrips()}catch(e){alert(e.message)}};
   const updatePersonRole=async(pId,role)=>{if(!activeTrip)return;
@@ -1287,7 +1289,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const boatRoleColors={primary:T.bl,support:T.tl,tender:T.am,rescue:T.rd};
   const boatRoleLabels={primary:"Primary",support:"Support",tender:"Tender",rescue:"Rescue"};
   const doAssignBoats=async()=>{if(!activeTrip||!addBoatIds.length)return;
-    try{await api.trips.assignBoats(activeTrip.id,addBoatIds,addBoatRole);await onRefreshTrips();await onRefreshBoats()}catch(e){alert(e.message)}setAddBoatMd(false);setAddBoatIds([])};
+    try{const autoReserve=settings?.autoReserveOnTrip!==false;await api.trips.assignBoats(activeTrip.id,addBoatIds,addBoatRole,autoReserve);await onRefreshTrips();await onRefreshBoats()}catch(e){alert(e.message)}setAddBoatMd(false);setAddBoatIds([])};
   const removeBoat=async(tripBoatId)=>{if(!activeTrip)return;
     try{await api.trips.removeBoat(activeTrip.id,tripBoatId);await onRefreshTrips();await onRefreshBoats()}catch(e){alert(e.message)}};
 
@@ -2174,32 +2176,44 @@ function LocAdmin({locs,setLocs,kits,onRefreshLocs}){
       title="Delete Location?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ DEPARTMENTS ═══════════ */
-function DeptAdmin({depts,setDepts,personnel,kits,onRefreshDepts}){
-  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",color:T.bl,headId:""});
+function DeptAdmin({depts,setDepts,personnel,kits,locs,onRefreshDepts}){
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",color:T.bl,site:"",headId:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const save=async()=>{if(!fm.name.trim())return;
-    try{if(md==="add"){await api.departments.create({name:fm.name.trim(),color:fm.color,headId:fm.headId||null})}
-    else{await api.departments.update(md,{name:fm.name.trim(),color:fm.color,headId:fm.headId||null})}
+    try{if(md==="add"){await api.departments.create({name:fm.name.trim(),color:fm.color,site:fm.site.trim()||null,headId:fm.headId||null})}
+    else{await api.departments.update(md,{name:fm.name.trim(),color:fm.color,site:fm.site.trim()||null,headId:fm.headId||null})}
     await onRefreshDepts()}catch(e){alert(e.message)}setMd(null)};
   const confirmDelete=(dept)=>{const dKits=kits.filter(k=>k.deptId===dept.id);
     if(dKits.length>0){alert("Cannot delete: department has "+dKits.length+" kit(s) assigned");return}
     setDeleteConfirm(dept)};
   const doDelete=async()=>{if(deleteConfirm){try{await api.departments.delete(deleteConfirm.id);await onRefreshDepts()}catch(e){alert(e.message)}}};
   const dColors=["#60a5fa","#818cf8","#a78bfa","#f472b6","#fb923c","#4ade80","#2dd4bf","#fbbf24","#f87171","#22d3ee"];
+  /* Group departments by site */
+  const grouped=useMemo(()=>{const g={};depts.forEach(d=>{const s=d.site||"Unassigned Site";(g[s]=g[s]||[]).push(d)});
+    return Object.entries(g).sort(([a],[b])=>a==="Unassigned Site"?1:b==="Unassigned Site"?-1:a.localeCompare(b))},[depts]);
+  const siteNames=useMemo(()=>[...new Set(depts.map(d=>d.site).filter(Boolean))].sort(),[depts]);
   return(<div>
-    <SH title="Departments" sub={depts.length+" departments"} action={<Bt v="primary" onClick={()=>{setFm({name:"",color:T.bl,headId:""});setMd("add")}}>+ Add</Bt>}/>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(280px,100%),1fr))",gap:10}}>
-      {depts.map(d=>{const head=d.headId?personnel.find(p=>p.id===d.headId):null;const dKits=kits.filter(k=>k.deptId===d.id);const dPers=personnel.filter(p=>p.deptId===d.id);
+    <SH title="Departments" sub={depts.length+" departments"+(siteNames.length>0?" across "+siteNames.length+" site"+(siteNames.length>1?"s":""):"")} action={<Bt v="primary" onClick={()=>{setFm({name:"",color:T.bl,site:"",headId:""});setMd("add")}}>+ Add</Bt>}/>
+    {grouped.map(([siteName,siteDepts])=><div key={siteName} style={{marginBottom:20}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <div style={{width:4,height:16,borderRadius:2,background:siteName==="Unassigned Site"?T.dm:T.bl}}/>
+        <span style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.5,color:siteName==="Unassigned Site"?T.dm:T.bl,fontFamily:T.m,fontWeight:700}}>{siteName} ({siteDepts.length})</span></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(280px,100%),1fr))",gap:10}}>
+      {siteDepts.map(d=>{const head=d.headId?personnel.find(p=>p.id===d.headId):null;const dKits=kits.filter(k=>k.deptId===d.id);const dPers=personnel.filter(p=>p.deptId===d.id);
         return(<div key={d.id} style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd,borderLeft:"3px solid "+d.color}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
             <div><div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>{d.name}</div>
-              <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Head: {head?head.name:"Unassigned"}</div></div>
-            <div style={{display:"flex",gap:4}}><Bt v="ghost" sm onClick={()=>{setFm({name:d.name,color:d.color,headId:d.headId||""});setMd(d.id)}}>Edit</Bt>
+              <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Head: {head?head.name:"Unassigned"}</div>
+              {d.site&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>⌖ {d.site}</div>}</div>
+            <div style={{display:"flex",gap:4}}><Bt v="ghost" sm onClick={()=>{setFm({name:d.name,color:d.color,site:d.site||"",headId:d.headId||""});setMd(d.id)}}>Edit</Bt>
               <Bt v="ghost" sm onClick={()=>confirmDelete(d)} style={{color:T.rd}} disabled={dKits.length>0}>Del</Bt></div></div>
-          <div style={{display:"flex",gap:6}}><Bg color={d.color} bg={d.color+"18"}>{dKits.length} kits</Bg><Bg color={d.color} bg={d.color+"18"}>{dPers.length} members</Bg></div></div>)})}</div>
+          <div style={{display:"flex",gap:6}}><Bg color={d.color} bg={d.color+"18"}>{dKits.length} kits</Bg><Bg color={d.color} bg={d.color+"18"}>{dPers.length} members</Bg></div></div>)})}</div></div>)}
     <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Add Department":"Edit Department"}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))}/></Fl>
+        <Fl label="Site / Location"><div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <In value={fm.site} onChange={e=>setFm(p=>({...p,site:e.target.value}))} placeholder="e.g. CA - San Diego, VA - Norfolk" style={{flex:1}}/>
+          {siteNames.length>0&&<Sl options={[{v:"",l:"— Pick existing —"},...siteNames.map(s=>({v:s,l:s}))]} value="" onChange={e=>{if(e.target.value)setFm(p=>({...p,site:e.target.value}))}} style={{maxWidth:180}}/>}</div></Fl>
         <Fl label="Color"><div style={{display:"flex",gap:5}}>{dColors.map(c=><button key={c} onClick={()=>setFm(p=>({...p,color:c}))} style={{all:"unset",cursor:"pointer",width:24,height:24,borderRadius:5,background:c,border:fm.color===c?"2px solid #fff":"2px solid transparent"}}/>)}</div></Fl>
         <Fl label="Head"><Sl options={[{v:"",l:"-- Unassigned --"},...personnel.filter(p=>p.role!=="user").map(p=>({v:p.id,l:p.name}))]} value={fm.headId} onChange={e=>setFm(p=>({...p,headId:e.target.value}))}/></Fl>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add":"Save"}</Bt></div></div></ModalWrap>
@@ -2207,7 +2221,8 @@ function DeptAdmin({depts,setDepts,personnel,kits,onRefreshDepts}){
       title="Delete Department?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? Personnel in this department will become unassigned.`}/></div>);}
 
 /* ═══════════ USV ADMIN ═══════════ */
-function BoatAdmin({boats,onRefreshBoats}){
+function BoatAdmin({boats,onRefreshBoats,settings}){
+  const bf=settings?.boatFields||{type:true,hullId:true,length:true,homePort:true,notes:true};
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",type:"",hullId:"",length:"",homePort:"",status:"available",notes:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const statusColors={available:T.gn,maintenance:T.am,decommissioned:T.rd};
@@ -2224,6 +2239,7 @@ function BoatAdmin({boats,onRefreshBoats}){
     setDeleteConfirm(boat)};
   const doDelete=async()=>{if(deleteConfirm){try{await api.boats.delete(deleteConfirm.id);await onRefreshBoats()}catch(e){alert(e.message)}}};
   const emptyFm=()=>({name:"",type:"",hullId:"",length:"",homePort:"",status:"available",notes:""});
+  const detailParts=b=>[bf.type&&b.type,bf.hullId&&b.hullId,bf.length&&b.length&&b.length+" m"].filter(Boolean).join(" · ");
   return(<div>
     <SH title="USVs" sub={boats.length+" vessel"+(boats.length!==1?"s":"")} action={<Bt v="primary" onClick={()=>{setFm(emptyFm());setMd("add")}}>+ Add USV</Bt>}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:8}}>
@@ -2233,25 +2249,25 @@ function BoatAdmin({boats,onRefreshBoats}){
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⛵</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:13,fontWeight:600,color:T.tx,fontFamily:T.u}}>{b.name}</div>
-            <div style={{fontSize:10,color:T.dm,fontFamily:T.m}}>{b.type}{b.hullId?" · "+b.hullId:""}{b.length?" · "+b.length+" m":""}</div>
+            {detailParts(b)&&<div style={{fontSize:10,color:T.dm,fontFamily:T.m}}>{detailParts(b)}</div>}
             <div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
               <Bg color={statusColors[b.status]} bg={(statusColors[b.status])+"18"}>{statusLabels[b.status]}</Bg>
-              {b.homePort&&<Bg color={T.mu} bg="rgba(148,163,184,.1)">{b.homePort}</Bg>}
+              {bf.homePort&&b.homePort&&<Bg color={T.mu} bg="rgba(148,163,184,.1)">{b.homePort}</Bg>}
               {activeTrips.length>0&&<Bg color={T.ind} bg="rgba(129,140,248,.1)">{activeTrips.length} trip{activeTrips.length!==1?"s":""}</Bg>}</div></div>
           <Bt v="ghost" sm onClick={()=>{setFm({name:b.name,type:b.type,hullId:b.hullId,length:b.length||"",homePort:b.homePort,status:b.status,notes:b.notes});setMd(b.id)}}>Edit</Bt>
           <Bt v="ghost" sm onClick={()=>confirmDelete(b)} style={{color:T.rd}}>Del</Bt></div>)})}</div>
     <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Add USV":"Edit USV"} wide>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Fl label="USV Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))} placeholder="e.g. WAM-V 16"/></Fl>
-          <Fl label="Type"><In value={fm.type} onChange={e=>setFm(p=>({...p,type:e.target.value}))} placeholder="e.g. WAM-V, Heron, Sailbuoy"/></Fl></div>
-        <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          <Fl label="Hull / Serial #"><In value={fm.hullId} onChange={e=>setFm(p=>({...p,hullId:e.target.value}))}/></Fl>
-          <Fl label="Length (m)"><In type="number" step="0.1" value={fm.length} onChange={e=>setFm(p=>({...p,length:e.target.value}))}/></Fl>
-          <Fl label="Home Port"><In value={fm.homePort} onChange={e=>setFm(p=>({...p,homePort:e.target.value}))}/></Fl></div>
+        <Fl label="USV Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))} placeholder="e.g. WAM-V 16"/></Fl>
+        {(bf.type||bf.hullId)&&<div className="slate-resp" style={{display:"grid",gridTemplateColumns:bf.type&&bf.hullId?"1fr 1fr":"1fr",gap:12}}>
+          {bf.type&&<Fl label="Type"><In value={fm.type} onChange={e=>setFm(p=>({...p,type:e.target.value}))} placeholder="e.g. WAM-V, Heron, Sailbuoy"/></Fl>}
+          {bf.hullId&&<Fl label="Hull / Serial #"><In value={fm.hullId} onChange={e=>setFm(p=>({...p,hullId:e.target.value}))}/></Fl>}</div>}
+        {(bf.length||bf.homePort)&&<div className="slate-resp" style={{display:"grid",gridTemplateColumns:bf.length&&bf.homePort?"1fr 1fr":"1fr",gap:12}}>
+          {bf.length&&<Fl label="Length (m)"><In type="number" step="0.1" value={fm.length} onChange={e=>setFm(p=>({...p,length:e.target.value}))}/></Fl>}
+          {bf.homePort&&<Fl label="Home Port"><In value={fm.homePort} onChange={e=>setFm(p=>({...p,homePort:e.target.value}))}/></Fl>}</div>}
         <Fl label="Status"><Sl options={[{v:"available",l:"Available"},{v:"maintenance",l:"Maintenance"},{v:"decommissioned",l:"Decommissioned"}]}
           value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl>
-        <Fl label="Notes"><In value={fm.notes} onChange={e=>setFm(p=>({...p,notes:e.target.value}))} placeholder="Any notes about this USV..."/></Fl>
+        {bf.notes&&<Fl label="Notes"><In value={fm.notes} onChange={e=>setFm(p=>({...p,notes:e.target.value}))} placeholder="Any notes about this USV..."/></Fl>}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add USV":"Save"}</Bt></div></div></ModalWrap>
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
       title="Delete USV?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
@@ -2351,7 +2367,17 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     {k:"enableMaintenance",l:"Enable maintenance tracking",d:"Repair and service tracking"},
     {k:"enableConsumables",l:"Enable consumables",d:"Stock management"},
     {k:"enableQR",l:"Enable QR codes",d:"QR code generation, printing, and scanning"},
+    {k:"autoReserveOnTrip",l:"Auto-reserve on trip creation",d:"Automatically create reservations for equipment, boats, and personnel when assigned to trips"},
   ];
+  const boatFieldItems=[
+    {k:"type",l:"Type",d:"USV model/type (e.g. WAM-V, Heron)"},
+    {k:"hullId",l:"Hull / Serial #",d:"Hull ID or serial number"},
+    {k:"length",l:"Length",d:"Vessel length in meters"},
+    {k:"homePort",l:"Home Port",d:"Vessel home port location"},
+    {k:"notes",l:"Notes",d:"Additional notes field"},
+  ];
+  const updateBoatField=(field,value)=>{setSettings(p=>{const bf={...(p.boatFields||{type:true,hullId:true,length:true,homePort:true,notes:true}),[field]:value};
+    const next={...p,boatFields:bf};clearTimeout(saveTimer.current);saveTimer.current=setTimeout(()=>{if(onSaveSettings)onSaveSettings(next)},800);return next})};
   const numItems=[
     {k:"inspectionDueThreshold",l:"Inspection due threshold",d:"Days before inspection overdue",unit:"days"},
     {k:"overdueReturnThreshold",l:"Overdue return threshold",d:"Days before return overdue",unit:"days"},
@@ -2382,7 +2408,7 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
   };
   return(<div>
     <SH title="System Settings" sub="Super Admin configuration"/>
-    <Tabs tabs={[{id:"general",l:"General"},{id:"serials",l:"Serials"},{id:"features",l:"Features"},{id:"roles",l:"Role Permissions"}]} active={tab} onChange={setTab}/>
+    <Tabs tabs={[{id:"general",l:"General"},{id:"serials",l:"Serials"},{id:"features",l:"Features"},{id:"usvFields",l:"USV Fields"},{id:"roles",l:"Role Permissions"}]} active={tab} onChange={setTab}/>
     <div style={{maxWidth:700,display:"flex",flexDirection:"column",gap:6}}>
       {tab==="general"&&<>
         {generalItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
@@ -2393,6 +2419,10 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
           <span style={{fontSize:10,color:T.mu,fontFamily:T.m,width:30}}>{it.unit}</span></div>)}</>}
       {tab==="serials"&&serialItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
       {tab==="features"&&featureItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
+      {tab==="usvFields"&&<>
+        <div style={{padding:12,borderRadius:8,background:"rgba(96,165,250,.03)",border:"1px solid rgba(96,165,250,.12)",marginBottom:8}}>
+          <div style={{fontSize:10,color:T.bl,fontFamily:T.m}}>Choose which fields are visible when adding or viewing USVs. Name and Status are always shown.</div></div>
+        {boatFieldItems.map(it=><ToggleRow key={it.k} item={it} checked={(settings.boatFields||{})[it.k]!==false} onChange={v=>updateBoatField(it.k,v)}/>)}</>}
       {tab==="roles"&&<>
         <div style={{padding:12,borderRadius:8,background:"rgba(96,165,250,.03)",border:"1px solid rgba(96,165,250,.12)",marginBottom:8}}>
           <div style={{fontSize:10,color:T.bl,fontFamily:T.m}}>Configure exactly what each role can access. Directors always have full access. Operators have view-only access to inventory and trips.</div></div>
@@ -3204,7 +3234,7 @@ export default function App(){
       fields:(t.fields||[]).map(f=>({key:f.key,label:f.label,type:f.type||"text"})),
       deptIds:(t.departments||[]).map(d=>d.deptId||d.department?.id).filter(Boolean)}};
   const xformLoc=l=>({id:l.id,name:l.name,sc:l.shortCode});
-  const xformDept=d=>({id:d.id,name:d.name,color:d.color||"#60a5fa",headId:d.headId||d.head?.id||null,
+  const xformDept=d=>({id:d.id,name:d.name,color:d.color||"#60a5fa",site:d.site||"",headId:d.headId||d.head?.id||null,
     kitTypeIds:(d.kitTypes||[]).map(kt=>kt.kitTypeId||kt.kitType?.id).filter(Boolean)});
   const xformTrip=t=>({id:t.id,name:t.name,description:t.description||"",location:t.location||"",objectives:t.objectives||"",
     leadId:t.leadId||null,leadName:t.lead?.name||null,startDate:t.startDate,endDate:t.endDate,
@@ -3496,7 +3526,7 @@ export default function App(){
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}
           personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} addLog={addLog} onRefreshKits={refreshKits}/>}
         {pg==="trips"&&<TripsPage trips={trips} kits={kits} types={types} depts={depts} personnel={personnel} reservations={reservations} boats={boats}
-          isAdmin={canManageTrips} isSuper={isSuper} curUserId={curUser} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits} onRefreshPersonnel={refreshPersonnel} onRefreshBoats={refreshBoats}/>}
+          isAdmin={canManageTrips} isSuper={isSuper} curUserId={curUser} settings={settings} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits} onRefreshPersonnel={refreshPersonnel} onRefreshBoats={refreshBoats} onRefreshReservations={refreshReservations}/>}
         {pg==="reservations"&&settings.enableReservations&&<ReservationsPage reservations={reservations} setReservations={setReservations}
           kits={kits} personnel={personnel} trips={trips} curUserId={curUser} isAdmin={isAdmin} addLog={addLog} onRefreshReservations={refreshReservations}/>}
         {pg==="maintenance"&&canAccess({access:"admin",perm:"maintenance",setting:"enableMaintenance"})&&settings.enableMaintenance&&<MaintenancePage kits={kits} setKits={setKits} types={types} locs={locs}
@@ -3508,9 +3538,9 @@ export default function App(){
         {pg==="types"&&canAccess({access:"admin",perm:"types"})&&<TypeAdmin types={types} setTypes={setTypes} comps={comps} kits={kits} depts={depts} onRefreshTypes={refreshTypes}/>}
         {pg==="components"&&canAccess({access:"admin",perm:"components"})&&<CompAdmin comps={comps} setComps={setComps} types={types} onRefreshComps={refreshComps}/>}
         {pg==="locations"&&canAccess({access:"admin",perm:"locations"})&&<LocAdmin locs={locs} setLocs={setLocs} kits={kits} onRefreshLocs={refreshLocs}/>}
-        {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} onRefreshDepts={refreshDepts}/>}
+        {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} locs={locs} onRefreshDepts={refreshDepts}/>}
         {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
-        {pg==="boats"&&canAccess({access:"lead",perm:"boats"})&&<BoatAdmin boats={boats} onRefreshBoats={refreshBoats}/>}
+        {pg==="boats"&&canAccess({access:"lead",perm:"boats"})&&<BoatAdmin boats={boats} onRefreshBoats={refreshBoats} settings={settings}/>}
         {pg==="settings"&&isSuper&&<SettingsPage settings={settings} setSettings={setSettings} onSaveSettings={saveSettings}/>}
         {pg==="profile"&&<MyProfile user={user} personnel={personnel} setPersonnel={setPersonnel} kits={kits} assets={assets} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
       </main>

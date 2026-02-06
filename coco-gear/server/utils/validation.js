@@ -58,6 +58,7 @@ export const locationSchema = z.object({
 export const departmentSchema = z.object({
   name: z.string().min(1).max(200),
   color: z.string().max(20).optional().default('#60a5fa'),
+  site: z.string().max(200).nullable().optional(),
   headId: z.string().uuid().nullable().optional(),
 });
 
@@ -220,6 +221,14 @@ export const settingsSchema = z.object({
   enableMaintenance: z.boolean().optional(),
   enableConsumables: z.boolean().optional(),
   enableQR: z.boolean().optional(),
+  boatFields: z.object({
+    type: z.boolean().optional(),
+    hullId: z.boolean().optional(),
+    length: z.boolean().optional(),
+    homePort: z.boolean().optional(),
+    notes: z.boolean().optional(),
+  }).optional(),
+  autoReserveOnTrip: z.boolean().optional(),
   adminPerms: z.object({
     analytics: z.boolean().optional(),
     reports: z.boolean().optional(),
