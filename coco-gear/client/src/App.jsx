@@ -1318,7 +1318,9 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
           {md==="addCon"&&<Fl label="Qty"><In type="number" value={fm.qty} onChange={e=>setFm(p=>({...p,qty:e.target.value}))}/></Fl>}
           <Fl label="Min Qty"><In type="number" value={fm.minQty} onChange={e=>setFm(p=>({...p,minQty:e.target.value}))}/></Fl>
           <Fl label="Unit"><Sl options={["ea","pk","box","roll"]} value={fm.unit} onChange={e=>setFm(p=>({...p,unit:e.target.value}))}/></Fl></div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={saveCon}>Save</Bt></div></div></ModalWrap>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          {isAdmin&&md!=="addCon"&&<Bt v="danger" onClick={async()=>{if(!confirm("Delete this consumable?"))return;try{await api.consumables.delete(md);await onRefreshConsumables()}catch(e){alert(e.message)}setMd(null)}} style={{marginRight:"auto"}}>Delete</Bt>}
+          <Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={saveCon}>Save</Bt></div></div></ModalWrap>
     
     {/* Asset edit modal */}
     <ModalWrap open={md==="addAsset"||(typeof md==="string"&&md.length>10&&!md.startsWith("checkout")&&!md.startsWith("history")&&!md.startsWith("qr")&&tab==="assets"&&md!=="addCon")} onClose={()=>setMd(null)} title={md==="addAsset"?"Add Asset":"Edit Asset"}>
@@ -1329,7 +1331,9 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
           <Fl label="Category"><Sl options={CATS} value={afm.category} onChange={e=>setAfm(p=>({...p,category:e.target.value}))}/></Fl></div>
         <Fl label="Location"><Sl options={[{v:"",l:"-- None --"},...locs.map(l=>({v:l.id,l:l.name}))]} value={afm.locId} onChange={e=>setAfm(p=>({...p,locId:e.target.value}))}/></Fl>
         <Fl label="Notes"><Ta value={afm.notes} onChange={e=>setAfm(p=>({...p,notes:e.target.value}))} rows={2}/></Fl>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={saveAsset}>Save</Bt></div></div></ModalWrap>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          {isAdmin&&md!=="addAsset"&&<Bt v="danger" onClick={async()=>{if(!confirm("Delete this asset and all its history?"))return;try{await api.assets.delete(md);await onRefreshAssets()}catch(e){alert(e.message)}setMd(null)}} style={{marginRight:"auto"}}>Delete</Bt>}
+          <Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={saveAsset}>Save</Bt></div></div></ModalWrap>
     
     {/* Adjust quantity modal */}
     <ModalWrap open={!!adj.id} onClose={()=>setAdj({id:"",delta:0,reason:""})} title="Adjust Quantity">
