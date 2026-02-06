@@ -2222,13 +2222,22 @@ function NavSection({section,pg,setPg,collapsed,onToggle,canAccess,getBadge}){
 function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
   const[selUser,setSelUser]=useState("");const[pin,setPin]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
   const[search,setSearch]=useState("");const[showList,setShowList]=useState(false);const[hiIdx,setHiIdx]=useState(0);
-  const[users,setUsers]=useState(personnel||[]);const[usersLoading,setUsersLoading]=useState(!personnel?.length);const[fetchFailed,setFetchFailed]=useState(false);
-  const searchRef=useRef(null);const listRef=useRef(null);const pinWrapRef=useRef(null);
+  const[users,setUsers]=useState(personnel||[]);const[usersLoading,setUsersLoading]=useState(true);const[fetchError,setFetchError]=useState("");
+  const searchRef=useRef(null);const listRef=useRef(null);const pinWrapRef=useRef(null);const retriesRef=useRef(0);
   const fetchUsers=useCallback(()=>{
-    setUsersLoading(true);setFetchFailed(false);
-    fetch('/api/auth/users').then(r=>{if(!r.ok)throw new Error();return r.json()})
-      .then(data=>{if(data?.length)setUsers(data.map(p=>({id:p.id,name:p.name,title:p.title||"",role:p.role,deptId:p.deptId})));setUsersLoading(false)})
-      .catch(()=>{setUsersLoading(false);setFetchFailed(true)});
+    setUsersLoading(true);setFetchError("");
+    fetch('/api/auth/users').then(r=>{
+      if(!r.ok)throw new Error("Server returned "+r.status);
+      return r.json();
+    }).then(data=>{
+      console.log("[Slate Login] Fetched users:",data?.length||0);
+      if(Array.isArray(data)&&data.length>0)setUsers(data.map(p=>({id:p.id,name:p.name,title:p.title||"",role:p.role,deptId:p.deptId})));
+      setUsersLoading(false);retriesRef.current=0;
+    }).catch(err=>{
+      console.error("[Slate Login] Fetch failed:",err);
+      if(retriesRef.current<3){retriesRef.current++;setTimeout(fetchUsers,1500)}
+      else{setUsersLoading(false);setFetchError(err.message||"Could not reach server")}
+    });
   },[]);
   useEffect(()=>{fetchUsers()},[fetchUsers]);
   useEffect(()=>{if(personnel?.length&&!users.length)setUsers(personnel)},[personnel,users.length]);
@@ -2305,9 +2314,11 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
                       {p.title&&<span style={{color:T.dm,marginLeft:6,fontSize:10}}>{p.title}</span>}
                     </div>))}</div>}
             </div></Fl>
-          {fetchFailed&&!users.length&&<div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
-            <span style={{fontSize:11,color:T.am,fontFamily:T.m}}>Could not load users</span>
-            <Bt sm onClick={fetchUsers} style={{fontSize:10}}>Retry</Bt></div>}
+          {fetchError&&!users.length&&<div style={{textAlign:"center",padding:"8px 12px",borderRadius:6,
+            background:"rgba(251,191,36,.06)",border:"1px solid rgba(251,191,36,.15)"}}>
+            <div style={{fontSize:11,color:T.am,fontFamily:T.m,marginBottom:6}}>Could not load users</div>
+            <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginBottom:8}}>{fetchError}</div>
+            <Bt sm onClick={()=>{retriesRef.current=0;fetchUsers()}} style={{fontSize:10}}>Retry</Bt></div>}
           <Fl label="PIN">
             <div ref={pinWrapRef}><In type="password" value={pin} onChange={e=>{setPin(e.target.value);setError("")}}
               placeholder="Enter PIN" onKeyDown={e=>{if(e.key==="Enter")attempt()}} maxLength={6}/></div></Fl>

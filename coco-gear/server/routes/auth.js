@@ -14,6 +14,7 @@ router.get('/users', async (req, res) => {
       select: { id: true, name: true, title: true, role: true, deptId: true },
       orderBy: { name: 'asc' },
     });
+    console.log(`GET /api/auth/users — returning ${users.length} users`);
     return res.json(users);
   } catch (err) {
     console.error('List users error:', err);
