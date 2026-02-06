@@ -52,8 +52,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // POST / - create kit type (admin+, perm: types)
 router.post('/', authMiddleware, requireAdminPerm('types'), validate(kitTypeSchema), async (req, res) => {
   try {
-    const { name, desc, components, fields } = req.validated;
-    const { deptIds } = req.body;
+    const { name, desc, components, fields, deptIds } = req.validated;
 
     const type = await prisma.kitType.create({
       data: {
