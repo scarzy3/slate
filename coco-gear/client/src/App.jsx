@@ -2320,7 +2320,7 @@ export default function App(){
   const toggleTheme=useCallback(()=>{setIsDark(d=>{const next=!d;applyTheme(next);return next})},[]);
 
   /* Load user list for login (public endpoint) */
-  useEffect(()=>{if(!isLoggedIn){fetch('/api/personnel').then(r=>r.ok?r.json():[]).then(setLoginUsers).catch(()=>{})}}, [isLoggedIn]);
+  useEffect(()=>{if(!isLoggedIn){fetch('/api/auth/users').then(r=>r.ok?r.json():[]).then(setLoginUsers).catch(()=>{})}}, [isLoggedIn]);
 
   /* Transform API component data to frontend format */
   const xformComp=c=>({id:c.id,key:c.key,label:c.label,cat:c.category,ser:c.serialized,calibrationRequired:c.calibrationRequired,calibrationIntervalDays:c.calibrationIntervalDays});
