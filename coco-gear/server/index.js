@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
 import authRoutes from './routes/auth.js';
 import kitRoutes from './routes/kits.js';
@@ -120,10 +121,41 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// ─── Ensure a default admin user exists ───
+async function ensureDefaultUser() {
+  try {
+    const userCount = await prisma.user.count();
+    if (userCount === 0) {
+      const pin = await bcrypt.hash('1234', 10);
+      const user = await prisma.user.create({
+        data: {
+          name: 'Admin',
+          title: 'System Administrator',
+          role: 'super',
+          pin,
+        },
+      });
+      console.log('');
+      console.log('══════════════════════════════════════════════');
+      console.log('  No users found — created default admin user');
+      console.log('  Name: Admin');
+      console.log('  PIN:  1234');
+      console.log('  Role: super');
+      console.log('  ** Change this PIN after first login **');
+      console.log('══════════════════════════════════════════════');
+      console.log('');
+    }
+  } catch (err) {
+    console.error('Failed to check/create default user:', err.message);
+  }
+}
+
 // ─── Start ───
-app.listen(PORT, () => {
-  console.log(`COCO Gear server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+ensureDefaultUser().then(() => {
+  app.listen(PORT, () => {
+    console.log(`COCO Gear server running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
 });
 
 export default app;
