@@ -234,4 +234,34 @@ router.put('/:id/cancel', authMiddleware, async (req, res) => {
   }
 });
 
+// DELETE /:id - delete reservation (owner or admin)
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const reservation = await prisma.reservation.findUnique({ where: { id } });
+
+    if (!reservation) {
+      return res.status(404).json({ error: 'Reservation not found' });
+    }
+
+    const isOwner = reservation.personId === req.user.id;
+    const isAdmin = ['developer','director','super','engineer','manager','admin','lead'].includes(req.user.role);
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Only the reservation owner or an admin can delete' });
+    }
+
+    await prisma.reservation.delete({ where: { id } });
+
+    await auditLog('reservation_delete', 'reservation', id, req.user.id, {
+      kitId: reservation.kitId,
+    });
+
+    return res.json({ message: 'Reservation deleted' });
+  } catch (err) {
+    console.error('Delete reservation error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
