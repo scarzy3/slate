@@ -11,6 +11,19 @@ Full-stack equipment tracking and management system built with React, Express, P
 - Node.js 20+
 - PostgreSQL 16+
 
+## Deploy to Ubuntu Server
+
+Have a fresh Ubuntu server? Run the automated setup script:
+
+```bash
+git clone <your-repo-url> /opt/slate
+cd /opt/slate/coco-gear
+chmod +x setup-server.sh
+sudo ./setup-server.sh
+```
+
+This installs Docker, PostgreSQL, Nginx, configures the firewall, generates secure passwords, and starts the app. See [`docs/ubuntu-deployment.md`](docs/ubuntu-deployment.md) for a detailed step-by-step guide.
+
 ## Quick Start with Docker
 
 ```bash
