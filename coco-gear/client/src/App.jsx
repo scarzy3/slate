@@ -2085,8 +2085,9 @@ function TypeAdmin({types,setTypes,comps,kits,depts,onRefreshTypes}){
     setFm(p=>({...p,fields:[...p.fields,{key:k,label:fd.label.trim(),type:fd.type}]}));setFd({key:"",label:"",type:"text"})};
   const totalExpanded=(ids,qtys)=>ids.reduce((s,id)=>s+(qtys[id]||1),0);
   const save=async()=>{if(!fm.name.trim())return;
-    try{if(md==="add"){await api.types.create({name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields,deptIds:fm.deptIds||[]})}
-    else{await api.types.update(md,{name:fm.name.trim(),desc:fm.desc.trim(),compIds:fm.compIds,compQtys:fm.compQtys,fields:fm.fields,deptIds:fm.deptIds||[]})}
+    const components=fm.compIds.map(id=>({componentId:id,quantity:fm.compQtys[id]||1}));
+    try{if(md==="add"){await api.types.create({name:fm.name.trim(),desc:fm.desc.trim(),components,fields:fm.fields,deptIds:fm.deptIds||[]})}
+    else{await api.types.update(md,{name:fm.name.trim(),desc:fm.desc.trim(),components,fields:fm.fields,deptIds:fm.deptIds||[]})}
     await onRefreshTypes()}catch(e){alert(e.message)}setMd(null)};
   const confirmDelete=(type)=>{const n=kits?.filter(k=>k.typeId===type.id).length||0;
     if(n>0){alert("Cannot delete: "+n+" kit(s) use this type");return}
