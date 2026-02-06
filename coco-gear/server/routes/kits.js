@@ -34,6 +34,7 @@ const KIT_INCLUDE = {
   },
   reservations: true,
   photos: true,
+  trip: { select: { id: true, name: true, status: true, startDate: true, endDate: true } },
 };
 
 function compKey(componentId, slotIndex, quantity) {
@@ -138,6 +139,8 @@ function serializeKit(kit) {
     })),
     photos: kit.photos ?? [],
     reservations: kit.reservations ?? [],
+    tripId: kit.tripId ?? null,
+    _trip: kit.trip ?? null,
     // Include type info for the frontend
     _type: kit.type ? {
       id: kit.type.id,
@@ -248,11 +251,12 @@ router.post('/', requireRole('admin'), validate(kitSchema), async (req, res) => 
 // PUT /:id - update kit (admin+)
 router.put('/:id', requireRole('admin'), async (req, res) => {
   try {
-    const { color, locId, deptId, fields } = req.body;
+    const { color, locId, deptId, tripId, fields } = req.body;
     const data = {};
     if (color !== undefined) data.color = color;
     if (locId !== undefined) data.locId = locId;
     if (deptId !== undefined) data.deptId = deptId;
+    if (tripId !== undefined) data.tripId = tripId;
 
     await prisma.kit.update({ where: { id: req.params.id }, data });
 

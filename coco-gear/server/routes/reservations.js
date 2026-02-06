@@ -46,6 +46,7 @@ router.get('/', authMiddleware, async (req, res) => {
           },
         },
         person: { select: { id: true, name: true, title: true } },
+        trip: { select: { id: true, name: true, status: true } },
       },
       orderBy: { startDate: 'asc' },
     });
@@ -60,7 +61,7 @@ router.get('/', authMiddleware, async (req, res) => {
 // POST / - create reservation (any auth user)
 router.post('/', authMiddleware, validate(reservationSchema), async (req, res) => {
   try {
-    const { kitId, startDate, endDate, purpose } = req.validated;
+    const { kitId, tripId, startDate, endDate, purpose } = req.validated;
 
     // Validate dates
     if (new Date(startDate) >= new Date(endDate)) {
@@ -87,6 +88,7 @@ router.post('/', authMiddleware, validate(reservationSchema), async (req, res) =
       data: {
         kitId,
         personId: req.user.id,
+        tripId: tripId || null,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         purpose,

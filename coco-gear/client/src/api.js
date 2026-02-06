@@ -121,6 +121,20 @@ export const reservations = {
   cancel: (id) => request(`/reservations/${id}/cancel`, { method: 'PUT' }),
 };
 
+// ─── Trips ───
+export const trips = {
+  list: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/trips${q ? '?' + q : ''}`);
+  },
+  get: (id) => request(`/trips/${id}`),
+  create: (data) => request('/trips', { method: 'POST', body: data }),
+  update: (id, data) => request(`/trips/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => request(`/trips/${id}`, { method: 'DELETE' }),
+  assignKits: (id, kitIds) => request(`/trips/${id}/kits`, { method: 'POST', body: { kitIds } }),
+  removeKit: (tripId, kitId) => request(`/trips/${tripId}/kits/${kitId}`, { method: 'DELETE' }),
+};
+
 // ─── Maintenance ───
 export const maintenance = {
   list: () => request('/maintenance'),
@@ -173,6 +187,6 @@ export const health = () => request('/health');
 
 export default {
   auth, kits, types, components, locations, departments,
-  personnel, consumables, assets, reservations, maintenance,
+  personnel, consumables, assets, reservations, trips, maintenance,
   audit, settings, reports, upload, health,
 };

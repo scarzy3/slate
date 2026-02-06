@@ -50,6 +50,7 @@ model Department {
   members   User[]   @relation("UserDepartment")
   kits      Kit[]
   checkoutRequests CheckoutRequest[]
+  kitTypes  KitTypeDepartment[]
 }
 
 // ─── Locations ───
@@ -93,9 +94,22 @@ model KitType {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  components KitTypeComponent[]
-  fields     KitTypeField[]
-  kits       Kit[]
+  components  KitTypeComponent[]
+  fields      KitTypeField[]
+  kits        Kit[]
+  departments KitTypeDepartment[]
+}
+
+// ─── Kit Type <-> Department (many-to-many) ───
+model KitTypeDepartment {
+  id        String @id @default(uuid())
+  kitTypeId String
+  deptId    String
+
+  kitType    KitType    @relation(fields: [kitTypeId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [deptId], references: [id], onDelete: Cascade)
+
+  @@unique([kitTypeId, deptId])
 }
 
 // ─── Kit Type <-> Component (many-to-many with qty) ───
@@ -132,6 +146,7 @@ model Kit {
   locId             String
   deptId            String?
   issuedToId        String?
+  tripId            String?
   lastChecked       DateTime?
   maintenanceStatus String?  // null | repair | calibration | upgrade | cleaning
   createdAt         DateTime @default(now())
@@ -141,6 +156,7 @@ model Kit {
   location          Location          @relation(fields: [locId], references: [id])
   department        Department?       @relation(fields: [deptId], references: [id], onDelete: SetNull)
   issuedTo          User?             @relation("KitHolder", fields: [issuedToId], references: [id], onDelete: SetNull)
+  trip              Trip?             @relation(fields: [tripId], references: [id], onDelete: SetNull)
   fieldValues       KitFieldValue[]
   componentStatuses KitComponentStatus[]
   serials           KitSerial[]
@@ -156,7 +172,26 @@ model Kit {
   @@index([locId])
   @@index([deptId])
   @@index([issuedToId])
+  @@index([tripId])
   @@index([color])
+}
+
+// ─── Trips / Missions ───
+model Trip {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  status      String   @default("planning") // planning | active | completed | cancelled
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  kits         Kit[]
+  reservations Reservation[]
+
+  @@index([status])
+  @@index([startDate, endDate])
 }
 
 // ─── Kit custom field values ───
@@ -312,6 +347,7 @@ model Reservation {
   id          String   @id @default(uuid())
   kitId       String
   personId    String
+  tripId      String?
   startDate   DateTime
   endDate     DateTime
   purpose     String?
@@ -320,8 +356,10 @@ model Reservation {
 
   kit    Kit  @relation(fields: [kitId], references: [id], onDelete: Cascade)
   person User @relation(fields: [personId], references: [id])
+  trip   Trip? @relation(fields: [tripId], references: [id], onDelete: SetNull)
 
   @@index([kitId])
+  @@index([tripId])
   @@index([startDate, endDate])
 }
 

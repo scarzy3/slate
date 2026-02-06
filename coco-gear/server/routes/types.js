@@ -15,6 +15,7 @@ router.get('/', authMiddleware, async (req, res) => {
       include: {
         components: { include: { component: true } },
         fields: true,
+        departments: { include: { department: { select: { id: true, name: true, color: true } } } },
         _count: { select: { kits: true } },
       },
       orderBy: { name: 'asc' },
@@ -34,6 +35,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
       include: {
         components: { include: { component: true } },
         fields: true,
+        departments: { include: { department: { select: { id: true, name: true, color: true } } } },
         _count: { select: { kits: true } },
       },
     });
@@ -51,6 +53,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 router.post('/', authMiddleware, requireAdminPerm('types'), validate(kitTypeSchema), async (req, res) => {
   try {
     const { name, desc, components, fields } = req.validated;
+    const { deptIds } = req.body;
 
     const type = await prisma.kitType.create({
       data: {
@@ -69,10 +72,14 @@ router.post('/', authMiddleware, requireAdminPerm('types'), validate(kitTypeSche
             type: f.type,
           })),
         },
+        departments: deptIds?.length ? {
+          create: deptIds.map(deptId => ({ deptId })),
+        } : undefined,
       },
       include: {
         components: { include: { component: true } },
         fields: true,
+        departments: { include: { department: { select: { id: true, name: true, color: true } } } },
       },
     });
 
@@ -89,7 +96,7 @@ router.post('/', authMiddleware, requireAdminPerm('types'), validate(kitTypeSche
 router.put('/:id', authMiddleware, requireAdminPerm('types'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, desc, components, fields } = req.body;
+    const { name, desc, components, fields, deptIds } = req.body;
 
     const existing = await prisma.kitType.findUnique({ where: { id } });
     if (!existing) {
@@ -133,11 +140,22 @@ router.put('/:id', authMiddleware, requireAdminPerm('types'), async (req, res) =
         }
       }
 
+      // Replace department associations if provided
+      if (deptIds !== undefined) {
+        await tx.kitTypeDepartment.deleteMany({ where: { kitTypeId: id } });
+        if (deptIds.length > 0) {
+          await tx.kitTypeDepartment.createMany({
+            data: deptIds.map(deptId => ({ kitTypeId: id, deptId })),
+          });
+        }
+      }
+
       return tx.kitType.findUnique({
         where: { id },
         include: {
           components: { include: { component: true } },
           fields: true,
+          departments: { include: { department: { select: { id: true, name: true, color: true } } } },
         },
       });
     });
