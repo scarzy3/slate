@@ -125,6 +125,27 @@ export const tripNoteSchema = z.object({
   category: z.enum(['general', 'logistics', 'safety', 'comms', 'after-action']).optional().default('general'),
 });
 
+// ─── Boat ───
+export const boatSchema = z.object({
+  name: z.string().min(1).max(200),
+  type: z.string().max(100).optional().default(''),
+  registration: z.string().max(100).optional().default(''),
+  capacity: z.number().int().positive().nullable().optional(),
+  homePort: z.string().max(200).optional().default(''),
+  status: z.enum(['available', 'maintenance', 'decommissioned']).optional().default('available'),
+  notes: z.string().max(1000).optional().default(''),
+});
+
+export const boatUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  type: z.string().max(100).optional(),
+  registration: z.string().max(100).optional(),
+  capacity: z.number().int().positive().nullable().optional(),
+  homePort: z.string().max(200).optional(),
+  status: z.enum(['available', 'maintenance', 'decommissioned']).optional(),
+  notes: z.string().max(1000).optional(),
+});
+
 // ─── Reservation ───
 export const reservationSchema = z.object({
   kitId: z.string().uuid(),

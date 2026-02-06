@@ -1220,7 +1220,7 @@ function MaintenancePage({kits,setKits,types,locs,personnel,addLog,curUserId,onS
           <Bt v="warn" onClick={()=>sendToMaint(fm.kitId)} disabled={!fm.kitId}>Send to Maintenance</Bt></div></div></ModalWrap></div>);}
 
 /* ═══════════ TRIPS PAGE — Full Planning Hub ═══════════ */
-function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSuper,curUserId,onRefreshTrips,onRefreshKits,onRefreshPersonnel}){
+function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,isSuper,curUserId,onRefreshTrips,onRefreshKits,onRefreshPersonnel,onRefreshBoats}){
   const[md,setMd]=useState(null);
   const[fm,setFm]=useState({name:"",description:"",location:"",objectives:"",leadId:"",startDate:"",endDate:"",status:"planning"});
   const[selTrip,setSelTrip]=useState(null);const[assignMd,setAssignMd]=useState(false);const[assignKits,setAssignKits]=useState([]);
@@ -1229,6 +1229,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
   const[noteText,setNoteText]=useState("");const[noteCat,setNoteCat]=useState("general");
   const[editRole,setEditRole]=useState(null);const[confirmDel,setConfirmDel]=useState(null);
   const[search,setSearch]=useState("");
+  const[addBoatMd,setAddBoatMd]=useState(false);const[addBoatIds,setAddBoatIds]=useState([]);const[addBoatRole,setAddBoatRole]=useState("primary");
   const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric"}):"";
   const fmtDT=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
@@ -1272,6 +1273,15 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
     try{await api.trips.deleteNote(activeTrip.id,noteId);await onRefreshTrips()}catch(e){alert(e.message)}};
   const changeStatus=async(newStatus)=>{if(!activeTrip)return;
     try{await api.trips.update(activeTrip.id,{status:newStatus});await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}};
+  const tripBoats=activeTrip?.boats||[];
+  const assignedBoatIds=new Set(tripBoats.map(b=>b.boatId));
+  const availableBoats=(boats||[]).filter(b=>b.status==="available"&&!assignedBoatIds.has(b.id));
+  const boatRoleColors={primary:T.bl,support:T.tl,tender:T.am,rescue:T.rd};
+  const boatRoleLabels={primary:"Primary",support:"Support",tender:"Tender",rescue:"Rescue"};
+  const doAssignBoats=async()=>{if(!activeTrip||!addBoatIds.length)return;
+    try{await api.trips.assignBoats(activeTrip.id,addBoatIds,addBoatRole);await onRefreshTrips();await onRefreshBoats()}catch(e){alert(e.message)}setAddBoatMd(false);setAddBoatIds([])};
+  const removeBoat=async(tripBoatId)=>{if(!activeTrip)return;
+    try{await api.trips.removeBoat(activeTrip.id,tripBoatId);await onRefreshTrips();await onRefreshBoats()}catch(e){alert(e.message)}};
 
   const daysUntilStart=activeTrip?Math.ceil((new Date(activeTrip.startDate)-Date.now())/864e5):0;
   const daysUntilEnd=activeTrip?Math.ceil((new Date(activeTrip.endDate)-Date.now())/864e5):0;
@@ -1306,6 +1316,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
           <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
             <Bg color={T.ind} bg="rgba(129,140,248,.1)">{t.kits.length} kits</Bg>
             <Bg color={T.tl} bg="rgba(45,212,191,.1)">{t.personnelCount||t.personnel?.length||0} personnel</Bg>
+            {t.boatCount>0&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">{t.boatCount} boats</Bg>}
             {t.reservationCount>0&&<Bg color={T.pu} bg="rgba(168,85,247,.1)">{t.reservationCount} reservations</Bg>}
             {t.kits.length>0&&<div style={{display:"flex",gap:2,alignItems:"center",marginLeft:4}}>
               {t.kits.slice(0,5).map(k=><div key={k.id} style={{width:14,height:14,borderRadius:7,background:CM[k.color]||"#888",border:"1px solid rgba(0,0,0,.2)"}} title={k.color}/>)}
@@ -1353,7 +1364,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
 
     {/* Status timeline indicator */}
     <div style={{display:"flex",gap:12,marginBottom:16,overflowX:"auto",padding:"2px 0"}}>
-      {[{l:"Kits",v:tripKits.length,c:T.ind,i:"▤"},{l:"Personnel",v:tripPers.length,c:T.tl,i:"◎"},
+      {[{l:"Kits",v:tripKits.length,c:T.ind,i:"▤"},{l:"Boats",v:tripBoats.length,c:T.bl,i:"⛵"},{l:"Personnel",v:tripPers.length,c:T.tl,i:"◎"},
         {l:"Reservations",v:tripRes.length,c:T.pu,i:"◷"},
         {l:daysUntilStart>0?"Starts in":"Started",v:daysUntilStart>0?daysUntilStart+"d":Math.abs(daysUntilStart)+"d ago",c:daysUntilStart>0?T.bl:T.gn,i:"◷"},
         {l:daysUntilEnd>0?"Ends in":"Ended",v:daysUntilEnd>0?daysUntilEnd+"d":Math.abs(daysUntilEnd)+"d ago",c:daysUntilEnd>0?T.am:T.rd,i:"◷"},
@@ -1363,7 +1374,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
 
     {/* Tabs */}
     <Tabs tabs={[{id:"overview",l:"Overview"},{id:"personnel",l:"Personnel ("+tripPers.length+")"},{id:"equipment",l:"Equipment ("+tripKits.length+")"},
-      {id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
+      {id:"boats",l:"Boats ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
 
     {/* ── OVERVIEW TAB ── */}
     {detailTab==="overview"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -1404,6 +1415,19 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
                   <div style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k.color} <span style={{color:T.dm}}>({ty?.name})</span></div>
                   {holder&&<div style={{fontSize:8,color:T.am,fontFamily:T.m}}>→ {holder.name}</div>}</div></div>)})}
             {tripKits.length>6&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>+{tripKits.length-6} more kits</div>}</div>}</div>
+
+      {/* Boats preview */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.tx,fontFamily:T.u}}>Boats</div>
+          <Bt v="ghost" sm onClick={()=>setDetailTab("boats")}>View all →</Bt></div>
+        {tripBoats.length===0?<div style={{fontSize:10,color:T.dm,fontFamily:T.m,textAlign:"center",padding:10}}>No boats assigned</div>:
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {tripBoats.slice(0,6).map(b=><div key={b.tripBoatId} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:6,
+              background:(boatRoleColors[b.role]||T.bl)+"0a",border:"1px solid "+(boatRoleColors[b.role]||T.bl)+"22"}}>
+              <span style={{fontSize:12}}>⛵</span>
+              <div><div style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m}}>{b.name}</div>
+                <div style={{fontSize:7,color:boatRoleColors[b.role]||T.bl,fontFamily:T.m,textTransform:"uppercase",letterSpacing:.5}}>{boatRoleLabels[b.role]||b.role}{b.type?" · "+b.type:""}</div></div></div>)}</div>}</div>
 
       {/* Recent notes preview */}
       {tripNotes.length>0&&<div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
@@ -1490,6 +1514,32 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
                     <div style={{fontSize:8,color:T.dm,fontFamily:T.m}}>{fmtD(r.startDate)} → {fmtD(r.endDate)}</div></div>
                   <Bg color={r.status==="confirmed"?T.gn:r.status==="pending"?T.or:T.rd} bg={(r.status==="confirmed"?T.gn:r.status==="pending"?T.or:T.rd)+"18"}>{r.status}</Bg></div>)})}</div></div>}
         </div>}</div>}
+
+    {/* ── BOATS TAB ── */}
+    {detailTab==="boats"&&<div>
+      {isAdmin&&editable&&<div style={{display:"flex",gap:8,marginBottom:16}}>
+        <Bt v="primary" onClick={()=>{setAddBoatIds([]);setAddBoatRole("primary");setAddBoatMd(true)}}>+ Assign Boats</Bt></div>}
+
+      {tripBoats.length===0?<div style={{padding:30,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No boats assigned to this trip yet</div>:
+        <div>
+          {/* Summary by role */}
+          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+            {Object.entries(boatRoleLabels).filter(([r])=>tripBoats.some(b=>b.role===r)).map(([r,l])=>
+              <Bg key={r} color={boatRoleColors[r]} bg={(boatRoleColors[r])+"18"}>{tripBoats.filter(b=>b.role===r).length}× {l}</Bg>)}</div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:8}}>
+            {tripBoats.map(b=><div key={b.tripBoatId} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:8,
+              background:T.card,border:"1px solid "+T.bd}}>
+              <div style={{width:36,height:36,borderRadius:8,background:(boatRoleColors[b.role]||T.bl)+"15",border:"1px solid "+(boatRoleColors[b.role]||T.bl)+"33",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⛵</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u}}>{b.name}</div>
+                <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{b.type}{b.registration?" · "+b.registration:""}</div>
+                <div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
+                  <Bg color={boatRoleColors[b.role]||T.bl} bg={(boatRoleColors[b.role]||T.bl)+"18"}>{boatRoleLabels[b.role]||b.role}</Bg>
+                  {b.capacity&&<Bg color={T.mu} bg="rgba(148,163,184,.1)">{b.capacity} pax</Bg>}</div>
+                {b.notes&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:2}}>{b.notes}</div>}</div>
+              {isAdmin&&editable&&<Bt v="ghost" sm onClick={()=>removeBoat(b.tripBoatId)} style={{color:T.rd,fontSize:9}}>×</Bt>}</div>)}</div></div>}</div>}
 
     {/* ── NOTES TAB ── */}
     {detailTab==="notes"&&<div>
@@ -1579,9 +1629,32 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
           <Bt onClick={()=>setAddPersonMd(false)}>Cancel</Bt>
           <Bt v="primary" onClick={doAddPersonnel} disabled={!addPersonIds.length}>{addPersonIds.length} people — Add to Trip</Bt></div></div></ModalWrap>
 
+    {/* Assign boats modal */}
+    <ModalWrap open={addBoatMd} onClose={()=>setAddBoatMd(false)} title="Assign Boats to Trip" wide>
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
+          <Fl label="Boat Role"><Sl options={Object.entries(boatRoleLabels).map(([v,l])=>({v,l}))} value={addBoatRole}
+            onChange={e=>setAddBoatRole(e.target.value)} style={{minWidth:120}}/></Fl></div>
+        <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Select boats to assign ({addBoatIds.length} selected)</div>
+        <div style={{maxHeight:400,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
+          {availableBoats.length===0&&<div style={{padding:20,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No available boats. Add boats in Configuration → Boats first.</div>}
+          {availableBoats.map(b=>{const isChecked=addBoatIds.includes(b.id);return(
+            <div key={b.id} onClick={()=>setAddBoatIds(p=>isChecked?p.filter(x=>x!==b.id):[...p,b.id])}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,cursor:"pointer",
+                background:isChecked?"rgba(96,165,250,.06)":"rgba(255,255,255,.02)",border:"1px solid "+(isChecked?"rgba(96,165,250,.25)":T.bd)}}>
+              <div style={{width:18,height:18,borderRadius:4,border:"1.5px solid "+(isChecked?T.bl:T.bd),background:isChecked?T.bl:"transparent",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:700}}>{isChecked?"✓":""}</div>
+              <span style={{fontSize:14}}>⛵</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{b.name}</div>
+                <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{b.type}{b.registration?" · "+b.registration:""}{b.capacity?" · "+b.capacity+" pax":""}</div></div></div>)})}</div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <Bt onClick={()=>setAddBoatMd(false)}>Cancel</Bt>
+          <Bt v="primary" onClick={doAssignBoats} disabled={!addBoatIds.length}>{addBoatIds.length} boats — Assign</Bt></div></div></ModalWrap>
+
     {/* Delete confirmation */}
     <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={deleteTrip}
-      title="Delete Trip?" message={"This will permanently delete this trip and remove all kit/personnel assignments. This cannot be undone."}
+      title="Delete Trip?" message={"This will permanently delete this trip and remove all kit/personnel/boat assignments. This cannot be undone."}
       confirmLabel="Delete Trip" confirmColor={T.rd}/>
   </div>);}
 
@@ -2124,6 +2197,56 @@ function DeptAdmin({depts,setDepts,personnel,kits,onRefreshDepts}){
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add":"Save"}</Bt></div></div></ModalWrap>
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
       title="Delete Department?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? Personnel in this department will become unassigned.`}/></div>);}
+
+/* ═══════════ BOATS ADMIN ═══════════ */
+function BoatAdmin({boats,onRefreshBoats}){
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",type:"",registration:"",capacity:"",homePort:"",status:"available",notes:""});
+  const[deleteConfirm,setDeleteConfirm]=useState(null);
+  const statusColors={available:T.gn,maintenance:T.am,decommissioned:T.rd};
+  const statusLabels={available:"Available",maintenance:"Maintenance",decommissioned:"Decommissioned"};
+  const save=async()=>{if(!fm.name.trim())return;
+    try{const payload={name:fm.name.trim(),type:fm.type.trim(),registration:fm.registration.trim(),
+      capacity:fm.capacity?parseInt(fm.capacity,10):null,homePort:fm.homePort.trim(),status:fm.status,notes:fm.notes.trim()};
+      if(md==="add"){await api.boats.create(payload)}
+      else{await api.boats.update(md,payload)}
+      await onRefreshBoats()}catch(e){alert(e.message)}setMd(null)};
+  const confirmDelete=(boat)=>{
+    const activeTrips=boat.trips?.filter(t=>t.tripStatus==="active"||t.tripStatus==="planning")||[];
+    if(activeTrips.length>0){alert("Cannot delete: boat is assigned to "+activeTrips.length+" active trip(s)");return}
+    setDeleteConfirm(boat)};
+  const doDelete=async()=>{if(deleteConfirm){try{await api.boats.delete(deleteConfirm.id);await onRefreshBoats()}catch(e){alert(e.message)}}};
+  const emptyFm=()=>({name:"",type:"",registration:"",capacity:"",homePort:"",status:"available",notes:""});
+  return(<div>
+    <SH title="Boats" sub={boats.length+" vessels"} action={<Bt v="primary" onClick={()=>{setFm(emptyFm());setMd("add")}}>+ Add Boat</Bt>}/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:8}}>
+      {boats.map(b=>{const activeTrips=b.trips?.filter(t=>t.tripStatus==="active"||t.tripStatus==="planning")||[];return(
+        <div key={b.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
+          <div style={{width:36,height:36,borderRadius:8,background:"rgba(96,165,250,.08)",border:"1px solid rgba(96,165,250,.2)",
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⛵</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:600,color:T.tx,fontFamily:T.u}}>{b.name}</div>
+            <div style={{fontSize:10,color:T.dm,fontFamily:T.m}}>{b.type}{b.registration?" · "+b.registration:""}{b.capacity?" · "+b.capacity+" pax":""}</div>
+            <div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
+              <Bg color={statusColors[b.status]} bg={(statusColors[b.status])+"18"}>{statusLabels[b.status]}</Bg>
+              {b.homePort&&<Bg color={T.mu} bg="rgba(148,163,184,.1)">{b.homePort}</Bg>}
+              {activeTrips.length>0&&<Bg color={T.ind} bg="rgba(129,140,248,.1)">{activeTrips.length} trip{activeTrips.length!==1?"s":""}</Bg>}</div></div>
+          <Bt v="ghost" sm onClick={()=>{setFm({name:b.name,type:b.type,registration:b.registration,capacity:b.capacity||"",homePort:b.homePort,status:b.status,notes:b.notes});setMd(b.id)}}>Edit</Bt>
+          <Bt v="ghost" sm onClick={()=>confirmDelete(b)} style={{color:T.rd}}>Del</Bt></div>)})}</div>
+    <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Add Boat":"Edit Boat"} wide>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Fl label="Boat Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))} placeholder="e.g. Zodiac MK-V"/></Fl>
+          <Fl label="Type"><In value={fm.type} onChange={e=>setFm(p=>({...p,type:e.target.value}))} placeholder="e.g. RIB, RHIB, Skiff"/></Fl></div>
+        <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+          <Fl label="Registration / Hull #"><In value={fm.registration} onChange={e=>setFm(p=>({...p,registration:e.target.value}))}/></Fl>
+          <Fl label="Capacity (pax)"><In type="number" value={fm.capacity} onChange={e=>setFm(p=>({...p,capacity:e.target.value}))}/></Fl>
+          <Fl label="Home Port"><In value={fm.homePort} onChange={e=>setFm(p=>({...p,homePort:e.target.value}))}/></Fl></div>
+        <Fl label="Status"><Sl options={[{v:"available",l:"Available"},{v:"maintenance",l:"Maintenance"},{v:"decommissioned",l:"Decommissioned"}]}
+          value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl>
+        <Fl label="Notes"><In value={fm.notes} onChange={e=>setFm(p=>({...p,notes:e.target.value}))} placeholder="Any notes about this vessel..."/></Fl>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add Boat":"Save"}</Bt></div></div></ModalWrap>
+    <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
+      title="Delete Boat?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ PERSONNEL ═══════════ */
 function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
@@ -2838,6 +2961,7 @@ const NAV_SECTIONS=[
     {id:"locations",l:"Locations",i:"⌖",access:"manager",perm:"locations"},
     {id:"departments",l:"Departments",i:"▣",access:"manager",perm:"departments"},
     {id:"personnel",l:"Personnel",i:"◎",access:"manager",perm:"personnel"},
+    {id:"boats",l:"Boats",i:"⛵",access:"manager"},
     {id:"settings",l:"Settings",i:"⚙",access:"director"},
   ]},
 ];
@@ -3021,7 +3145,7 @@ export default function App(){
   const[curUser,setCurUser]=useState(null);const[mustChangePw,setMustChangePw]=useState(false);const[settings,setSettings]=useState(DEF_SETTINGS);
   const[requests,setRequests]=useState([]);const[logs,setLogs]=useState([]);
   const[reservations,setReservations]=useState([]);const[trips,setTrips]=useState([]);
-  const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[favorites,setFavorites]=useState([]);
+  const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[boats,setBoats]=useState([]);const[favorites,setFavorites]=useState([]);
   const[searchMd,setSearchMd]=useState(false);const[scanMd,setScanMd]=useState(null);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);
   const[collapsedSections,setCollapsedSections]=useState({});
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
@@ -3055,7 +3179,12 @@ export default function App(){
     personnel:(t.personnel||[]).map(p=>({id:p.id,userId:p.user?.id,name:p.user?.name,title:p.user?.title,sysRole:p.user?.role,
       deptId:p.user?.deptId,tripRole:p.role,notes:p.notes||""})),
     notes:(t.notes||[]).map(n=>({id:n.id,content:n.content,category:n.category,authorName:n.author?.name,authorId:n.authorId,createdAt:n.createdAt})),
-    personnelCount:t._count?.personnel||0,reservationCount:t._count?.reservations||0});
+    boats:(t.boats||[]).map(tb=>({tripBoatId:tb.id,boatId:tb.boat?.id,name:tb.boat?.name,type:tb.boat?.type,registration:tb.boat?.registration,
+      capacity:tb.boat?.capacity,status:tb.boat?.status,role:tb.role,notes:tb.notes||""})),
+    personnelCount:t._count?.personnel||0,reservationCount:t._count?.reservations||0,boatCount:t._count?.boats||0});
+  const xformBoat=b=>({id:b.id,name:b.name,type:b.type||"",registration:b.registration||"",capacity:b.capacity,
+    homePort:b.homePort||"",status:b.status,notes:b.notes||"",
+    trips:(b.trips||[]).map(tb=>({tripBoatId:tb.id,tripId:tb.trip?.id,tripName:tb.trip?.name,tripStatus:tb.trip?.status,role:tb.role,notes:tb.notes||""}))});
   const xformPerson=p=>({id:p.id,name:p.name,title:p.title||"",role:p.role,deptId:p.deptId});
   const xformKit=(k)=>({
     id:k.id,typeId:k.typeId,color:k.color,locId:k.locId,deptId:k.deptId,tripId:k.tripId||null,
@@ -3074,15 +3203,15 @@ export default function App(){
   /* Load all data from API */
   const loadData=useCallback(async()=>{
     try{
-      const[compsD,typesD,locsD,deptsD,persD,kitsD,consD,assetsD,resD,tripsD]=await Promise.all([
+      const[compsD,typesD,locsD,deptsD,persD,kitsD,consD,assetsD,resD,tripsD,boatsD]=await Promise.all([
         api.components.list(),api.types.list(),api.locations.list(),api.departments.list(),
-        api.personnel.list(),api.kits.list(),api.consumables.list(),api.assets.list(),api.reservations.list(),api.trips.list(),
+        api.personnel.list(),api.kits.list(),api.consumables.list(),api.assets.list(),api.reservations.list(),api.trips.list(),api.boats.list(),
       ]);
       const mappedComps=compsD.map(xformComp);
       setComps(mappedComps);setTypes(typesD.map(t=>xformType(t,mappedComps)));setLocs(locsD.map(xformLoc));
       setDepts(deptsD.map(xformDept));setPersonnel(persD.map(xformPerson));setKits(kitsD.map(xformKit));
       setConsumables(consD.map(xformConsumable));setAssets(assetsD.map(xformAsset));setReservations(resD.map(xformReservation));
-      setTrips((tripsD||[]).map(xformTrip));
+      setTrips((tripsD||[]).map(xformTrip));setBoats((boatsD||[]).map(xformBoat));
       try{const logsD=await api.audit.list({limit:500});setLogs((logsD.logs||[]).map(xformLog))}catch(e){}
       try{const sett=await api.settings.get();setSettings(s=>({...s,...sett}))}catch(e){}
       setDataLoaded(true);setLoadError("");
@@ -3105,6 +3234,7 @@ export default function App(){
   const refreshAssets=async()=>{try{const d=await api.assets.list();setAssets(d.map(xformAsset))}catch(e){}};
   const refreshReservations=async()=>{try{const d=await api.reservations.list();setReservations(d.map(xformReservation))}catch(e){}};
   const refreshTrips=async()=>{try{const d=await api.trips.list();setTrips((d||[]).map(xformTrip))}catch(e){}};
+  const refreshBoats=async()=>{try{const d=await api.boats.list();setBoats((d||[]).map(xformBoat))}catch(e){}};
   const refreshPersonnel=async()=>{try{const d=await api.personnel.list();setPersonnel(d.map(xformPerson))}catch(e){}};
   const refreshComps=async()=>{try{const d=await api.components.list();setComps(d.map(xformComp))}catch(e){}};
   const refreshTypes=async()=>{try{const d=await api.types.list();setTypes(d.map(t=>xformType(t,comps)))}catch(e){}};
@@ -3318,8 +3448,8 @@ export default function App(){
         {pg==="reports"&&canAccess({access:"admin",perm:"reports"})&&<ReportsPage kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs} logs={logs} analytics={analytics}/>}
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}
           personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} addLog={addLog} onRefreshKits={refreshKits}/>}
-        {pg==="trips"&&<TripsPage trips={trips} kits={kits} types={types} depts={depts} personnel={personnel} reservations={reservations}
-          isAdmin={isAdmin} isSuper={isSuper} curUserId={curUser} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits} onRefreshPersonnel={refreshPersonnel}/>}
+        {pg==="trips"&&<TripsPage trips={trips} kits={kits} types={types} depts={depts} personnel={personnel} reservations={reservations} boats={boats}
+          isAdmin={isAdmin} isSuper={isSuper} curUserId={curUser} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits} onRefreshPersonnel={refreshPersonnel} onRefreshBoats={refreshBoats}/>}
         {pg==="reservations"&&settings.enableReservations&&<ReservationsPage reservations={reservations} setReservations={setReservations}
           kits={kits} personnel={personnel} trips={trips} curUserId={curUser} isAdmin={isAdmin} addLog={addLog} onRefreshReservations={refreshReservations}/>}
         {pg==="maintenance"&&canAccess({access:"admin",perm:"maintenance",setting:"enableMaintenance"})&&settings.enableMaintenance&&<MaintenancePage kits={kits} setKits={setKits} types={types} locs={locs}
@@ -3333,6 +3463,7 @@ export default function App(){
         {pg==="locations"&&canAccess({access:"admin",perm:"locations"})&&<LocAdmin locs={locs} setLocs={setLocs} kits={kits} onRefreshLocs={refreshLocs}/>}
         {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} onRefreshDepts={refreshDepts}/>}
         {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
+        {pg==="boats"&&canAccess({access:"manager"})&&<BoatAdmin boats={boats} onRefreshBoats={refreshBoats}/>}
         {pg==="settings"&&isSuper&&<SettingsPage settings={settings} setSettings={setSettings} onSaveSettings={saveSettings}/>}
         {pg==="profile"&&<MyProfile user={user} personnel={personnel} setPersonnel={setPersonnel} kits={kits} assets={assets} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
       </main>

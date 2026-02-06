@@ -24,6 +24,11 @@ const tripIncludes = {
       issuedTo: { select: { id: true, name: true } },
     },
   },
+  boats: {
+    include: {
+      boat: true,
+    },
+  },
   personnel: {
     include: {
       user: { select: { id: true, name: true, title: true, role: true, deptId: true } },
@@ -36,7 +41,7 @@ const tripIncludes = {
     },
     orderBy: { createdAt: 'desc' },
   },
-  _count: { select: { reservations: true, personnel: true } },
+  _count: { select: { reservations: true, personnel: true, boats: true } },
 };
 
 // GET / - list all trips with kit counts
@@ -60,12 +65,15 @@ router.get('/', async (req, res) => {
             type: { select: { id: true, name: true } },
           },
         },
+        boats: {
+          include: { boat: true },
+        },
         personnel: {
           include: {
             user: { select: { id: true, name: true, title: true, role: true, deptId: true } },
           },
         },
-        _count: { select: { reservations: true, personnel: true } },
+        _count: { select: { reservations: true, personnel: true, boats: true } },
       },
       orderBy: { startDate: 'desc' },
     });
@@ -413,6 +421,81 @@ router.delete('/:id/notes/:noteId', async (req, res) => {
   }
 });
 
+// ─── Boat Assignment ───
+
+// POST /:id/boats - assign boats to trip
+router.post('/:id/boats', requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { boatIds, role = 'primary' } = req.body;
+
+    if (!Array.isArray(boatIds) || !boatIds.length) {
+      return res.status(400).json({ error: 'boatIds array required' });
+    }
+
+    const trip = await prisma.trip.findUnique({ where: { id } });
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    if (trip.status === 'completed' || trip.status === 'cancelled') {
+      return res.status(409).json({ error: 'Cannot assign boats to a ' + trip.status + ' trip' });
+    }
+
+    const results = [];
+    for (const boatId of boatIds) {
+      try {
+        const entry = await prisma.tripBoat.create({
+          data: { tripId: id, boatId, role },
+          include: { boat: true },
+        });
+        results.push(entry);
+      } catch { /* skip duplicates */ }
+    }
+
+    await auditLog('trip_assign_boats', 'trip', id, req.user.id, { count: results.length });
+    return res.json({ added: results.length, boats: results });
+  } catch (err) {
+    console.error('Assign boats to trip error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /:id/boats/:tripBoatId - update boat role on trip
+router.put('/:id/boats/:tripBoatId', requireRole('admin'), async (req, res) => {
+  try {
+    const { tripBoatId } = req.params;
+    const { role, notes } = req.body;
+
+    const data = {};
+    if (role !== undefined) data.role = role;
+    if (notes !== undefined) data.notes = notes;
+
+    const entry = await prisma.tripBoat.update({
+      where: { id: tripBoatId },
+      data,
+      include: { boat: true },
+    });
+
+    return res.json(entry);
+  } catch (err) {
+    console.error('Update trip boat error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /:id/boats/:tripBoatId - remove boat from trip
+router.delete('/:id/boats/:tripBoatId', requireRole('admin'), async (req, res) => {
+  try {
+    const { id, tripBoatId } = req.params;
+
+    await prisma.tripBoat.delete({ where: { id: tripBoatId } });
+    await auditLog('trip_remove_boat', 'trip', id, req.user.id, { tripBoatId });
+    return res.json({ message: 'Boat removed from trip' });
+  } catch (err) {
+    console.error('Remove boat from trip error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── Trip Manifest ───
 
 // GET /:id/manifest - get a full manifest of the trip
@@ -446,6 +529,9 @@ router.get('/:id/manifest', async (req, res) => {
               include: { component: { select: { id: true, key: true, label: true } } },
             },
           },
+        },
+        boats: {
+          include: { boat: true },
         },
         reservations: {
           include: {

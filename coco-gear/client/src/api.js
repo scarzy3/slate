@@ -139,7 +139,18 @@ export const trips = {
   removePersonnel: (tripId, personnelId) => request(`/trips/${tripId}/personnel/${personnelId}`, { method: 'DELETE' }),
   addNote: (tripId, data) => request(`/trips/${tripId}/notes`, { method: 'POST', body: data }),
   deleteNote: (tripId, noteId) => request(`/trips/${tripId}/notes/${noteId}`, { method: 'DELETE' }),
+  assignBoats: (tripId, boatIds, role) => request(`/trips/${tripId}/boats`, { method: 'POST', body: { boatIds, role } }),
+  updateBoat: (tripId, tripBoatId, data) => request(`/trips/${tripId}/boats/${tripBoatId}`, { method: 'PUT', body: data }),
+  removeBoat: (tripId, tripBoatId) => request(`/trips/${tripId}/boats/${tripBoatId}`, { method: 'DELETE' }),
   manifest: (id) => request(`/trips/${id}/manifest`),
+};
+
+// ─── Boats ───
+export const boats = {
+  list: () => request('/boats'),
+  create: (data) => request('/boats', { method: 'POST', body: data }),
+  update: (id, data) => request(`/boats/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => request(`/boats/${id}`, { method: 'DELETE' }),
 };
 
 // ─── Maintenance ───
@@ -194,6 +205,6 @@ export const health = () => request('/health');
 
 export default {
   auth, kits, types, components, locations, departments,
-  personnel, consumables, assets, reservations, trips, maintenance,
+  personnel, consumables, assets, reservations, trips, boats, maintenance,
   audit, settings, reports, upload, health,
 };
