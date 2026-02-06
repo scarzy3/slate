@@ -451,7 +451,7 @@ function ScanAction({scanMd,setScanMd,kits,types,locs,comps:allC,personnel,depts
           <Sw color={kit.color} size={40}/>
           <div style={{flex:1}}><div style={{fontSize:16,fontWeight:800,fontFamily:T.u,color:T.tx}}>{kit.color}</div>
             <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{ty?.name||"Unknown type"}</div>
-            <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{lo?.name||"Unknown location"}{dept?" | "+dept.name:""}</div></div></div>
+            <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{lo?.name||"Unknown storage"}{dept?" | "+dept.name:""}</div></div></div>
         {/* Status display */}
         <div style={{padding:"12px 14px",borderRadius:8,background:inMaint?"rgba(251,191,36,.04)":person?"rgba(244,114,182,.04)":"rgba(34,197,94,.04)",
           border:"1px solid "+(inMaint?"rgba(251,191,36,.15)":person?"rgba(244,114,182,.15)":"rgba(34,197,94,.15)")}}>
@@ -777,7 +777,7 @@ function GlobalSearch({kits,personnel,locs,depts,types,comps,onSelect,onClose}){
     depts.forEach(d=>{if(d.name.toLowerCase().includes(s))r.push({type:"dept",item:d,label:d.name,sub:"Department"})});
     return r.slice(0,15)},[q,kits,personnel,locs,depts,types]);
   return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-    <In value={q} onChange={e=>setQ(e.target.value)} placeholder="Search kits, people, locations, serials..." autoFocus style={{fontSize:14,padding:"12px 16px"}}/>
+    <In value={q} onChange={e=>setQ(e.target.value)} placeholder="Search kits, people, storage, serials..." autoFocus style={{fontSize:14,padding:"12px 16px"}}/>
     {results.length>0?<div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:400,overflowY:"auto"}}>
       {results.map((r,i)=><button key={i} onClick={()=>{onSelect(r);onClose()}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:10,
         padding:"10px 14px",borderRadius:7,background:T.card,border:"1px solid "+T.bd}}>
@@ -876,7 +876,7 @@ function AnalyticsPage({analytics,kits,personnel,depts,comps,types,locs}){
               <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:8,height:8,borderRadius:2,background:T.am}}/><span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Maintenance ({kits.filter(k=>k.maintenanceStatus).length})</span></div></div></div></div>
         
         <div style={{padding:18,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
-          <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>By Location</div>
+          <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>By Storage</div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {locs.slice(0,5).map(l=>{const ct=kits.filter(k=>k.locId===l.id).length;const max=Math.max(...locs.map(x=>kits.filter(k=>k.locId===x.id).length),1);
               return(<div key={l.id} style={{display:"flex",alignItems:"center",gap:8}}>
@@ -1021,7 +1021,7 @@ function ReportsPage({kits,personnel,depts,comps,types,locs,logs,analytics}){
   ];
   
   const exportFleetStatus=(format)=>{
-    const headers=["Kit","Type","Color","Location","Status","Issued To","Last Inspected","Dept","Issues"];
+    const headers=["Kit","Type","Color","Storage","Status","Issued To","Last Inspected","Dept","Issues"];
     const rows=kits.map(k=>{
       const ty=types.find(t=>t.id===k.typeId);const lo=locs.find(l=>l.id===k.locId);
       const person=k.issuedTo?personnel.find(p=>p.id===k.issuedTo):null;
@@ -1126,7 +1126,7 @@ function ReportsPage({kits,personnel,depts,comps,types,locs,logs,analytics}){
       generateCSV(headers,rows,`custody_${k.color}_${td()}`);}
     else{
       const content=`<h1>Chain of Custody: Kit ${k.color}</h1><div class="meta">Generated: ${new Date().toLocaleString()}</div>
-        <div><span class="stat">Type: ${ty?.name}</span><span class="stat">Location: ${lo?.name}</span><span class="stat">Status: ${k.issuedTo?"Checked Out":k.maintenanceStatus?"Maintenance":"Available"}</span></div>
+        <div><span class="stat">Type: ${ty?.name}</span><span class="stat">Storage: ${lo?.name}</span><span class="stat">Status: ${k.issuedTo?"Checked Out":k.maintenanceStatus?"Maintenance":"Available"}</span></div>
         <h2>History (${all.length} events)</h2><table><tr><th>Date</th><th>Event</th><th>Details</th></tr>
         ${all.map(e=>`<tr><td>${e.sortDate}</td><td>${e.type==="checkout"?"Checkout":"Inspection"}</td>
           <td>${e.type==="checkout"?`To: ${e.person}, By: ${e.issuedBy}${e.returnedDate?`, Returned: ${e.returnedDate}`:""}`:`Inspector: ${e.inspector}, Good: ${e.good}, Issues: ${e.issues}`}</td></tr>`).join("")}</table>`;
@@ -1337,7 +1337,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fl label="Trip Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))} placeholder="e.g. Operation Sunrise"/></Fl>
-          <Fl label="Location / Destination"><In value={fm.location} onChange={e=>setFm(p=>({...p,location:e.target.value}))} placeholder="e.g. Camp Pendleton"/></Fl></div>
+          <Fl label="Destination"><In value={fm.location} onChange={e=>setFm(p=>({...p,location:e.target.value}))} placeholder="e.g. Camp Pendleton, Pearl Harbor"/></Fl></div>
         <Fl label="Description"><In value={fm.description} onChange={e=>setFm(p=>({...p,description:e.target.value}))} placeholder="Brief description..."/></Fl>
         <Fl label="Objectives / Mission"><Ta value={fm.objectives} onChange={e=>setFm(p=>({...p,objectives:e.target.value}))} placeholder="Mission objectives, goals, tasks..." rows={3}/></Fl>
         <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
@@ -1582,7 +1582,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fl label="Trip Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))} placeholder="e.g. Operation Sunrise"/></Fl>
-          <Fl label="Location / Destination"><In value={fm.location} onChange={e=>setFm(p=>({...p,location:e.target.value}))} placeholder="e.g. Camp Pendleton"/></Fl></div>
+          <Fl label="Destination"><In value={fm.location} onChange={e=>setFm(p=>({...p,location:e.target.value}))} placeholder="e.g. Camp Pendleton, Pearl Harbor"/></Fl></div>
         <Fl label="Description"><In value={fm.description} onChange={e=>setFm(p=>({...p,description:e.target.value}))} placeholder="Brief description..."/></Fl>
         <Fl label="Objectives / Mission"><Ta value={fm.objectives} onChange={e=>setFm(p=>({...p,objectives:e.target.value}))} placeholder="Mission objectives, goals, tasks..." rows={3}/></Fl>
         <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
@@ -1934,7 +1934,7 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fl label="Serial Number"><In value={afm.serial} onChange={e=>setAfm(p=>({...p,serial:e.target.value}))}/></Fl>
           <Fl label="Category"><Sl options={CATS} value={afm.category} onChange={e=>setAfm(p=>({...p,category:e.target.value}))}/></Fl></div>
-        <Fl label="Location"><Sl options={[{v:"",l:"-- None --"},...locs.map(l=>({v:l.id,l:l.name}))]} value={afm.locId} onChange={e=>setAfm(p=>({...p,locId:e.target.value}))}/></Fl>
+        <Fl label="Storage"><Sl options={[{v:"",l:"-- None --"},...locs.map(l=>({v:l.id,l:l.name}))]} value={afm.locId} onChange={e=>setAfm(p=>({...p,locId:e.target.value}))}/></Fl>
         <Fl label="Notes"><Ta value={afm.notes} onChange={e=>setAfm(p=>({...p,notes:e.target.value}))} rows={2}/></Fl>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           {isAdmin&&md!=="addAsset"&&<Bt v="danger" onClick={async()=>{if(!confirm("Delete this asset and all its history?"))return;try{await api.assets.delete(md);await onRefreshAssets()}catch(e){alert(e.message)}setMd(null)}} style={{marginRight:"auto"}}>Delete</Bt>}
@@ -2145,7 +2145,7 @@ function TypeAdmin({types,setTypes,comps,kits,depts,onRefreshTypes}){
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
       title="Delete Kit Type?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This template will no longer be available for new kits.`}/></div>);}
 
-/* ═══════════ LOCATIONS ═══════════ */
+/* ═══════════ STORAGE ═══════════ */
 function LocAdmin({locs,setLocs,kits,onRefreshLocs}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",sc:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
@@ -2154,11 +2154,13 @@ function LocAdmin({locs,setLocs,kits,onRefreshLocs}){
     else{await api.locations.update(md,{name:fm.name.trim(),shortCode:fm.sc.trim()})}
     await onRefreshLocs()}catch(e){alert(e.message)}setMd(null)};
   const confirmDelete=(loc)=>{const n=kits.filter(k=>k.locId===loc.id).length;
-    if(n>0){alert("Cannot delete: location has "+n+" kit(s)");return}
+    if(n>0){alert("Cannot delete: storage area has "+n+" kit(s)");return}
     setDeleteConfirm(loc)};
   const doDelete=async()=>{if(deleteConfirm){try{await api.locations.delete(deleteConfirm.id);await onRefreshLocs()}catch(e){alert(e.message)}}};
   return(<div>
-    <SH title="Locations" sub={locs.length+" locations"} action={<Bt v="primary" onClick={()=>{setFm({name:"",sc:""});setMd("add")}}>+ Add</Bt>}/>
+    <SH title="Storage" sub={locs.length+" storage area"+(locs.length!==1?"s":"")} action={<Bt v="primary" onClick={()=>{setFm({name:"",sc:""});setMd("add")}}>+ Add</Bt>}/>
+    <div style={{padding:10,borderRadius:8,background:"rgba(45,212,191,.03)",border:"1px solid rgba(45,212,191,.1)",marginBottom:14}}>
+      <div style={{fontSize:10,color:T.tl,fontFamily:T.m}}>Storage areas are the physical places where kits are kept — cages, rooms, racks, vehicles, etc.</div></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(240px,100%),1fr))",gap:8}}>
       {locs.map(l=>{const n=kits.filter(k=>k.locId===l.id).length;return(
         <div key={l.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
@@ -2168,13 +2170,13 @@ function LocAdmin({locs,setLocs,kits,onRefreshLocs}){
             <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{n} kit{n!==1?"s":""}</div></div>
           <Bt v="ghost" sm onClick={()=>{setFm({name:l.name,sc:l.sc});setMd(l.id)}}>Edit</Bt>
           <Bt v="ghost" sm onClick={()=>confirmDelete(l)} style={{color:T.rd}} disabled={n>0}>Del</Bt></div>)})}</div>
-    <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Add Location":"Edit Location"}>
+    <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Add Storage Area":"Edit Storage Area"}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <Fl label="Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))}/></Fl>
-        <Fl label="Short Code"><In value={fm.sc} onChange={e=>setFm(p=>({...p,sc:e.target.value}))} style={{width:120}}/></Fl>
+        <Fl label="Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))} placeholder="e.g. Cage A, Bldg 7 Rack 2, Vehicle Bay"/></Fl>
+        <Fl label="Short Code"><In value={fm.sc} onChange={e=>setFm(p=>({...p,sc:e.target.value}))} placeholder="e.g. CGA, B7R2" style={{width:120}}/></Fl>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add":"Save"}</Bt></div></div></ModalWrap>
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
-      title="Delete Location?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
+      title="Delete Storage Area?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ DEPARTMENTS ═══════════ */
 function DeptAdmin({depts,setDepts,personnel,kits,locs,onRefreshDepts}){
@@ -2212,7 +2214,7 @@ function DeptAdmin({depts,setDepts,personnel,kits,locs,onRefreshDepts}){
     <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Add Department":"Edit Department"}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))}/></Fl>
-        <Fl label="Site / Location"><div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <Fl label="Site"><div style={{display:"flex",gap:8,alignItems:"center"}}>
           <In value={fm.site} onChange={e=>setFm(p=>({...p,site:e.target.value}))} placeholder="e.g. CA - San Diego, VA - Norfolk" style={{flex:1}}/>
           {siteNames.length>0&&<Sl options={[{v:"",l:"— Pick existing —"},...siteNames.map(s=>({v:s,l:s}))]} value="" onChange={e=>{if(e.target.value)setFm(p=>({...p,site:e.target.value}))}} style={{maxWidth:180}}/>}</div></Fl>
         <Fl label="Color"><div style={{display:"flex",gap:5}}>{dColors.map(c=><button key={c} onClick={()=>setFm(p=>({...p,color:c}))} style={{all:"unset",cursor:"pointer",width:24,height:24,borderRadius:5,background:c,border:fm.color===c?"2px solid #fff":"2px solid transparent"}}/>)}</div></Fl>
@@ -2354,7 +2356,7 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     clearTimeout(saveTimer.current);saveTimer.current=setTimeout(()=>{if(onSaveSettings)onSaveSettings(next)},800);return next})};
   const generalItems=[
     {k:"requireDeptApproval",l:"Require dept head approval",d:"For department-locked kits"},
-    {k:"allowUserLocationUpdate",l:"Allow user location updates",d:"Users can update kit locations"},
+    {k:"allowUserLocationUpdate",l:"Allow user storage updates",d:"Users can change which storage area a kit is in"},
   ];
   const serialItems=[
     {k:"requireSerialsOnCheckout",l:"Require serials on checkout",d:"S/N entry during checkout"},
@@ -2372,7 +2374,7 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     {k:"type",l:"Type",d:"USV model/type (e.g. WAM-V, Heron)"},
     {k:"hullId",l:"Hull / Serial #",d:"Hull ID or serial number"},
     {k:"length",l:"Length",d:"Vessel length in meters"},
-    {k:"homePort",l:"Home Port",d:"Vessel home port location"},
+    {k:"homePort",l:"Home Port",d:"Vessel home port"},
     {k:"notes",l:"Notes",d:"Additional notes field"},
   ];
   const updateBoatField=(field,value)=>{setSettings(p=>{const bf={...(p.boatFields||{type:true,hullId:true,length:true,homePort:true,notes:true}),[field]:value};
@@ -2389,7 +2391,7 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     {k:"consumables",l:"Consumables",d:"Manage consumable inventory"},
     {k:"types",l:"Kit Types",d:"Create and edit kit templates"},
     {k:"components",l:"Components",d:"Manage component library"},
-    {k:"locations",l:"Locations",d:"Manage storage locations"},
+    {k:"locations",l:"Storage",d:"Manage storage areas (cages, rooms, racks)"},
     {k:"departments",l:"Departments",d:"Manage departments"},
     {k:"personnel",l:"Personnel",d:"Manage personnel records"},
     {k:"boats",l:"USVs",d:"Manage unmanned surface vehicles"},
@@ -2752,7 +2754,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
               <button onClick={()=>toggleFav(sel.id)} style={{all:"unset",cursor:"pointer",fontSize:16,color:isFav?T.am:T.dm}}>{isFav?"★":"☆"}</button>
               <button onClick={()=>setSelId(null)} style={{all:"unset",cursor:"pointer",color:T.mu,fontSize:14,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:5,background:T.card}}>×</button></div></div>
           {dept&&<div style={{marginBottom:10}}><DeptBg dept={dept}/></div>}
-          {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!sel.maintenanceStatus&&<div style={{marginBottom:14}}><Fl label="Location">
+          {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!sel.maintenanceStatus&&<div style={{marginBottom:14}}><Fl label="Storage">
             <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={sel.locId} onChange={e=>{setKits(p=>p.map(k=>k.id===sel.id?{...k,locId:e.target.value}:k));
               addLog("location_change","kit",sel.id,curUserId,now(),{kitColor:sel.color,to:locs.find(l=>l.id===e.target.value)?.name})}}/></Fl></div>}
           {sel.maintenanceStatus&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
@@ -2789,7 +2791,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
         <Fl label="Color"><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{Object.keys(CM).map(c=><button key={c} onClick={()=>setKf(p=>({...p,color:c}))} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:5,
           padding:"4px 8px",borderRadius:5,background:kf.color===c?"rgba(255,255,255,.1)":T.card,border:"1px solid "+(kf.color===c?T.bdH:T.bd)}}><Sw color={c} size={16}/><span style={{fontSize:9,color:kf.color===c?T.tx:T.mu,fontFamily:T.m}}>{c}</span></button>)}</div></Fl>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Fl label="Location"><Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={kf.locId} onChange={e=>setKf(p=>({...p,locId:e.target.value}))}/></Fl>
+          <Fl label="Storage"><Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={kf.locId} onChange={e=>setKf(p=>({...p,locId:e.target.value}))}/></Fl>
           <Fl label="Department"><Sl options={[{v:"",l:"-- None --"},...depts.map(d=>({v:d.id,l:d.name}))]} value={kf.deptId||""} onChange={e=>setKf(p=>({...p,deptId:e.target.value}))}/></Fl></div>
         {cType&&cType.fields.map(f=><Fl key={f.key} label={f.label}>{f.type==="toggle"?<Tg checked={!!kf.fields[f.key]} onChange={v=>setKf(p=>({...p,fields:{...p.fields,[f.key]:v}}))}/>
           :<In value={kf.fields[f.key]||""} onChange={e=>setKf(p=>({...p,fields:{...p.fields,[f.key]:e.target.value}}))}/>}</Fl>)}
@@ -2908,7 +2910,7 @@ function Dash({kits,types,locs,comps,personnel,depts,trips,requests,analytics,lo
             <Bg color={t.status==="active"?T.gn:T.bl} bg={(t.status==="active"?T.gn:T.bl)+"18"}>{t.status}</Bg></div>)}</div>
       {/* By Location */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
-        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>By Location</div>
+        <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>By Storage</div>
         {locs.map(l=>{const lk=kits.filter(k=>k.locId===l.id);if(!lk.length)return null;return(
           <div key={l.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,background:"rgba(255,255,255,.015)",marginBottom:4}}>
             <div style={{width:26,height:26,borderRadius:5,background:"rgba(45,212,191,.06)",border:"1px solid rgba(45,212,191,.15)",
@@ -3021,7 +3023,7 @@ const NAV_SECTIONS=[
   {id:"config",label:"Configuration",items:[
     {id:"types",l:"Kit Types",i:"+",access:"lead",perm:"types"},
     {id:"components",l:"Components",i:":",access:"lead",perm:"components"},
-    {id:"locations",l:"Locations",i:"⌖",access:"lead",perm:"locations"},
+    {id:"locations",l:"Storage",i:"⌖",access:"lead",perm:"locations"},
     {id:"departments",l:"Departments",i:"▣",access:"lead",perm:"departments"},
     {id:"personnel",l:"Personnel",i:"◎",access:"lead",perm:"personnel"},
     {id:"boats",l:"USVs",i:"⛵",access:"lead",perm:"boats"},
