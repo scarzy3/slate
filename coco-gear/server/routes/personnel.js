@@ -110,9 +110,16 @@ router.put('/:id', authMiddleware, requireAdminPerm('personnel'), validate(perso
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Developer account cannot be demoted
+    if (existing.role === 'developer') {
+      if (role && role !== 'developer') {
+        return res.status(403).json({ error: 'Cannot modify the developer account role' });
+      }
+    }
+
     // Protect primary director from demotion
-    if (['director','super','engineer'].includes(existing.role) && role && !['director','super','engineer'].includes(role)) {
-      const directorCount = await prisma.user.count({ where: { role: { in: ['director', 'super', 'engineer'] } } });
+    if (['director','super','engineer'].includes(existing.role) && role && !['director','super','engineer','developer'].includes(role)) {
+      const directorCount = await prisma.user.count({ where: { role: { in: ['developer', 'director', 'super', 'engineer'] } } });
       if (directorCount <= 1) {
         return res.status(403).json({ error: 'Cannot demote the only director' });
       }
@@ -166,9 +173,14 @@ router.delete('/:id', authMiddleware, requireAdminPerm('personnel'), async (req,
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Developer account cannot be deleted
+    if (user.role === 'developer') {
+      return res.status(403).json({ error: 'Cannot delete the developer account' });
+    }
+
     // Cannot delete the last director
     if (['director','super','engineer'].includes(user.role)) {
-      const directorCount = await prisma.user.count({ where: { role: { in: ['director', 'super', 'engineer'] } } });
+      const directorCount = await prisma.user.count({ where: { role: { in: ['developer', 'director', 'super', 'engineer'] } } });
       if (directorCount <= 1) {
         return res.status(403).json({ error: 'Cannot delete the only director' });
       }

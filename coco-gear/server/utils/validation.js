@@ -65,7 +65,7 @@ export const departmentSchema = z.object({
 export const personnelSchema = z.object({
   name: z.string().min(1).max(200),
   title: z.string().max(200).optional().default(''),
-  role: z.enum(['director', 'engineer', 'manager', 'lead', 'user']).default('user'),
+  role: z.enum(['developer', 'director', 'engineer', 'manager', 'lead', 'user']).default('user'),
   deptId: z.string().uuid().nullable().optional(),
   pin: z.string().min(1).max(128).optional().default('password'),
 });
@@ -73,7 +73,7 @@ export const personnelSchema = z.object({
 export const personnelUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   title: z.string().max(200).optional(),
-  role: z.enum(['director', 'engineer', 'manager', 'lead', 'user']).optional(),
+  role: z.enum(['developer', 'director', 'engineer', 'manager', 'lead', 'user']).optional(),
   deptId: z.string().uuid().nullable().optional(),
   pin: z.string().min(1).max(128).optional(),
 });

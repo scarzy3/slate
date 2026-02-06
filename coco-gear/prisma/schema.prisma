@@ -12,7 +12,7 @@ model User {
   id        String   @id @default(uuid())
   name      String
   title     String?
-  role      String   @default("user") // director | engineer | manager | lead | user
+  role      String   @default("user") // developer | director | engineer | manager | lead | user
   pin       String   // bcrypt hashed
   mustChangePassword Boolean @default(true)
   deptId    String?

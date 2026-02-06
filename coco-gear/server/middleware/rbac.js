@@ -2,9 +2,9 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Role hierarchy: director > manager > lead > user
+// Role hierarchy: developer > director > manager > lead > user
 // Backwards compat: super → director, admin → manager
-const ROLE_LEVEL = { director: 4, super: 4, engineer: 4, manager: 3, admin: 3, lead: 2, user: 1 };
+const ROLE_LEVEL = { developer: 5, director: 4, super: 4, engineer: 4, manager: 3, admin: 3, lead: 2, user: 1 };
 
 /**
  * Require minimum role level

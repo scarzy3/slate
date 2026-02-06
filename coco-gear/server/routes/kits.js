@@ -301,7 +301,7 @@ router.post('/checkout', validate(checkoutSchema), async (req, res) => {
     if (kit.issuedToId) return res.status(409).json({ error: 'Kit already issued' });
     if (kit.maintenanceStatus) return res.status(409).json({ error: 'Kit in maintenance' });
 
-    const isAdmin = ['director','super','engineer','manager','admin'].includes(req.user.role);
+    const isAdmin = ['developer','director','super','engineer','manager','admin'].includes(req.user.role);
     const recipientId = isAdmin && personId ? personId : req.user.id;
 
     // Check if approval needed
@@ -355,7 +355,7 @@ router.post('/return', validate(returnSchema), async (req, res) => {
     if (!kit) return res.status(404).json({ error: 'Kit not found' });
     if (!kit.issuedToId) return res.status(409).json({ error: 'Kit not issued' });
 
-    const isAdmin = ['director','super','engineer','manager','admin'].includes(req.user.role);
+    const isAdmin = ['developer','director','super','engineer','manager','admin'].includes(req.user.role);
     if (!isAdmin && kit.issuedToId !== req.user.id) {
       return res.status(403).json({ error: 'Only the holder or admin can return' });
     }
@@ -447,7 +447,7 @@ router.put('/:id/location', async (req, res) => {
     const kit = await prisma.kit.findUnique({ where: { id: req.params.id } });
     if (!kit) return res.status(404).json({ error: 'Kit not found' });
 
-    const isAdmin = ['director','super','engineer','manager','admin'].includes(req.user.role);
+    const isAdmin = ['developer','director','super','engineer','manager','admin'].includes(req.user.role);
     if (!isAdmin) {
       const settings = await prisma.systemSetting.findMany();
       const allowed = settings.find(s => s.key === 'allowUserLocationUpdate')?.value ?? true;
