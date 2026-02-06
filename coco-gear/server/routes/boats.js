@@ -38,10 +38,10 @@ router.get('/', async (req, res) => {
 // POST / - create boat (manager+)
 router.post('/', requireRole('manager'), validate(boatSchema), async (req, res) => {
   try {
-    const { name, type, registration, capacity, homePort, status: boatStatus, notes } = req.validated;
+    const { name, type, hullId, length, homePort, status: boatStatus, notes } = req.validated;
 
     const boat = await prisma.boat.create({
-      data: { name, type, registration, capacity, homePort, status: boatStatus, notes },
+      data: { name, type, hullId, length, homePort, status: boatStatus, notes },
     });
 
     await auditLog('boat_create', 'boat', boat.id, req.user.id, { name });

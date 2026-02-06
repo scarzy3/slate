@@ -237,13 +237,13 @@ model TripNote {
   @@index([tripId])
 }
 
-// ─── Boats / Vessels ───
+// ─── USVs (Unmanned Surface Vehicles) ───
 model Boat {
   id           String   @id @default(uuid())
   name         String
-  type         String?  // e.g. RIB, RHIB, Sailboat, Motorboat, Kayak, Skiff
-  registration String?  // hull or registration number
-  capacity     Int?     // max personnel
+  type         String?  // e.g. WAM-V, Heron, Sailbuoy, custom
+  hullId       String?  // hull or serial number
+  length       Float?   // length in meters
   homePort     String?
   status       String   @default("available") // available | maintenance | decommissioned
   notes        String?
