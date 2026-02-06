@@ -133,6 +133,13 @@ export const trips = {
   delete: (id) => request(`/trips/${id}`, { method: 'DELETE' }),
   assignKits: (id, kitIds) => request(`/trips/${id}/kits`, { method: 'POST', body: { kitIds } }),
   removeKit: (tripId, kitId) => request(`/trips/${tripId}/kits/${kitId}`, { method: 'DELETE' }),
+  addPersonnel: (tripId, data) => request(`/trips/${tripId}/personnel`, { method: 'POST', body: data }),
+  addPersonnelBulk: (tripId, userIds, role) => request(`/trips/${tripId}/personnel/bulk`, { method: 'POST', body: { userIds, role } }),
+  updatePersonnel: (tripId, personnelId, data) => request(`/trips/${tripId}/personnel/${personnelId}`, { method: 'PUT', body: data }),
+  removePersonnel: (tripId, personnelId) => request(`/trips/${tripId}/personnel/${personnelId}`, { method: 'DELETE' }),
+  addNote: (tripId, data) => request(`/trips/${tripId}/notes`, { method: 'POST', body: data }),
+  deleteNote: (tripId, noteId) => request(`/trips/${tripId}/notes/${noteId}`, { method: 'DELETE' }),
+  manifest: (id) => request(`/trips/${id}/manifest`),
 };
 
 // ─── Maintenance ───

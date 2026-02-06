@@ -2,13 +2,42 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
-import { validate, tripSchema } from '../utils/validation.js';
+import { validate, tripSchema, tripPersonnelSchema, tripNoteSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
 const router = Router();
 
 router.use(authMiddleware);
+
+const tripIncludes = {
+  lead: { select: { id: true, name: true, title: true } },
+  kits: {
+    select: {
+      id: true,
+      color: true,
+      typeId: true,
+      deptId: true,
+      issuedToId: true,
+      type: { select: { id: true, name: true } },
+      department: { select: { id: true, name: true, color: true } },
+      issuedTo: { select: { id: true, name: true } },
+    },
+  },
+  personnel: {
+    include: {
+      user: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  },
+  notes: {
+    include: {
+      author: { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  },
+  _count: { select: { reservations: true, personnel: true } },
+};
 
 // GET / - list all trips with kit counts
 router.get('/', async (req, res) => {
@@ -20,6 +49,7 @@ router.get('/', async (req, res) => {
     const trips = await prisma.trip.findMany({
       where,
       include: {
+        lead: { select: { id: true, name: true } },
         kits: {
           select: {
             id: true,
@@ -30,7 +60,12 @@ router.get('/', async (req, res) => {
             type: { select: { id: true, name: true } },
           },
         },
-        _count: { select: { reservations: true } },
+        personnel: {
+          include: {
+            user: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+          },
+        },
+        _count: { select: { reservations: true, personnel: true } },
       },
       orderBy: { startDate: 'desc' },
     });
@@ -41,24 +76,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /:id - single trip
+// GET /:id - single trip with full details
 router.get('/:id', async (req, res) => {
   try {
     const trip = await prisma.trip.findUnique({
       where: { id: req.params.id },
       include: {
-        kits: {
-          select: {
-            id: true,
-            color: true,
-            typeId: true,
-            deptId: true,
-            issuedToId: true,
-            type: { select: { id: true, name: true } },
-            department: { select: { id: true, name: true, color: true } },
-            issuedTo: { select: { id: true, name: true } },
-          },
-        },
+        ...tripIncludes,
         reservations: {
           include: {
             kit: { select: { id: true, color: true, type: { select: { name: true } } } },
@@ -78,7 +102,7 @@ router.get('/:id', async (req, res) => {
 // POST / - create trip (admin+)
 router.post('/', requireRole('admin'), validate(tripSchema), async (req, res) => {
   try {
-    const { name, description, startDate, endDate, status: tripStatus } = req.validated;
+    const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus } = req.validated;
 
     if (new Date(startDate) >= new Date(endDate)) {
       return res.status(400).json({ error: 'Start date must be before end date' });
@@ -88,11 +112,24 @@ router.post('/', requireRole('admin'), validate(tripSchema), async (req, res) =>
       data: {
         name,
         description,
+        location,
+        objectives,
+        leadId: leadId || null,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         status: tripStatus || 'planning',
       },
+      include: tripIncludes,
     });
+
+    // If lead assigned, also add them as personnel
+    if (leadId) {
+      try {
+        await prisma.tripPersonnel.create({
+          data: { tripId: trip.id, userId: leadId, role: 'lead' },
+        });
+      } catch { /* already exists */ }
+    }
 
     await auditLog('trip_create', 'trip', trip.id, req.user.id, { name });
     return res.status(201).json(trip);
@@ -106,7 +143,7 @@ router.post('/', requireRole('admin'), validate(tripSchema), async (req, res) =>
 router.put('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, startDate, endDate, status: tripStatus } = req.body;
+    const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus } = req.body;
 
     const existing = await prisma.trip.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Trip not found' });
@@ -114,6 +151,9 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     const data = {};
     if (name !== undefined) data.name = name;
     if (description !== undefined) data.description = description;
+    if (location !== undefined) data.location = location;
+    if (objectives !== undefined) data.objectives = objectives;
+    if (leadId !== undefined) data.leadId = leadId || null;
     if (startDate !== undefined) data.startDate = new Date(startDate);
     if (endDate !== undefined) data.endDate = new Date(endDate);
     if (tripStatus !== undefined) data.status = tripStatus;
@@ -129,15 +169,7 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     const trip = await prisma.trip.update({
       where: { id },
       data,
-      include: {
-        kits: {
-          select: {
-            id: true, color: true, typeId: true,
-            type: { select: { id: true, name: true } },
-          },
-        },
-        _count: { select: { reservations: true } },
-      },
+      include: tripIncludes,
     });
 
     await auditLog('trip_update', 'trip', id, req.user.id, { name: trip.name, status: trip.status });
@@ -170,6 +202,8 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
   }
 });
 
+// ─── Kit Assignment ───
+
 // POST /:id/kits - assign kits to trip
 router.post('/:id/kits', requireRole('admin'), async (req, res) => {
   try {
@@ -194,15 +228,7 @@ router.post('/:id/kits', requireRole('admin'), async (req, res) => {
 
     const updated = await prisma.trip.findUnique({
       where: { id },
-      include: {
-        kits: {
-          select: {
-            id: true, color: true, typeId: true,
-            type: { select: { id: true, name: true } },
-          },
-        },
-        _count: { select: { reservations: true } },
-      },
+      include: tripIncludes,
     });
 
     await auditLog('trip_assign_kits', 'trip', id, req.user.id, { kitCount: kitIds.length });
@@ -232,6 +258,212 @@ router.delete('/:id/kits/:kitId', requireRole('admin'), async (req, res) => {
     return res.json({ message: 'Kit removed from trip' });
   } catch (err) {
     console.error('Remove kit from trip error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Personnel Assignment ───
+
+// POST /:id/personnel - add person to trip
+router.post('/:id/personnel', requireRole('admin'), validate(tripPersonnelSchema), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, role, notes } = req.validated;
+
+    const trip = await prisma.trip.findUnique({ where: { id } });
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const entry = await prisma.tripPersonnel.create({
+      data: { tripId: id, userId, role, notes },
+      include: {
+        user: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+      },
+    });
+
+    await auditLog('trip_add_personnel', 'trip', id, req.user.id, { userId, role, userName: user.name });
+    return res.status(201).json(entry);
+  } catch (err) {
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'Person already assigned to this trip' });
+    }
+    console.error('Add trip personnel error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /:id/personnel/:personnelId - update person's trip role
+router.put('/:id/personnel/:personnelId', requireRole('admin'), async (req, res) => {
+  try {
+    const { personnelId } = req.params;
+    const { role, notes } = req.body;
+
+    const data = {};
+    if (role !== undefined) data.role = role;
+    if (notes !== undefined) data.notes = notes;
+
+    const entry = await prisma.tripPersonnel.update({
+      where: { id: personnelId },
+      data,
+      include: {
+        user: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+      },
+    });
+
+    return res.json(entry);
+  } catch (err) {
+    console.error('Update trip personnel error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /:id/personnel/:personnelId - remove person from trip
+router.delete('/:id/personnel/:personnelId', requireRole('admin'), async (req, res) => {
+  try {
+    const { id, personnelId } = req.params;
+
+    await prisma.tripPersonnel.delete({ where: { id: personnelId } });
+    await auditLog('trip_remove_personnel', 'trip', id, req.user.id, { personnelId });
+    return res.json({ message: 'Person removed from trip' });
+  } catch (err) {
+    console.error('Remove trip personnel error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /:id/personnel/bulk - add multiple people at once
+router.post('/:id/personnel/bulk', requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userIds, role = 'member' } = req.body;
+
+    if (!Array.isArray(userIds) || !userIds.length) {
+      return res.status(400).json({ error: 'userIds array required' });
+    }
+
+    const trip = await prisma.trip.findUnique({ where: { id } });
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    const results = [];
+    for (const userId of userIds) {
+      try {
+        const entry = await prisma.tripPersonnel.create({
+          data: { tripId: id, userId, role },
+          include: {
+            user: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+          },
+        });
+        results.push(entry);
+      } catch { /* skip duplicates */ }
+    }
+
+    await auditLog('trip_add_personnel_bulk', 'trip', id, req.user.id, { count: results.length });
+    return res.json({ added: results.length, personnel: results });
+  } catch (err) {
+    console.error('Bulk add trip personnel error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Trip Notes ───
+
+// POST /:id/notes - add a note
+router.post('/:id/notes', validate(tripNoteSchema), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, category } = req.validated;
+
+    const trip = await prisma.trip.findUnique({ where: { id } });
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    const note = await prisma.tripNote.create({
+      data: { tripId: id, authorId: req.user.id, content, category },
+      include: {
+        author: { select: { id: true, name: true } },
+      },
+    });
+
+    return res.status(201).json(note);
+  } catch (err) {
+    console.error('Add trip note error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /:id/notes/:noteId - delete a note (author or admin)
+router.delete('/:id/notes/:noteId', async (req, res) => {
+  try {
+    const { noteId } = req.params;
+
+    const note = await prisma.tripNote.findUnique({ where: { id: noteId } });
+    if (!note) return res.status(404).json({ error: 'Note not found' });
+
+    // Only author or admin can delete
+    if (note.authorId !== req.user.id && req.user.role !== 'super' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized to delete this note' });
+    }
+
+    await prisma.tripNote.delete({ where: { id: noteId } });
+    return res.json({ message: 'Note deleted' });
+  } catch (err) {
+    console.error('Delete trip note error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Trip Manifest ───
+
+// GET /:id/manifest - get a full manifest of the trip
+router.get('/:id/manifest', async (req, res) => {
+  try {
+    const trip = await prisma.trip.findUnique({
+      where: { id: req.params.id },
+      include: {
+        lead: { select: { id: true, name: true, title: true } },
+        personnel: {
+          include: {
+            user: {
+              select: {
+                id: true, name: true, title: true, role: true, deptId: true,
+                department: { select: { id: true, name: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        kits: {
+          include: {
+            type: { select: { id: true, name: true } },
+            location: { select: { id: true, name: true, shortCode: true } },
+            department: { select: { id: true, name: true, color: true } },
+            issuedTo: { select: { id: true, name: true } },
+            componentStatuses: {
+              include: { component: { select: { id: true, key: true, label: true, category: true } } },
+            },
+            serials: {
+              include: { component: { select: { id: true, key: true, label: true } } },
+            },
+          },
+        },
+        reservations: {
+          include: {
+            kit: { select: { id: true, color: true, type: { select: { name: true } } } },
+            person: { select: { id: true, name: true } },
+          },
+        },
+        notes: {
+          include: { author: { select: { id: true, name: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    return res.json(trip);
+  } catch (err) {
+    console.error('Get trip manifest error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

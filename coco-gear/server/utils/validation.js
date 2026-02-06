@@ -106,9 +106,23 @@ export const assetSchema = z.object({
 export const tripSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(1000).optional().default(''),
+  location: z.string().max(200).optional().default(''),
+  objectives: z.string().max(2000).optional().default(''),
+  leadId: z.string().uuid().nullable().optional(),
   startDate: z.string().refine(d => !isNaN(Date.parse(d))),
   endDate: z.string().refine(d => !isNaN(Date.parse(d))),
   status: z.enum(['planning', 'active', 'completed', 'cancelled']).optional().default('planning'),
+});
+
+export const tripPersonnelSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.enum(['lead', 'comms', 'driver', 'medic', 'member', 'other']).optional().default('member'),
+  notes: z.string().max(500).optional().default(''),
+});
+
+export const tripNoteSchema = z.object({
+  content: z.string().min(1).max(5000),
+  category: z.enum(['general', 'logistics', 'safety', 'comms', 'after-action']).optional().default('general'),
 });
 
 // ─── Reservation ───
