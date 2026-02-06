@@ -45,6 +45,7 @@ model Department {
   id        String   @id @default(uuid())
   name      String
   color     String   @default("#60a5fa")
+  site      String?  // physical site/location e.g. "CA - San Diego", "VA - Norfolk"
   headId    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

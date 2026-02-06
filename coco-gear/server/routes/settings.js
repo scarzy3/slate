@@ -22,6 +22,14 @@ const DEFAULT_SETTINGS = {
   enableMaintenance: true,
   enableConsumables: true,
   enableQR: true,
+  boatFields: {
+    type: true,
+    hullId: true,
+    length: true,
+    homePort: true,
+    notes: true,
+  },
+  autoReserveOnTrip: true,
   adminPerms: {
     analytics: true,
     reports: true,
@@ -43,7 +51,9 @@ function mergeSettings(dbSettings) {
   const merged = { ...DEFAULT_SETTINGS, rolePerms: JSON.parse(JSON.stringify(DEFAULT_ROLE_PERMS)) };
 
   for (const row of dbSettings) {
-    if (row.key === 'adminPerms' && typeof row.value === 'object') {
+    if (row.key === 'boatFields' && typeof row.value === 'object') {
+      merged.boatFields = { ...DEFAULT_SETTINGS.boatFields, ...row.value };
+    } else if (row.key === 'adminPerms' && typeof row.value === 'object') {
       merged.adminPerms = { ...DEFAULT_SETTINGS.adminPerms, ...row.value };
     } else if (row.key === 'rolePerms' && typeof row.value === 'object') {
       // Deep merge each role's permissions over defaults

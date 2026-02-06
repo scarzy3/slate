@@ -52,7 +52,7 @@ router.post('/', authMiddleware, requireAdminPerm('departments'), validate(depar
 router.put('/:id', authMiddleware, requireAdminPerm('departments'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, color, headId } = req.body;
+    const { name, color, site, headId } = req.body;
 
     const existing = await prisma.department.findUnique({ where: { id } });
     if (!existing) {
@@ -62,6 +62,7 @@ router.put('/:id', authMiddleware, requireAdminPerm('departments'), async (req, 
     const data = {};
     if (name !== undefined) data.name = name;
     if (color !== undefined) data.color = color;
+    if (site !== undefined) data.site = site;
     if (headId !== undefined) data.headId = headId;
 
     const department = await prisma.department.update({

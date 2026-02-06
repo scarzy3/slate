@@ -216,7 +216,7 @@ router.delete('/:id', requirePerm('trips'), async (req, res) => {
 router.post('/:id/kits', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { kitIds } = req.body;
+    const { kitIds, autoReserve } = req.body;
 
     if (!Array.isArray(kitIds) || !kitIds.length) {
       return res.status(400).json({ error: 'kitIds array required' });
@@ -234,12 +234,31 @@ router.post('/:id/kits', requirePerm('trips'), async (req, res) => {
       data: { tripId: id },
     });
 
+    // Auto-create reservations for the trip date range
+    if (autoReserve) {
+      for (const kitId of kitIds) {
+        try {
+          await prisma.reservation.create({
+            data: {
+              kitId,
+              personId: req.user.id,
+              tripId: id,
+              startDate: trip.startDate,
+              endDate: trip.endDate,
+              purpose: `Auto-reserved for trip: ${trip.name}`,
+              status: 'confirmed',
+            },
+          });
+        } catch { /* skip if reservation already exists or conflicts */ }
+      }
+    }
+
     const updated = await prisma.trip.findUnique({
       where: { id },
       include: tripIncludes,
     });
 
-    await auditLog('trip_assign_kits', 'trip', id, req.user.id, { kitCount: kitIds.length });
+    await auditLog('trip_assign_kits', 'trip', id, req.user.id, { kitCount: kitIds.length, autoReserve: !!autoReserve });
     return res.json(updated);
   } catch (err) {
     console.error('Assign kits to trip error:', err);
@@ -427,7 +446,7 @@ router.delete('/:id/notes/:noteId', async (req, res) => {
 router.post('/:id/boats', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { boatIds, role = 'primary' } = req.body;
+    const { boatIds, role = 'primary', autoReserve } = req.body;
 
     if (!Array.isArray(boatIds) || !boatIds.length) {
       return res.status(400).json({ error: 'boatIds array required' });
@@ -451,7 +470,7 @@ router.post('/:id/boats', requirePerm('trips'), async (req, res) => {
       } catch { /* skip duplicates */ }
     }
 
-    await auditLog('trip_assign_boats', 'trip', id, req.user.id, { count: results.length });
+    await auditLog('trip_assign_boats', 'trip', id, req.user.id, { count: results.length, autoReserve: !!autoReserve });
     return res.json({ added: results.length, boats: results });
   } catch (err) {
     console.error('Assign boats to trip error:', err);
