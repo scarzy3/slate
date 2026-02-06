@@ -125,6 +125,7 @@ router.put('/:id', authMiddleware, requireAdminPerm('personnel'), validate(perso
     if (deptId !== undefined) data.deptId = deptId;
     if (pin !== undefined) {
       data.pin = await bcrypt.hash(pin, SALT_ROUNDS);
+      data.mustChangePassword = true;
     }
 
     const user = await prisma.user.update({

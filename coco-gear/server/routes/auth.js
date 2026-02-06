@@ -53,6 +53,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
         title: user.title,
         role: user.role,
         deptId: user.deptId,
+        mustChangePassword: !!user.mustChangePassword,
       },
     });
   } catch (err) {
@@ -110,6 +111,29 @@ router.put('/me', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error('Update profile error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /me/password - change own password
+router.put('/me/password', authMiddleware, async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 1) {
+      return res.status(400).json({ error: 'New password is required' });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { pin: hashed, mustChangePassword: false },
+    });
+
+    return res.json({ message: 'Password updated', mustChangePassword: false });
+  } catch (err) {
+    console.error('Change password error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

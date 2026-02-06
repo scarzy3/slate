@@ -68,14 +68,14 @@ async function main() {
 
   // ─── Personnel ───
   const users = await Promise.all([
-    prisma.user.create({ data: { name: 'Jordan Martinez', title: 'Operations Director', role: 'super', pin, deptId: null } }),
-    prisma.user.create({ data: { name: 'Riley Chen', title: 'Field Technician', role: 'user', pin, deptId: depts[0].id } }),
-    prisma.user.create({ data: { name: 'Drew Williams', title: 'Project Manager', role: 'user', pin, deptId: depts[0].id } }),
-    prisma.user.create({ data: { name: 'Kim Thompson', title: 'Engineer', role: 'user', pin, deptId: depts[1].id } }),
-    prisma.user.create({ data: { name: 'Morgan Davis', title: 'Analyst', role: 'user', pin, deptId: depts[2].id } }),
-    prisma.user.create({ data: { name: 'Taylor Nguyen', title: 'Team Lead', role: 'admin', pin, deptId: null } }),
-    prisma.user.create({ data: { name: 'Lee Garcia', title: 'Technician', role: 'user', pin, deptId: depts[1].id } }),
-    prisma.user.create({ data: { name: 'Ash Patel', title: 'Support Specialist', role: 'user', pin, deptId: depts[2].id } }),
+    prisma.user.create({ data: { name: 'Jordan Martinez', title: 'Operations Director', role: 'super', pin, mustChangePassword: false, deptId: null } }),
+    prisma.user.create({ data: { name: 'Riley Chen', title: 'Field Technician', role: 'user', pin, mustChangePassword: false, deptId: depts[0].id } }),
+    prisma.user.create({ data: { name: 'Drew Williams', title: 'Project Manager', role: 'user', pin, mustChangePassword: false, deptId: depts[0].id } }),
+    prisma.user.create({ data: { name: 'Kim Thompson', title: 'Engineer', role: 'user', pin, mustChangePassword: false, deptId: depts[1].id } }),
+    prisma.user.create({ data: { name: 'Morgan Davis', title: 'Analyst', role: 'user', pin, mustChangePassword: false, deptId: depts[2].id } }),
+    prisma.user.create({ data: { name: 'Taylor Nguyen', title: 'Team Lead', role: 'admin', pin, mustChangePassword: false, deptId: null } }),
+    prisma.user.create({ data: { name: 'Lee Garcia', title: 'Technician', role: 'user', pin, mustChangePassword: false, deptId: depts[1].id } }),
+    prisma.user.create({ data: { name: 'Ash Patel', title: 'Support Specialist', role: 'user', pin, mustChangePassword: false, deptId: depts[2].id } }),
   ]);
   console.log(`  Created ${users.length} users`);
 

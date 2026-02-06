@@ -14,6 +14,7 @@ model User {
   title     String?
   role      String   @default("user") // super | admin | user
   pin       String   // bcrypt hashed
+  mustChangePassword Boolean @default(true)
   deptId    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
