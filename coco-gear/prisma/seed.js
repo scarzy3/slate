@@ -5,6 +5,13 @@ const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
 
 async function main() {
+  // Skip seeding if data already exists (prevents wiping on container restart)
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0) {
+    console.log('Database already seeded — skipping. Use "npm run db:reset" to re-seed.');
+    return;
+  }
+
   console.log('Seeding database...');
 
   // Clear existing data

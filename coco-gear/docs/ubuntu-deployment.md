@@ -466,7 +466,7 @@ http://YOUR_SERVER_IP:3000
 
 Replace `YOUR_SERVER_IP` with the IP address from Part 1 (e.g., `http://164.90.150.23:3000`).
 
-**What you should see:** The COCO Gear login page! You can log in with any of the sample users. They all use PIN **1234**.
+**What you should see:** The Slate login page with a searchable user picker. Start typing a name to filter the list, or scroll through all users. On first startup, the app automatically creates a default **Admin** user with PIN **1234**. If the seed data loaded successfully, you'll also see the sample users (all use PIN **1234**).
 
 **If the page doesn't load:** The server's firewall might be blocking port 3000. Run this command on the server:
 
@@ -951,6 +951,18 @@ If the test passes, make sure Nginx is running:
 sudo systemctl restart nginx
 ```
 
+### "The login page shows no users"
+
+The app automatically creates a default **Admin** user (PIN: **1234**) on startup if no users exist. If you still don't see any users, check the logs:
+```bash
+cd /opt/slate/coco-gear
+docker compose logs app
+```
+Look for the `No users found — created default admin user` banner. If you see database errors instead, the database might not be ready. Try restarting:
+```bash
+docker compose restart app
+```
+
 ### "The page loads but login doesn't work"
 
 Check the app logs:
@@ -989,7 +1001,7 @@ docker compose down -v
 docker compose up -d --build
 ```
 
-The `-v` flag deletes all stored data. Only do this if you really want to start over.
+The `-v` flag deletes all stored data. Only do this if you really want to start over. The app will re-run the seed script to load demo data. If for some reason the seed fails, the server will still create a default Admin user (PIN: 1234) so you can log in.
 
 ---
 
@@ -1063,9 +1075,19 @@ Internet
 | `UPLOAD_DIR` | Where uploaded photos are stored on disk |
 | `MAX_FILE_SIZE` | Maximum photo upload size in bytes (default: 10 MB = 10485760) |
 
-### Default sample data
+### Default admin user
 
-After the first startup, the app is loaded with sample data for testing:
+If the app starts and finds **no users** in the database, it automatically creates a default admin account:
+
+| Name | Role | PIN |
+|------|------|-----|
+| Admin | Super Admin | 1234 |
+
+This ensures you can always log in, even if the seed script fails. You'll see a banner in the server logs when this happens. **Change this PIN after your first login** by going to your profile settings.
+
+### Sample data
+
+On first startup, the seed script loads demo data for testing. **The seed only runs once** — if it detects existing users, it skips automatically, so your real data is never overwritten on container restarts.
 
 **8 sample users** (all use PIN **1234**):
 
@@ -1082,37 +1104,19 @@ After the first startup, the app is loaded with sample data for testing:
 
 Plus: 8 locations, 3 departments, 12 kits, 19 component types, 6 consumables, 10 standalone assets, and system settings.
 
-**Important:** After you've set up real data, you'll want to prevent the sample data from being reloaded if the server restarts. Edit docker-compose.yml and change the `command` section:
+To re-seed the database (this **erases all data** and reloads the demo data):
 
-```bash
-nano /opt/slate/coco-gear/docker-compose.yml
-```
-
-Find this section:
-```yaml
-    command: >
-      sh -c "npx prisma db push --skip-generate &&
-             node prisma/seed.js &&
-             node server/index.js"
-```
-
-Remove the `node prisma/seed.js &&` line so it looks like:
-```yaml
-    command: >
-      sh -c "npx prisma db push --skip-generate &&
-             node server/index.js"
-```
-
-Save (Ctrl+O, Enter, Ctrl+X), then restart:
 ```bash
 cd /opt/slate/coco-gear
-docker compose down
-docker compose up -d
+docker compose exec app npx prisma migrate reset --force
+docker compose restart app
 ```
 
 ### Security features already built into the app
 
 - **PIN-based login** with bcrypt hashing (PINs are never stored in plain text)
+- **Searchable login screen** — type to filter users by name, role, or title instead of scrolling through a long dropdown
+- **Automatic default admin** — if no users exist, a default Admin user (PIN: 1234) is created on server startup so the app is always accessible
 - **Role-based access control** — Super Admin > Admin > User — each level has different permissions
 - **JWT authentication** — secure, stateless login sessions
 - **File upload restrictions** — only image files (JPEG, PNG, GIF, WebP), max 10 MB each, max 10 per request
