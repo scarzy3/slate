@@ -209,7 +209,7 @@ model TripPersonnel {
   id        String   @id @default(uuid())
   tripId    String
   userId    String
-  role      String   @default("member") // lead | comms | driver | medic | member | other
+  role      String   @default("specialist") // director | manager | senior-spec | specialist | engineer | other
   notes     String?
   createdAt DateTime @default(now())
 

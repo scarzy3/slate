@@ -116,7 +116,7 @@ export const tripSchema = z.object({
 
 export const tripPersonnelSchema = z.object({
   userId: z.string().uuid(),
-  role: z.enum(['lead', 'comms', 'driver', 'medic', 'member', 'other']).optional().default('member'),
+  role: z.enum(['director', 'manager', 'senior-spec', 'specialist', 'engineer', 'other']).optional().default('specialist'),
   notes: z.string().max(500).optional().default(''),
 });
 

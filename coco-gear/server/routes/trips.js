@@ -337,7 +337,7 @@ router.delete('/:id/personnel/:personnelId', requireRole('admin'), async (req, r
 router.post('/:id/personnel/bulk', requireRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { userIds, role = 'member' } = req.body;
+    const { userIds, role = 'specialist' } = req.body;
 
     if (!Array.isArray(userIds) || !userIds.length) {
       return res.status(400).json({ error: 'userIds array required' });

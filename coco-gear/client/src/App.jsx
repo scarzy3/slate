@@ -1231,8 +1231,8 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
   const fmtDT=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
   const statusLabels={planning:"Planning",active:"Active",completed:"Completed",cancelled:"Cancelled"};
-  const roleColors={lead:T.rd,comms:T.bl,driver:T.or,medic:T.gn,member:T.mu,other:T.pu};
-  const roleLabels={lead:"Lead",comms:"Comms",driver:"Driver",medic:"Medic",member:"Member",other:"Other"};
+  const roleColors={director:T.rd,manager:T.am,"senior-spec":T.or,specialist:T.bl,engineer:T.tl,other:T.pu};
+  const roleLabels={director:"Director",manager:"Manager","senior-spec":"Senior Specialist",specialist:"Specialist",engineer:"Engineer",other:"Other"};
   const noteCatColors={general:T.mu,logistics:T.bl,safety:T.rd,comms:T.ind,["after-action"]:T.am};
   const filtered=tab==="all"?trips:tab==="active"?trips.filter(t=>t.status==="planning"||t.status==="active"):trips.filter(t=>t.status===tab);
   const searchFiltered=search.trim()?filtered.filter(t=>t.name.toLowerCase().includes(search.toLowerCase())||t.location?.toLowerCase().includes(search.toLowerCase())):filtered;
@@ -1259,7 +1259,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
   const removeFromTrip=async(kitId)=>{if(!activeTrip)return;
     try{await api.trips.removeKit(activeTrip.id,kitId);await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}};
   const doAddPersonnel=async()=>{if(!activeTrip||!addPersonIds.length)return;
-    try{await api.trips.addPersonnelBulk(activeTrip.id,addPersonIds,addPersonRole);await onRefreshTrips()}catch(e){alert(e.message)}setAddPersonMd(false);setAddPersonIds([]);setAddPersonRole("member")};
+    try{await api.trips.addPersonnelBulk(activeTrip.id,addPersonIds,addPersonRole);await onRefreshTrips()}catch(e){alert(e.message)}setAddPersonMd(false);setAddPersonIds([]);setAddPersonRole("specialist")};
   const removePerson=async(pId)=>{if(!activeTrip)return;
     try{await api.trips.removePersonnel(activeTrip.id,pId);await onRefreshTrips()}catch(e){alert(e.message)}};
   const updatePersonRole=async(pId,role)=>{if(!activeTrip)return;
@@ -1420,7 +1420,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
     {/* ── PERSONNEL TAB ── */}
     {detailTab==="personnel"&&<div>
       {isAdmin&&editable&&<div style={{display:"flex",gap:8,marginBottom:16}}>
-        <Bt v="primary" onClick={()=>{setAddPersonIds([]);setAddPersonRole("member");setAddPersonMd(true)}}>+ Add Personnel</Bt></div>}
+        <Bt v="primary" onClick={()=>{setAddPersonIds([]);setAddPersonRole("specialist");setAddPersonMd(true)}}>+ Add Personnel</Bt></div>}
 
       {tripPers.length===0?<div style={{padding:30,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No personnel assigned to this trip yet</div>:
         <div>
