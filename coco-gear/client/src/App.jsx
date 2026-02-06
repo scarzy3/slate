@@ -220,9 +220,10 @@ function Bt({children,onClick,v="default",disabled,sm,style:sx}){
     pink:{background:"rgba(244,114,182,.1)",border:"1px solid rgba(244,114,182,.25)",color:T.pk},
     orange:{background:"rgba(251,146,60,.1)",border:"1px solid rgba(251,146,60,.25)",color:T.or}};
   return <button onClick={disabled?undefined:onClick} style={{...base,...vs[v],...sx}}>{children}</button>;}
-function Fl({label,children,sub}){return <div style={{display:"flex",flexDirection:"column",gap:4}}>
+function Fl({label,children,sub,hint}){return <div style={{display:"flex",flexDirection:"column",gap:4}}>
   <label style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,whiteSpace:"nowrap"}}>
-    {label}{sub&&<span style={{color:T.dm,fontWeight:400,textTransform:"none",letterSpacing:0}}> {sub}</span>}</label>{children}</div>;}
+    {label}{sub&&<span style={{color:T.dm,fontWeight:400,textTransform:"none",letterSpacing:0}}> {sub}</span>}</label>{children}
+  {hint&&<span style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{hint}</span>}</div>;}
 function In(props){return <input {...props} style={{padding:"7px 11px",borderRadius:6,background:T.card,
   border:"1px solid "+T.bd,color:T.tx,fontSize:12,fontFamily:T.m,outline:"none",width:"100%",...props.style}}/>;}
 function Ta(props){return <textarea {...props} style={{padding:"7px 11px",borderRadius:6,background:T.card,
@@ -2061,7 +2062,7 @@ function CompAdmin({comps,setComps,types,onRefreshComps}){
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Label"><In value={fm.label} onChange={e=>setFm(p=>({...p,label:e.target.value}))} placeholder="e.g. Silvus 4200"/></Fl>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Fl label="Key"><In value={fm.key} onChange={e=>setFm(p=>({...p,key:e.target.value}))} placeholder="auto"/></Fl>
+          <Fl label="Short ID" hint="Auto-generated from label if blank"><In value={fm.key} onChange={e=>setFm(p=>({...p,key:e.target.value}))} placeholder="auto"/></Fl>
           <Fl label="Category"><Sl options={CATS} value={fm.cat} onChange={e=>setFm(p=>({...p,cat:e.target.value}))}/></Fl></div>
         <div style={{display:"flex",alignItems:"center",gap:16}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}><Tg checked={fm.ser} onChange={v=>setFm(p=>({...p,ser:v}))}/>
