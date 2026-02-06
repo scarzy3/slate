@@ -1689,7 +1689,6 @@ function ReservationsPage({reservations,setReservations,kits,personnel,trips,cur
     setMd(null);setFm({kitId:"",tripId:"",startDate:"",endDate:"",purpose:""})};
 
   const approveRes=async(id)=>{try{await api.reservations.approve(id);await onRefreshReservations()}catch(e){alert(e.message)}};
-  const cancelRes=async(id)=>{try{await api.reservations.cancel(id);await onRefreshReservations()}catch(e){alert(e.message)}};
   const deleteRes=async(id)=>{try{await api.reservations.delete(id);await onRefreshReservations()}catch(e){alert(e.message)}};
   
   /* Calendar helpers */
@@ -1701,8 +1700,8 @@ function ReservationsPage({reservations,setReservations,kits,personnel,trips,cur
   const today=new Date().toISOString().slice(0,10);
   
   const getResForDay=(day)=>{
-    const dateStr=`${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-    return active.filter(r=>r.startDate<=dateStr&&r.endDate>=dateStr)};
+    const d=Date.UTC(year,month,day);
+    return active.filter(r=>{const s=new Date(r.startDate+"T00:00:00Z").getTime();const e=new Date(r.endDate+"T00:00:00Z").getTime();return s<=d&&e>=d})};
   
   const getDayColor=(day)=>{
     const res=getResForDay(day);if(!res.length)return null;
@@ -1770,11 +1769,10 @@ function ReservationsPage({reservations,setReservations,kits,personnel,trips,cur
                 {r.purpose&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,fontStyle:"italic",marginTop:4}}>{r.purpose}</div>}
                 {(isMine||isAdmin)&&<div style={{display:"flex",gap:4,marginTop:8}}>
                   {isAdmin&&r.status==="pending"&&<Bt v="success" sm onClick={()=>approveRes(r.id)}>Approve</Bt>}
-                  {r.status!=="cancelled"&&<Bt sm onClick={()=>cancelRes(r.id)}>Cancel</Bt>}
                   <Bt v="danger" sm onClick={()=>deleteRes(r.id)}>Delete</Bt></div>}</div>)})}
           </div>:<div style={{padding:16,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No reservations</div>}
-          <Bt v="primary" sm style={{marginTop:12,width:"100%"}} onClick={()=>{
-            setFm(p=>({...p,startDate:selectedDateStr,endDate:selectedDateStr}));setMd("new")}}>+ Reserve for this day</Bt></div>}
+          <div style={{marginTop:12}}><Bt v="primary" sm style={{width:"100%"}} onClick={()=>{
+            setFm(p=>({...p,startDate:selectedDateStr,endDate:selectedDateStr}));setMd("new")}}>+ Reserve for this day</Bt></div></div>}
         
         {/* Pending approvals */}
         {pending.length>0&&isAdmin&&<div style={{padding:16,borderRadius:10,background:"rgba(251,146,60,.02)",border:"1px solid rgba(251,146,60,.12)"}}>

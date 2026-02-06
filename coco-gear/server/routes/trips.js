@@ -53,28 +53,7 @@ router.get('/', async (req, res) => {
 
     const trips = await prisma.trip.findMany({
       where,
-      include: {
-        lead: { select: { id: true, name: true } },
-        kits: {
-          select: {
-            id: true,
-            color: true,
-            typeId: true,
-            deptId: true,
-            issuedToId: true,
-            type: { select: { id: true, name: true } },
-          },
-        },
-        boats: {
-          include: { boat: true },
-        },
-        personnel: {
-          include: {
-            user: { select: { id: true, name: true, title: true, role: true, deptId: true } },
-          },
-        },
-        _count: { select: { reservations: true, personnel: true, boats: true } },
-      },
+      include: tripIncludes,
       orderBy: { startDate: 'desc' },
     });
     return res.json(trips);
