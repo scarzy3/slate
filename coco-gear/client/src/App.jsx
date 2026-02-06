@@ -176,17 +176,25 @@ const parseQR=val=>{if(!val)return null;const s=val.trim();
   return{type:"text",value:s}};
 
 /* ─── DEFAULT SETTINGS ─── */
+const DEF_ROLE_PERMS={
+  lead:{trips:true,maintenance:false,consumables:false,analytics:false,reports:false,
+    types:false,components:false,locations:false,departments:false,personnel:false,boats:false},
+  manager:{trips:true,maintenance:true,consumables:true,analytics:true,reports:true,
+    types:true,components:true,locations:true,departments:true,personnel:true,boats:true},
+};
 const DEF_SETTINGS={
   requireDeptApproval:true,allowUserLocationUpdate:true,
   requireSerialsOnCheckout:true,requireSerialsOnReturn:true,requireSerialsOnInspect:true,
   allowUserInspect:true,allowUserCheckout:true,
   inspectionDueThreshold:30,overdueReturnThreshold:14,
   enableReservations:true,enableMaintenance:true,enableConsumables:true,enableQR:true,
-  /* Admin permissions - what admins can access */
+  /* Admin permissions - what admins can access (legacy, kept for compat) */
   adminPerms:{
     analytics:true,reports:true,maintenance:true,consumables:true,
     types:true,components:true,locations:true,departments:true,personnel:true,
-  }
+  },
+  /* Role-based permissions - configurable by super admins */
+  rolePerms:DEF_ROLE_PERMS,
 };
 
 /* ─── Data loaded from API ─── */
@@ -2322,7 +2330,10 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
   const saveTimer=useRef(null);
   const updateSetting=(key,value)=>{setSettings(p=>{const next={...p,[key]:value};
     clearTimeout(saveTimer.current);saveTimer.current=setTimeout(()=>{if(onSaveSettings)onSaveSettings(next)},800);return next})};
-  const updateAdminPerm=(key,value)=>{setSettings(p=>{const next={...p,adminPerms:{...p.adminPerms,[key]:value}};
+  const updateRolePerm=(role,perm,value)=>{setSettings(p=>{
+    const rp={...p.rolePerms||DEF_ROLE_PERMS};
+    rp[role]={...(rp[role]||DEF_ROLE_PERMS[role]||{}),[perm]:value};
+    const next={...p,rolePerms:rp};
     clearTimeout(saveTimer.current);saveTimer.current=setTimeout(()=>{if(onSaveSettings)onSaveSettings(next)},800);return next})};
   const generalItems=[
     {k:"requireDeptApproval",l:"Require dept head approval",d:"For department-locked kits"},
@@ -2345,7 +2356,8 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     {k:"inspectionDueThreshold",l:"Inspection due threshold",d:"Days before inspection overdue",unit:"days"},
     {k:"overdueReturnThreshold",l:"Overdue return threshold",d:"Days before return overdue",unit:"days"},
   ];
-  const adminPermItems=[
+  const permItems=[
+    {k:"trips",l:"Trips",d:"Create, edit, and manage trip planning"},
     {k:"analytics",l:"Analytics",d:"View fleet analytics and insights"},
     {k:"reports",l:"Reports",d:"Generate and export reports"},
     {k:"maintenance",l:"Maintenance",d:"Manage maintenance workflow"},
@@ -2355,16 +2367,23 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     {k:"locations",l:"Locations",d:"Manage storage locations"},
     {k:"departments",l:"Departments",d:"Manage departments"},
     {k:"personnel",l:"Personnel",d:"Manage personnel records"},
+    {k:"boats",l:"USVs",d:"Manage unmanned surface vehicles"},
   ];
+  const roles=[{k:"lead",l:"Lead",c:T.or},{k:"manager",l:"Manager",c:T.am}];
   const ToggleRow=({item,checked,onChange})=>(
     <div style={{display:"flex",alignItems:"center",gap:14,padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
       <Tg checked={checked} onChange={onChange}/>
       <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:checked?T.tx:T.mu,fontFamily:T.u}}>{item.l}</div>
         <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{item.d}</div></div></div>);
+  const getRolePerm=(role,perm)=>{
+    const rp=settings.rolePerms||DEF_ROLE_PERMS;
+    if(rp[role]&&perm in rp[role])return rp[role][perm];
+    return DEF_ROLE_PERMS[role]?.[perm]||false;
+  };
   return(<div>
     <SH title="System Settings" sub="Super Admin configuration"/>
-    <Tabs tabs={[{id:"general",l:"General"},{id:"serials",l:"Serials"},{id:"features",l:"Features"},{id:"admin",l:"Admin Permissions"}]} active={tab} onChange={setTab}/>
-    <div style={{maxWidth:600,display:"flex",flexDirection:"column",gap:6}}>
+    <Tabs tabs={[{id:"general",l:"General"},{id:"serials",l:"Serials"},{id:"features",l:"Features"},{id:"roles",l:"Role Permissions"}]} active={tab} onChange={setTab}/>
+    <div style={{maxWidth:700,display:"flex",flexDirection:"column",gap:6}}>
       {tab==="general"&&<>
         {generalItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
         {numItems.map(it=><div key={it.k} style={{display:"flex",alignItems:"center",gap:14,padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
@@ -2374,11 +2393,26 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
           <span style={{fontSize:10,color:T.mu,fontFamily:T.m,width:30}}>{it.unit}</span></div>)}</>}
       {tab==="serials"&&serialItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
       {tab==="features"&&featureItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
-      {tab==="admin"&&<>
-        <div style={{padding:12,borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.1)",marginBottom:8}}>
-          <div style={{fontSize:10,color:T.am,fontFamily:T.m}}>Configure which pages Admins can access. Super Admins always have full access.</div></div>
-        {adminPermItems.map(it=><ToggleRow key={it.k} item={it} checked={settings.adminPerms?.[it.k]!==false}
-          onChange={v=>updateAdminPerm(it.k,v)}/>)}</>}</div></div>);}
+      {tab==="roles"&&<>
+        <div style={{padding:12,borderRadius:8,background:"rgba(96,165,250,.03)",border:"1px solid rgba(96,165,250,.12)",marginBottom:8}}>
+          <div style={{fontSize:10,color:T.bl,fontFamily:T.m}}>Configure exactly what each role can access. Directors always have full access. Operators have view-only access to inventory and trips.</div></div>
+        {/* Permission matrix */}
+        <div style={{borderRadius:10,border:"1px solid "+T.bd,overflow:"hidden"}}>
+          {/* Header row */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr repeat("+(roles.length+1)+",72px)",padding:"10px 16px",background:T.card,borderBottom:"1px solid "+T.bd}}>
+            <div style={{fontSize:10,fontWeight:700,color:T.tx,fontFamily:T.u}}>Permission</div>
+            {roles.map(r=><div key={r.k} style={{fontSize:10,fontWeight:700,color:r.c,fontFamily:T.m,textAlign:"center"}}>{r.l}</div>)}
+            <div style={{fontSize:10,fontWeight:700,color:T.rd,fontFamily:T.m,textAlign:"center"}}>Director</div></div>
+          {/* Permission rows */}
+          {permItems.map((it,i)=><div key={it.k} style={{display:"grid",gridTemplateColumns:"1fr repeat("+(roles.length+1)+",72px)",padding:"10px 16px",
+            background:i%2===0?"transparent":T.card,borderBottom:i<permItems.length-1?"1px solid "+T.bd:"none",alignItems:"center"}}>
+            <div><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>{it.l}</div>
+              <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{it.d}</div></div>
+            {roles.map(r=><div key={r.k} style={{display:"flex",justifyContent:"center"}}>
+              <Tg checked={getRolePerm(r.k,it.k)} onChange={v=>updateRolePerm(r.k,it.k,v)}/></div>)}
+            <div style={{display:"flex",justifyContent:"center"}}>
+              <Tg checked={true} onChange={()=>{}}/></div></div>)}</div>
+      </>}</div></div>);}
 
 /* ═══════════ MY PROFILE (User Settings) ═══════════ */
 function MyProfile({user,personnel,setPersonnel,kits,assets,depts,onRefreshPersonnel}){
@@ -2947,21 +2981,21 @@ const NAV_SECTIONS=[
     {id:"trips",l:"Trips",i:"▸",access:"all"},
     {id:"reservations",l:"Reservations",i:"◷",access:"all",setting:"enableReservations"},
     {id:"approvals",l:"Approvals",i:"✓",access:"approver"},
-    {id:"maintenance",l:"Maintenance",i:"⚙",access:"lead",setting:"enableMaintenance"},
-    {id:"consumables",l:"Supplies",i:"◨",access:"lead",setting:"enableConsumables"},
+    {id:"maintenance",l:"Maintenance",i:"⚙",access:"lead",perm:"maintenance",setting:"enableMaintenance"},
+    {id:"consumables",l:"Supplies",i:"◨",access:"lead",perm:"consumables",setting:"enableConsumables"},
   ]},
   {id:"insights",label:"Insights",items:[
-    {id:"analytics",l:"Analytics",i:"◔",access:"manager",perm:"analytics"},
-    {id:"reports",l:"Reports",i:"◫",access:"manager",perm:"reports"},
+    {id:"analytics",l:"Analytics",i:"◔",access:"lead",perm:"analytics"},
+    {id:"reports",l:"Reports",i:"◫",access:"lead",perm:"reports"},
     {id:"auditlog",l:"Audit Log",i:"≡",access:"director"},
   ]},
   {id:"config",label:"Configuration",items:[
-    {id:"types",l:"Kit Types",i:"+",access:"manager",perm:"types"},
-    {id:"components",l:"Components",i:":",access:"manager",perm:"components"},
-    {id:"locations",l:"Locations",i:"⌖",access:"manager",perm:"locations"},
-    {id:"departments",l:"Departments",i:"▣",access:"manager",perm:"departments"},
-    {id:"personnel",l:"Personnel",i:"◎",access:"manager",perm:"personnel"},
-    {id:"boats",l:"USVs",i:"⛵",access:"manager"},
+    {id:"types",l:"Kit Types",i:"+",access:"lead",perm:"types"},
+    {id:"components",l:"Components",i:":",access:"lead",perm:"components"},
+    {id:"locations",l:"Locations",i:"⌖",access:"lead",perm:"locations"},
+    {id:"departments",l:"Departments",i:"▣",access:"lead",perm:"departments"},
+    {id:"personnel",l:"Personnel",i:"◎",access:"lead",perm:"personnel"},
+    {id:"boats",l:"USVs",i:"⛵",access:"lead",perm:"boats"},
     {id:"settings",l:"Settings",i:"⚙",access:"director"},
   ]},
 ];
@@ -3274,19 +3308,32 @@ export default function App(){
     const compId=parts[0];const comp=comps.find(c=>c.id===compId);
     return{componentId:compId,slotIndex:parts.length>1?parseInt(parts[1],10):0}};
 
+  /* Role-based permission check */
+  const normalizeRole=r=>r==="admin"?"manager":r==="super"||r==="engineer"?"director":r;
+  const hasPerm=(perm)=>{
+    if(isDirector)return true;
+    if(!isLead)return false;
+    const role=normalizeRole(effectiveRole);
+    const perms=settings.rolePerms?.[role];
+    if(perms&&perm in perms)return perms[perm];
+    return DEF_ROLE_PERMS[role]?.[perm]||false;
+  };
+  const canManageTrips=hasPerm("trips");
+
   /* Permission check for nav items */
   const canAccess=(item)=>{
     if(item.setting&&!settings[item.setting])return false;
     if(item.access==="all")return true;
     if(item.access==="super"||item.access==="director")return isDirector;
     if(item.access==="approver")return isApprover;
-    if(item.access==="lead")return isLead;
-    if(item.access==="admin"||item.access==="manager"){
+    /* Items with perm key use the rolePerms system */
+    if(item.perm){
       if(isDirector)return true;
-      if(!isManager)return false;
-      if(item.perm&&settings.adminPerms?.[item.perm]===false)return false;
-      return true;
+      if(!isLead)return false;
+      return hasPerm(item.perm);
     }
+    if(item.access==="lead")return isLead;
+    if(item.access==="admin"||item.access==="manager")return isManager;
     return false;
   };
   
@@ -3449,13 +3496,13 @@ export default function App(){
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}
           personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} addLog={addLog} onRefreshKits={refreshKits}/>}
         {pg==="trips"&&<TripsPage trips={trips} kits={kits} types={types} depts={depts} personnel={personnel} reservations={reservations} boats={boats}
-          isAdmin={isAdmin} isSuper={isSuper} curUserId={curUser} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits} onRefreshPersonnel={refreshPersonnel} onRefreshBoats={refreshBoats}/>}
+          isAdmin={canManageTrips} isSuper={isSuper} curUserId={curUser} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits} onRefreshPersonnel={refreshPersonnel} onRefreshBoats={refreshBoats}/>}
         {pg==="reservations"&&settings.enableReservations&&<ReservationsPage reservations={reservations} setReservations={setReservations}
           kits={kits} personnel={personnel} trips={trips} curUserId={curUser} isAdmin={isAdmin} addLog={addLog} onRefreshReservations={refreshReservations}/>}
         {pg==="maintenance"&&canAccess({access:"admin",perm:"maintenance",setting:"enableMaintenance"})&&settings.enableMaintenance&&<MaintenancePage kits={kits} setKits={setKits} types={types} locs={locs}
           personnel={personnel} addLog={addLog} curUserId={curUser} onSendMaint={apiSendMaint} onReturnMaint={apiReturnMaint}/>}
         {pg==="consumables"&&canAccess({access:"admin",perm:"consumables",setting:"enableConsumables"})&&settings.enableConsumables&&<ConsumablesPage consumables={consumables} setConsumables={setConsumables}
-          assets={assets} setAssets={setAssets} personnel={personnel} locs={locs} addLog={addLog} curUserId={curUser} isAdmin={isAdmin}
+          assets={assets} setAssets={setAssets} personnel={personnel} locs={locs} addLog={addLog} curUserId={curUser} isAdmin={hasPerm("consumables")}
           onRefreshConsumables={refreshConsumables} onRefreshAssets={refreshAssets}/>}
         {pg==="auditlog"&&isSuper&&<AuditLogPage logs={logs} kits={kits} personnel={personnel}/>}
         {pg==="types"&&canAccess({access:"admin",perm:"types"})&&<TypeAdmin types={types} setTypes={setTypes} comps={comps} kits={kits} depts={depts} onRefreshTypes={refreshTypes}/>}
@@ -3463,7 +3510,7 @@ export default function App(){
         {pg==="locations"&&canAccess({access:"admin",perm:"locations"})&&<LocAdmin locs={locs} setLocs={setLocs} kits={kits} onRefreshLocs={refreshLocs}/>}
         {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} onRefreshDepts={refreshDepts}/>}
         {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
-        {pg==="boats"&&canAccess({access:"manager"})&&<BoatAdmin boats={boats} onRefreshBoats={refreshBoats}/>}
+        {pg==="boats"&&canAccess({access:"lead",perm:"boats"})&&<BoatAdmin boats={boats} onRefreshBoats={refreshBoats}/>}
         {pg==="settings"&&isSuper&&<SettingsPage settings={settings} setSettings={setSettings} onSaveSettings={saveSettings}/>}
         {pg==="profile"&&<MyProfile user={user} personnel={personnel} setPersonnel={setPersonnel} kits={kits} assets={assets} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
       </main>

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
-import { requireRole, requireSuper } from '../middleware/rbac.js';
+import { requireRole, requireSuper, DEFAULT_ROLE_PERMS } from '../middleware/rbac.js';
 import { validate, settingsSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
@@ -33,17 +33,26 @@ const DEFAULT_SETTINGS = {
     departments: true,
     personnel: true,
   },
+  rolePerms: DEFAULT_ROLE_PERMS,
 };
 
 /**
  * Merge DB settings over defaults, handling nested objects
  */
 function mergeSettings(dbSettings) {
-  const merged = { ...DEFAULT_SETTINGS };
+  const merged = { ...DEFAULT_SETTINGS, rolePerms: JSON.parse(JSON.stringify(DEFAULT_ROLE_PERMS)) };
 
   for (const row of dbSettings) {
     if (row.key === 'adminPerms' && typeof row.value === 'object') {
       merged.adminPerms = { ...DEFAULT_SETTINGS.adminPerms, ...row.value };
+    } else if (row.key === 'rolePerms' && typeof row.value === 'object') {
+      // Deep merge each role's permissions over defaults
+      for (const role of Object.keys(DEFAULT_ROLE_PERMS)) {
+        merged.rolePerms[role] = {
+          ...DEFAULT_ROLE_PERMS[role],
+          ...(row.value[role] || {}),
+        };
+      }
     } else {
       merged[row.key] = row.value;
     }
