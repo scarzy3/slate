@@ -2221,6 +2221,26 @@ function NavSection({section,pg,setPg,collapsed,onToggle,canAccess,getBadge}){
 /* ═══════════ LOGIN SCREEN ═══════════ */
 function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
   const[selUser,setSelUser]=useState("");const[pin,setPin]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
+  const[search,setSearch]=useState("");const[showList,setShowList]=useState(false);const[hiIdx,setHiIdx]=useState(0);
+  const searchRef=useRef(null);const listRef=useRef(null);const pinWrapRef=useRef(null);
+  const selectedUser=personnel.find(p=>p.id===selUser);
+  const filtered=useMemo(()=>{
+    if(!search)return personnel;
+    const q=search.toLowerCase();
+    return personnel.filter(p=>p.name.toLowerCase().includes(q)||p.role.toLowerCase().includes(q)||(p.title||"").toLowerCase().includes(q));
+  },[personnel,search]);
+  useEffect(()=>{setHiIdx(0)},[filtered.length]);
+  useEffect(()=>{
+    if(!showList)return;
+    const h=e=>{if(searchRef.current&&!searchRef.current.contains(e.target)&&listRef.current&&!listRef.current.contains(e.target))setShowList(false)};
+    document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);
+  },[showList]);
+  const pickUser=(p)=>{setSelUser(p.id);setSearch("");setShowList(false);setError("");setTimeout(()=>pinWrapRef.current?.querySelector("input")?.focus(),50)};
+  const handleSearchKey=(e)=>{
+    if(e.key==="ArrowDown"){e.preventDefault();setHiIdx(i=>Math.min(i+1,filtered.length-1))}
+    else if(e.key==="ArrowUp"){e.preventDefault();setHiIdx(i=>Math.max(i-1,0))}
+    else if(e.key==="Enter"&&filtered[hiIdx]){e.preventDefault();pickUser(filtered[hiIdx])}
+    else if(e.key==="Escape"){setShowList(false)}};
   const attempt=async()=>{
     if(!selUser){setError("Select a user");return}
     setLoading(true);setError("");
@@ -2248,11 +2268,34 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
           <div style={{fontSize:11,color:T.mu,fontFamily:T.m,marginTop:4}}>Equipment Management System</div></div>
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <Fl label="User">
-            <Sl options={[{v:"",l:"-- Select User --"},...personnel.map(p=>({v:p.id,l:p.name+" ["+p.role+"]"}))]}
-              value={selUser} onChange={e=>{setSelUser(e.target.value);setError("")}}/></Fl>
+            <div style={{position:"relative"}} ref={searchRef}>
+              {selUser&&!showList?(
+                <div onClick={()=>{setSelUser("");setSearch("");setShowList(true);setTimeout(()=>searchRef.current?.querySelector("input")?.focus(),50)}}
+                  style={{padding:"7px 11px",borderRadius:6,background:T.cardH,border:"1px solid "+T.bd,color:T.tx,
+                    fontSize:11,fontFamily:T.m,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span>{selectedUser?.name} <span style={{color:T.mu}}>[{selectedUser?.role}]</span></span>
+                  <span style={{color:T.dm,fontSize:9}}>change</span></div>
+              ):(
+                <In value={search} autoFocus={showList} onChange={e=>{setSearch(e.target.value);setShowList(true);setError("")}}
+                  onFocus={()=>setShowList(true)} onKeyDown={handleSearchKey}
+                  placeholder={personnel.length+" users — type to search..."} autoComplete="off"/>
+              )}
+              {showList&&<div ref={listRef} style={{position:"absolute",top:"100%",left:0,right:0,marginTop:4,
+                background:T.panel,border:"1px solid "+T.bd,borderRadius:8,maxHeight:200,overflowY:"auto",zIndex:10,
+                boxShadow:"0 8px 24px rgba(0,0,0,.25)"}}>
+                {filtered.length===0?<div style={{padding:"10px 12px",fontSize:11,color:T.mu,fontFamily:T.m}}>No users found</div>:
+                  filtered.map((p,i)=>(
+                    <div key={p.id} onMouseDown={e=>{e.preventDefault();pickUser(p)}} onMouseEnter={()=>setHiIdx(i)}
+                      style={{padding:"8px 12px",cursor:"pointer",fontSize:11,fontFamily:T.m,
+                        background:i===hiIdx?(T._isDark?"rgba(255,255,255,.06)":"rgba(0,0,0,.04)"):"transparent",
+                        color:T.tx,borderBottom:i<filtered.length-1?"1px solid "+T.bd:"none",transition:"background .1s"}}>
+                      {p.name} <span style={{color:T.mu}}>[{p.role}]</span>
+                      {p.title&&<span style={{color:T.dm,marginLeft:6,fontSize:10}}>{p.title}</span>}
+                    </div>))}</div>}
+            </div></Fl>
           <Fl label="PIN">
-            <In type="password" value={pin} onChange={e=>{setPin(e.target.value);setError("")}}
-              placeholder="Enter PIN" onKeyDown={e=>{if(e.key==="Enter")attempt()}} maxLength={6}/></Fl>
+            <div ref={pinWrapRef}><In type="password" value={pin} onChange={e=>{setPin(e.target.value);setError("")}}
+              placeholder="Enter PIN" onKeyDown={e=>{if(e.key==="Enter")attempt()}} maxLength={6}/></div></Fl>
           {error&&<div style={{fontSize:11,color:T.rd,fontFamily:T.m,textAlign:"center",padding:"8px 12px",borderRadius:6,
             background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)"}}>{error}</div>}
           <Bt v="primary" onClick={attempt} disabled={loading} style={{justifyContent:"center",padding:"11px 0",fontSize:13}}>{loading?"Signing in...":"Sign In"}</Bt>
