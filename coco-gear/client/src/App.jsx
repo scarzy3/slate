@@ -1342,8 +1342,8 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
         <Fl label="Description"><In value={fm.description} onChange={e=>setFm(p=>({...p,description:e.target.value}))} placeholder="Brief description..."/></Fl>
         <Fl label="Objectives / Mission"><Ta value={fm.objectives} onChange={e=>setFm(p=>({...p,objectives:e.target.value}))} placeholder="Mission objectives, goals, tasks..." rows={3}/></Fl>
         <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          <Fl label="Start Date"><In type="date" value={fm.startDate?.slice(0,10)||fm.startDate} onChange={e=>setFm(p=>({...p,startDate:e.target.value}))}/></Fl>
-          <Fl label="End Date"><In type="date" value={fm.endDate?.slice(0,10)||fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl>
+          <Fl label="Start Date"><In type="date" value={fm.startDate} onChange={e=>setFm(p=>({...p,startDate:e.target.value}))}/></Fl>
+          <Fl label="End Date"><In type="date" value={fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl>
           <Fl label="Status"><Sl options={[{v:"planning",l:"Planning"},{v:"active",l:"Active"},{v:"completed",l:"Completed"},{v:"cancelled",l:"Cancelled"}]}
             value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl></div>
         <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["developer","director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
@@ -1370,7 +1370,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
         {at.status==="planning"&&<Bt v="success" sm onClick={()=>changeStatus("active")}>▸ Activate</Bt>}
         {at.status==="active"&&<Bt v="primary" sm onClick={()=>changeStatus("completed")}>✓ Complete</Bt>}
         <Bt sm onClick={()=>{setFm({name:at.name,description:at.description,location:at.location,objectives:at.objectives,
-          leadId:at.leadId||"",startDate:at.startDate?.slice(0,10)||"",endDate:at.endDate?.slice(0,10)||"",status:at.status});setMd(at.id)}}>Edit</Bt>
+          leadId:at.leadId||"",startDate:at.startDate||"",endDate:at.endDate||"",status:at.status});setMd(at.id)}}>Edit</Bt>
         <Bt v="danger" sm onClick={()=>setConfirmDel(at.id)}>Delete</Bt></div>}</div>
 
     {/* Status timeline indicator */}
@@ -1587,8 +1587,8 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
         <Fl label="Description"><In value={fm.description} onChange={e=>setFm(p=>({...p,description:e.target.value}))} placeholder="Brief description..."/></Fl>
         <Fl label="Objectives / Mission"><Ta value={fm.objectives} onChange={e=>setFm(p=>({...p,objectives:e.target.value}))} placeholder="Mission objectives, goals, tasks..." rows={3}/></Fl>
         <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          <Fl label="Start Date"><In type="date" value={fm.startDate?.slice(0,10)||fm.startDate} onChange={e=>setFm(p=>({...p,startDate:e.target.value}))}/></Fl>
-          <Fl label="End Date"><In type="date" value={fm.endDate?.slice(0,10)||fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl>
+          <Fl label="Start Date"><In type="date" value={fm.startDate} onChange={e=>setFm(p=>({...p,startDate:e.target.value}))}/></Fl>
+          <Fl label="End Date"><In type="date" value={fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl>
           <Fl label="Status"><Sl options={[{v:"planning",l:"Planning"},{v:"active",l:"Active"},{v:"completed",l:"Completed"},{v:"cancelled",l:"Cancelled"}]}
             value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl></div>
         <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["developer","director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
@@ -3242,7 +3242,7 @@ export default function App(){
   const xformDept=d=>({id:d.id,name:d.name,color:d.color||"#60a5fa",site:d.site||"",headId:d.headId||d.head?.id||null,
     kitTypeIds:(d.kitTypes||[]).map(kt=>kt.kitTypeId||kt.kitType?.id).filter(Boolean)});
   const xformTrip=t=>({id:t.id,name:t.name,description:t.description||"",location:t.location||"",objectives:t.objectives||"",
-    leadId:t.leadId||null,leadName:t.lead?.name||null,startDate:t.startDate,endDate:t.endDate,
+    leadId:t.leadId||null,leadName:t.lead?.name||null,startDate:(t.startDate||"").slice(0,10),endDate:(t.endDate||"").slice(0,10),
     status:t.status,kits:(t.kits||[]).map(k=>({id:k.id,color:k.color,typeId:k.typeId,deptId:k.deptId,issuedToId:k.issuedToId,
       typeName:k.type?.name,deptName:k.department?.name,deptColor:k.department?.color,holderName:k.issuedTo?.name})),
     personnel:(t.personnel||[]).map(p=>({id:p.id,userId:p.user?.id,name:p.user?.name,title:p.user?.title,sysRole:p.user?.role,
