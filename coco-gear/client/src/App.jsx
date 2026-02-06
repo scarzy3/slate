@@ -2222,13 +2222,22 @@ function NavSection({section,pg,setPg,collapsed,onToggle,canAccess,getBadge}){
 function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
   const[selUser,setSelUser]=useState("");const[pin,setPin]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
   const[search,setSearch]=useState("");const[showList,setShowList]=useState(false);const[hiIdx,setHiIdx]=useState(0);
+  const[users,setUsers]=useState(personnel||[]);const[usersLoading,setUsersLoading]=useState(!personnel?.length);const[fetchFailed,setFetchFailed]=useState(false);
   const searchRef=useRef(null);const listRef=useRef(null);const pinWrapRef=useRef(null);
-  const selectedUser=personnel.find(p=>p.id===selUser);
+  const fetchUsers=useCallback(()=>{
+    setUsersLoading(true);setFetchFailed(false);
+    fetch('/api/auth/users').then(r=>{if(!r.ok)throw new Error();return r.json()})
+      .then(data=>{if(data?.length)setUsers(data.map(p=>({id:p.id,name:p.name,title:p.title||"",role:p.role,deptId:p.deptId})));setUsersLoading(false)})
+      .catch(()=>{setUsersLoading(false);setFetchFailed(true)});
+  },[]);
+  useEffect(()=>{fetchUsers()},[fetchUsers]);
+  useEffect(()=>{if(personnel?.length&&!users.length)setUsers(personnel)},[personnel,users.length]);
+  const selectedUser=users.find(p=>p.id===selUser);
   const filtered=useMemo(()=>{
-    if(!search)return personnel;
+    if(!search)return users;
     const q=search.toLowerCase();
-    return personnel.filter(p=>p.name.toLowerCase().includes(q)||p.role.toLowerCase().includes(q)||(p.title||"").toLowerCase().includes(q));
-  },[personnel,search]);
+    return users.filter(p=>p.name.toLowerCase().includes(q)||p.role.toLowerCase().includes(q)||(p.title||"").toLowerCase().includes(q));
+  },[users,search]);
   useEffect(()=>{setHiIdx(0)},[filtered.length]);
   useEffect(()=>{
     if(!showList)return;
@@ -2269,7 +2278,10 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <Fl label="User">
             <div style={{position:"relative"}} ref={searchRef}>
-              {selUser&&!showList?(
+              {usersLoading?(
+                <div style={{padding:"7px 11px",borderRadius:6,background:T.card,border:"1px solid "+T.bd,
+                  color:T.mu,fontSize:11,fontFamily:T.m}}>Loading users...</div>
+              ):selUser&&!showList?(
                 <div onClick={()=>{setSelUser("");setSearch("");setShowList(true);setTimeout(()=>searchRef.current?.querySelector("input")?.focus(),50)}}
                   style={{padding:"7px 11px",borderRadius:6,background:T.cardH,border:"1px solid "+T.bd,color:T.tx,
                     fontSize:11,fontFamily:T.m,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -2278,7 +2290,7 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
               ):(
                 <In value={search} autoFocus={showList} onChange={e=>{setSearch(e.target.value);setShowList(true);setError("")}}
                   onFocus={()=>setShowList(true)} onKeyDown={handleSearchKey}
-                  placeholder={personnel.length+" users — type to search..."} autoComplete="off"/>
+                  placeholder={users.length?users.length+" users — type to search...":"Click to search users..."} autoComplete="off"/>
               )}
               {showList&&<div ref={listRef} style={{position:"absolute",top:"100%",left:0,right:0,marginTop:4,
                 background:T.panel,border:"1px solid "+T.bd,borderRadius:8,maxHeight:200,overflowY:"auto",zIndex:10,
@@ -2293,6 +2305,9 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
                       {p.title&&<span style={{color:T.dm,marginLeft:6,fontSize:10}}>{p.title}</span>}
                     </div>))}</div>}
             </div></Fl>
+          {fetchFailed&&!users.length&&<div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
+            <span style={{fontSize:11,color:T.am,fontFamily:T.m}}>Could not load users</span>
+            <Bt sm onClick={fetchUsers} style={{fontSize:10}}>Retry</Bt></div>}
           <Fl label="PIN">
             <div ref={pinWrapRef}><In type="password" value={pin} onChange={e=>{setPin(e.target.value);setError("")}}
               placeholder="Enter PIN" onKeyDown={e=>{if(e.key==="Enter")attempt()}} maxLength={6}/></div></Fl>
