@@ -988,7 +988,7 @@ function ReportsPage({kits,personnel,depts,comps,types,locs,logs,analytics}){
       
       {report==="custody"&&<div style={{marginBottom:16}}>
         <Fl label="Select Kit"><Sl options={[{v:"",l:"-- Select Kit --"},...kits.map(k=>({v:k.id,l:`Kit ${k.color}`}))]} 
-          value={custodyKit} onChange={e=>setCustodyKit(e.target.value)} style={{width:200}}/></Fl></div>}
+          value={custodyKit} onChange={e=>setCustodyKit(e.target.value)} style={{width:200,maxWidth:"100%"}}/></Fl></div>}
       
       <div style={{display:"flex",gap:8}}>
         <Bt v="primary" onClick={()=>{
@@ -1115,7 +1115,7 @@ function ReservationsPage({reservations,setReservations,kits,personnel,curUserId
     <SH title="Reservations" sub={pending.length+" pending approval | "+active.length+" total"}
       action={<Bt v="primary" onClick={()=>setMd("new")}>+ New Reservation</Bt>}/>
     
-    <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:20}}>
+    <div className="slate-grid-side" style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:20}}>
       {/* Calendar */}
       <div style={{padding:20,borderRadius:12,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
@@ -1400,7 +1400,7 @@ function AuditLogPage({logs,kits,personnel}){
   return(<div>
     <SH title="Audit Log" sub={logs.length+" events recorded"}/>
     <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-      <In value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Search..." style={{width:200}}/>
+      <In value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Search..." style={{width:200,maxWidth:"100%"}}/>
       <Sl options={[{v:"all",l:"All Actions"},...actions.map(a=>({v:a,l:a.replace("_"," ")}))]} value={actionFilter} onChange={e=>setActionFilter(e.target.value)}/></div>
     <div style={{display:"flex",flexDirection:"column",gap:4}}>
       {filtered.slice(0,100).map(l=>{const p=personnel.find(x=>x.id===l.by);return(
@@ -1605,7 +1605,7 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
   const isPrimarySuper=(id)=>primarySuper?.id===id;
 
   const save=async()=>{if(!fm.name.trim())return;
-    try{if(md==="add"){await api.personnel.create({name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||"1234"})}
+    try{if(md==="add"){await api.personnel.create({name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||"password"})}
     else{
       if(isPrimarySuper(md)&&fm.role!=="super"){alert("Cannot change role of primary administrator");return}
       const data={name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null};
@@ -1654,7 +1654,7 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
           <Fl label="Role"><Sl options={[{v:"user",l:"User"},{v:"admin",l:"Admin"},{v:"super",l:"Super Admin"}]} value={fm.role} onChange={e=>setFm(p=>({...p,role:e.target.value}))}
             disabled={isPrimarySuper(md)}/></Fl>
           <Fl label="Department"><Sl options={[{v:"",l:"-- None --"},...depts.map(d=>({v:d.id,l:d.name}))] } value={fm.deptId} onChange={e=>setFm(p=>({...p,deptId:e.target.value}))}/></Fl>
-          <Fl label="Login PIN"><In type="password" value={fm.pin} onChange={e=>setFm(p=>({...p,pin:e.target.value}))} placeholder={md==="add"?"1234":"unchanged"} maxLength={6}/></Fl></div>
+          <Fl label="Password"><In type="password" value={fm.pin} onChange={e=>setFm(p=>({...p,pin:e.target.value}))} placeholder={md==="add"?"password":"unchanged"}/></Fl></div>
         {isPrimarySuper(md)&&<div style={{padding:10,borderRadius:6,background:"rgba(239,68,68,.05)",border:"1px solid rgba(239,68,68,.1)"}}>
           <div style={{fontSize:10,color:T.rd,fontFamily:T.m}}>This is the primary administrator. Role cannot be changed.</div></div>}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add":"Save"}</Bt></div></div></ModalWrap>
@@ -1746,7 +1746,7 @@ function MyProfile({user,personnel,setPersonnel,kits,assets,depts,onRefreshPerso
   return(<div>
     <SH title="My Profile" sub="Your account settings"/>
     
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+    <div className="slate-grid-side" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
       {/* Profile Card */}
       <div style={{padding:24,borderRadius:12,background:T.card,border:"1px solid "+T.bd}}>
         {!editing?<>
@@ -1869,7 +1869,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
         {settings.enableQR!==false&&<Bt sm onClick={()=>setMd("qr-scan")}>Scan QR</Bt>}
         {(isAdmin||isSuper)&&<Bt v="primary" onClick={()=>setMd("adminIssue")}>Admin Issue</Bt>}</div>}/>
     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-      <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:200}}/>
+      <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:200,maxWidth:"100%"}}/>
       {["all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
         return <button key={v} onClick={()=>setView(v)} style={{all:"unset",cursor:"pointer",padding:"5px 12px",borderRadius:5,fontSize:10,fontFamily:T.m,fontWeight:600,
           background:view===v?"rgba(255,255,255,.08)":"transparent",color:view===v?T.tx:T.mu,border:"1px solid "+(view===v?T.bdH:T.bd)}}>{v} ({ct})</button>})}</div>
@@ -2014,13 +2014,13 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
           fontWeight:statusFilter===s.id?600:400,transition:"all .12s"}}>{s.l} ({s.ct})</button>)}</div>
     
     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
-      <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search kits, serials..." style={{width:200}}/>
+      <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search kits, serials..." style={{width:200,maxWidth:"100%"}}/>
       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
         <button onClick={()=>setLf("ALL")} style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:5,fontSize:9,fontFamily:T.m,fontWeight:600,
           background:lf==="ALL"?"rgba(255,255,255,.08)":"transparent",color:lf==="ALL"?T.tx:T.mu,border:"1px solid "+(lf==="ALL"?T.bdH:T.bd)}}>ALL ({kits.length})</button>
         {locs.map(l=><button key={l.id} onClick={()=>setLf(lf===l.id?"ALL":l.id)} style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:5,fontSize:9,fontFamily:T.m,
           background:lf===l.id?"rgba(255,255,255,.08)":"transparent",color:lf===l.id?T.tx:T.mu,border:"1px solid "+(lf===l.id?T.bdH:T.bd)}}>{l.sc} ({lc[l.id]||0})</button>)}</div></div>
-    <div style={{display:"grid",gridTemplateColumns:sel?"1fr 360px":"1fr",gap:0}}>
+    <div className="slate-grid-side" style={{display:"grid",gridTemplateColumns:sel?"1fr 360px":"1fr",gap:0}}>
       <div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
         {filt.map(kit=>{const st=stMeta(kit.lastChecked);const ty=types.find(t=>t.id===kit.typeId);const lo=locs.find(l=>l.id===kit.locId);
           const cEx=ty?expandComps(ty.compIds,ty.compQtys||{}):[];const iss=cEx.filter(e=>kit.comps[e.key]&&kit.comps[e.key]!=="GOOD");const isSel=selId===kit.id;
@@ -2394,14 +2394,14 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
             <div style={{fontSize:11,color:T.am,fontFamily:T.m,marginBottom:6}}>Could not load users</div>
             <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginBottom:8}}>{fetchError}</div>
             <Bt sm onClick={()=>{retriesRef.current=0;fetchUsers()}} style={{fontSize:10}}>Retry</Bt></div>}
-          <Fl label="PIN">
+          <Fl label="Password">
             <div ref={pinWrapRef}><In type="password" value={pin} onChange={e=>{setPin(e.target.value);setError("")}}
-              placeholder="Enter PIN" onKeyDown={e=>{if(e.key==="Enter")attempt()}} maxLength={6}/></div></Fl>
+              placeholder="Enter password" onKeyDown={e=>{if(e.key==="Enter")attempt()}}/></div></Fl>
           {error&&<div style={{fontSize:11,color:T.rd,fontFamily:T.m,textAlign:"center",padding:"8px 12px",borderRadius:6,
             background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)"}}>{error}</div>}
           <Bt v="primary" onClick={attempt} disabled={loading} style={{justifyContent:"center",padding:"11px 0",fontSize:13}}>{loading?"Signing in...":"Sign In"}</Bt>
-          <div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>Default PIN: 1234</div>
-          <div style={{fontSize:8,color:T.dm,fontFamily:T.m,textAlign:"center",opacity:.5,marginTop:4}}>build 2026-02-06b</div>
+          <div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>Default password: password</div>
+          <div style={{fontSize:8,color:T.dm,fontFamily:T.m,textAlign:"center",opacity:.5,marginTop:4}}>build 2026-02-06c</div>
         </div></div></div>);}
 
 export default function App(){
@@ -2419,6 +2419,9 @@ export default function App(){
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
   const[loginUsers,setLoginUsers]=useState([]);
   const[isDark,setIsDark]=useState(()=>localStorage.getItem("slate_theme")!=="light");
+  const[mobileNav,setMobileNav]=useState(false);
+  const[isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
+  useEffect(()=>{const h=()=>setIsMobile(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h)},[]);
   const toggleTheme=useCallback(()=>{setIsDark(d=>{const next=!d;applyTheme(next);return next})},[]);
 
   /* Load user list for login (public endpoint) */
@@ -2557,36 +2560,26 @@ export default function App(){
       <Bt v="primary" onClick={loadData}>Retry</Bt></div></div>);
   if(!user)return null;
 
-  return(
-    <div style={{display:"flex",minHeight:"100vh",background:T.bg,color:T.tx,fontFamily:T.u}}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-        @keyframes mdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        *{box-sizing:border-box}::selection{background:rgba(96,165,250,.3)}
-        ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}
-        ::-webkit-scrollbar-thumb{background:${T._scrollThumb};border-radius:3px}option{background:${T._optBg};color:${T._optColor}}
-      `}</style>
-      
-      <nav style={{width:200,flexShrink:0,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",display:"flex",flexDirection:"column",overflowY:"auto"}}>
+  const navContent=<>
         <div style={{padding:"0 16px 12px",borderBottom:"1px solid "+T.bd,marginBottom:8}}>
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
             <div style={{width:6,height:6,borderRadius:"50%",background:roleColor,boxShadow:"0 0 8px "+roleColor+"55"}}/>
             <span style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.5,color:roleColor,fontFamily:T.m,fontWeight:600}}>{roleLabel}</span></div>
           <div style={{fontSize:15,fontWeight:800,fontFamily:T.u,letterSpacing:-.3}}>Slate</div></div>
-        
-        <button onClick={()=>setSearchMd(true)} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
+
+        <button onClick={()=>{setSearchMd(true);setMobileNav(false)}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
           margin:"0 10px 10px",padding:"7px 12px",borderRadius:6,background:T.card,border:"1px solid "+T.bd,
           fontSize:10,color:T.mu,fontFamily:T.m}}>
           <span>⌕</span> Search...</button>
-        
-        {NAV_SECTIONS.map(section=><NavSection key={section.id} section={section} pg={pg} setPg={setPg}
+
+        {NAV_SECTIONS.map(section=><NavSection key={section.id} section={section} pg={pg} setPg={id=>{setPg(id);setMobileNav(false)}}
           collapsed={collapsedSections[section.id]} onToggle={()=>toggleSection(section.id)}
           canAccess={canAccess} getBadge={getBadge}/>)}
-        
+
         <div style={{flex:1,minHeight:20}}/>
-        
+
         {/* Profile button */}
-        <button onClick={()=>setPg("profile")} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:10,
+        <button onClick={()=>{setPg("profile");setMobileNav(false)}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:10,
           margin:"0 10px 8px",padding:"10px 12px",borderRadius:8,background:pg==="profile"?T.cardH:T.card,
           border:"1px solid "+(pg==="profile"?T.bdH:T.bd),transition:"all .12s"}}
           onMouseEnter={e=>{if(pg!=="profile")e.currentTarget.style.background=T.cardH}}
@@ -2608,13 +2601,53 @@ export default function App(){
             <span style={{fontSize:13}}>{isDark?"☀":"☾"}</span>{isDark?"Light Mode":"Dark Mode"}</button></div>
 
         <div style={{padding:"4px 12px 10px",borderTop:"1px solid "+T.bd,marginTop:4}}>
-          <button onClick={()=>{localStorage.removeItem('slate_token');localStorage.removeItem('slate_user');setIsLoggedIn(false);setDataLoaded(false);setCurUser(null);setPg("dashboard")}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+          <button onClick={()=>{localStorage.removeItem('slate_token');localStorage.removeItem('slate_user');setIsLoggedIn(false);setDataLoaded(false);setCurUser(null);setPg("dashboard");setMobileNav(false)}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
             width:"100%",padding:"7px 0",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:T.m,color:T.rd,
             background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)",transition:"all .15s",marginTop:6}}
             onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,.12)"}
-            onMouseLeave={e=>e.currentTarget.style.background="rgba(239,68,68,.06)"}>Sign Out</button></div></nav>
-      
-      <main style={{flex:1,padding:"20px 26px",overflowY:"auto",overflowX:"hidden"}}>
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(239,68,68,.06)"}>Sign Out</button></div></>;
+
+  return(
+    <div style={{display:"flex",flexDirection:isMobile?"column":"row",minHeight:"100vh",background:T.bg,color:T.tx,fontFamily:T.u}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        @keyframes mdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+        *{box-sizing:border-box}::selection{background:rgba(96,165,250,.3)}
+        ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:${T._scrollThumb};border-radius:3px}option{background:${T._optBg};color:${T._optColor}}
+        @media(max-width:767px){
+          .slate-grid-side{grid-template-columns:1fr!important}
+          .slate-grid-cards{grid-template-columns:1fr!important}
+          input,select{font-size:16px!important}
+        }
+      `}</style>
+
+      {/* Mobile top bar */}
+      {isMobile&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",background:T.panel,borderBottom:"1px solid "+T.bd,position:"sticky",top:0,zIndex:50}}>
+        <button onClick={()=>setMobileNav(v=>!v)} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+          width:36,height:36,borderRadius:8,background:T.card,border:"1px solid "+T.bd,fontSize:18,color:T.tx}}>☰</button>
+        <div style={{flex:1}}><div style={{fontSize:14,fontWeight:800,fontFamily:T.u,letterSpacing:-.3}}>Slate</div>
+          <div style={{fontSize:8,color:roleColor,fontFamily:T.m,fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>{roleLabel}</div></div>
+        <button onClick={()=>setSearchMd(true)} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+          width:36,height:36,borderRadius:8,background:T.card,border:"1px solid "+T.bd,fontSize:14,color:T.mu}}>⌕</button>
+        <button onClick={()=>{setPg("profile");setMobileNav(false)}} style={{all:"unset",cursor:"pointer",
+          width:28,height:28,borderRadius:14,background:roleColor+"22",border:"1px solid "+roleColor+"44",
+          display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:roleColor,fontFamily:T.m}}>
+          {user.name.split(" ").map(n=>n[0]).join("").slice(0,2)}</button></div>}
+
+      {/* Mobile nav drawer */}
+      {isMobile&&mobileNav&&<>
+        <div onClick={()=>setMobileNav(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:98}}/>
+        <nav style={{position:"fixed",top:0,left:0,bottom:0,width:260,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",
+          display:"flex",flexDirection:"column",overflowY:"auto",zIndex:99,animation:"slideIn .2s ease-out"}}>
+          {navContent}</nav></>}
+
+      {/* Desktop sidebar */}
+      {!isMobile&&<nav style={{width:200,flexShrink:0,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",display:"flex",flexDirection:"column",overflowY:"auto"}}>
+        {navContent}</nav>}
+
+      <main style={{flex:1,padding:isMobile?"14px 12px":"20px 26px",overflowY:"auto",overflowX:"hidden"}}>
         {pg==="dashboard"&&<Dash kits={kits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts} requests={requests}
           analytics={analytics} logs={logs} settings={settings} curUserId={curUser} favorites={favorites} setFavorites={setFavorites} onNavigate={handleNavigate} onAction={handleQuickAction} onFilterKits={handleFilterKits}/>}
         {pg==="kits"&&<KitInv kits={kits} setKits={setKits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts}

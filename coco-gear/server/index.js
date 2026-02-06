@@ -134,7 +134,7 @@ async function ensureDefaultUser() {
   try {
     const userCount = await prisma.user.count();
     if (userCount === 0) {
-      const pin = await bcrypt.hash('1234', 10);
+      const pin = await bcrypt.hash('password', 10);
       const user = await prisma.user.create({
         data: {
           name: 'Admin',
@@ -146,10 +146,10 @@ async function ensureDefaultUser() {
       console.log('');
       console.log('══════════════════════════════════════════════');
       console.log('  No users found — created default admin user');
-      console.log('  Name: Admin');
-      console.log('  PIN:  1234');
-      console.log('  Role: super');
-      console.log('  ** Change this PIN after first login **');
+      console.log('  Name:     Admin');
+      console.log('  Password: password');
+      console.log('  Role:     super');
+      console.log('  ** Change this password after first login **');
       console.log('══════════════════════════════════════════════');
       console.log('');
     }

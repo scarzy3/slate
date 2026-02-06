@@ -3,7 +3,7 @@ import { z } from 'zod';
 // ─── Auth ───
 export const loginSchema = z.object({
   userId: z.string().uuid(),
-  pin: z.string().min(1).max(6),
+  pin: z.string().min(1).max(128),
 });
 
 // ─── Component ───
@@ -67,7 +67,7 @@ export const personnelSchema = z.object({
   title: z.string().max(200).optional().default(''),
   role: z.enum(['super', 'admin', 'user']).default('user'),
   deptId: z.string().uuid().nullable().optional(),
-  pin: z.string().min(1).max(6).optional().default('1234'),
+  pin: z.string().min(1).max(128).optional().default('password'),
 });
 
 export const personnelUpdateSchema = z.object({
@@ -75,7 +75,7 @@ export const personnelUpdateSchema = z.object({
   title: z.string().max(200).optional(),
   role: z.enum(['super', 'admin', 'user']).optional(),
   deptId: z.string().uuid().nullable().optional(),
-  pin: z.string().min(1).max(6).optional(),
+  pin: z.string().min(1).max(128).optional(),
 });
 
 // ─── Consumable ───
