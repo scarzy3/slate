@@ -2452,6 +2452,7 @@ export default function App(){
   const[mobileNav,setMobileNav]=useState(false);
   const[isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
   useEffect(()=>{const h=()=>setIsMobile(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h)},[]);
+  useEffect(()=>{if(mobileNav){document.body.style.overflow="hidden";document.body.style.position="fixed";document.body.style.width="100%";document.body.style.top=`-${window.scrollY}px`}else{const top=document.body.style.top;document.body.style.overflow="";document.body.style.position="";document.body.style.width="";document.body.style.top="";if(top)window.scrollTo(0,-parseInt(top))}return()=>{document.body.style.overflow="";document.body.style.position="";document.body.style.width="";document.body.style.top=""}},[mobileNav]);
   const toggleTheme=useCallback(()=>{setIsDark(d=>{const next=!d;applyTheme(next);return next})},[]);
 
   /* Load user list for login (public endpoint) */
@@ -2673,9 +2674,9 @@ export default function App(){
 
       {/* Mobile nav drawer */}
       {isMobile&&mobileNav&&<>
-        <div onClick={()=>setMobileNav(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:98}}/>
+        <div onClick={()=>setMobileNav(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:98,touchAction:"none"}}/>
         <nav style={{position:"fixed",top:0,left:0,bottom:0,width:260,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",
-          display:"flex",flexDirection:"column",overflowY:"auto",zIndex:99,animation:"slideIn .2s ease-out"}}>
+          display:"flex",flexDirection:"column",overflowY:"auto",overflowX:"hidden",zIndex:99,animation:"slideIn .2s ease-out",touchAction:"pan-y",WebkitOverflowScrolling:"touch"}}>
           {navContent}</nav></>}
 
       {/* Desktop sidebar */}
