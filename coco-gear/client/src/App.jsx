@@ -2374,10 +2374,10 @@ function NavSection({section,pg,setPg,collapsed,onToggle,canAccess,getBadge}){
 
 /* ═══════════ LOGIN SCREEN ═══════════ */
 function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
-  const[selUser,setSelUser]=useState("");const[pin,setPin]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
-  const[search,setSearch]=useState("");const[showList,setShowList]=useState(false);const[hiIdx,setHiIdx]=useState(0);
+  const[nameVal,setNameVal]=useState("");const[pin,setPin]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
+  const[showList,setShowList]=useState(false);const[hiIdx,setHiIdx]=useState(0);
   const[users,setUsers]=useState(personnel||[]);const[usersLoading,setUsersLoading]=useState(true);const[fetchError,setFetchError]=useState("");
-  const searchRef=useRef(null);const listRef=useRef(null);const pinWrapRef=useRef(null);const retriesRef=useRef(0);
+  const nameRef=useRef(null);const listRef=useRef(null);const pwRef=useRef(null);const retriesRef=useRef(0);const formRef=useRef(null);
   const fetchUsers=useCallback(()=>{
     setUsersLoading(true);setFetchError("");
     fetch('/api/auth/users').then(r=>{
@@ -2395,30 +2395,35 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
   },[]);
   useEffect(()=>{fetchUsers()},[fetchUsers]);
   useEffect(()=>{if(personnel?.length&&!users.length)setUsers(personnel)},[personnel,users.length]);
-  const selectedUser=users.find(p=>p.id===selUser);
+  const resolveUser=(name)=>{if(!name)return null;const q=name.trim().toLowerCase();return users.find(p=>p.name.toLowerCase()===q)};
+  const matchedUser=resolveUser(nameVal);
   const filtered=useMemo(()=>{
-    if(!search)return users;
-    const q=search.toLowerCase();
+    if(!nameVal)return users;
+    const q=nameVal.toLowerCase();
     return users.filter(p=>p.name.toLowerCase().includes(q)||p.role.toLowerCase().includes(q)||(p.title||"").toLowerCase().includes(q));
-  },[users,search]);
+  },[users,nameVal]);
   useEffect(()=>{setHiIdx(0)},[filtered.length]);
   useEffect(()=>{
     if(!showList)return;
-    const h=e=>{if(searchRef.current&&!searchRef.current.contains(e.target)&&listRef.current&&!listRef.current.contains(e.target))setShowList(false)};
+    const h=e=>{if(nameRef.current&&!nameRef.current.contains(e.target)&&listRef.current&&!listRef.current.contains(e.target))setShowList(false)};
     document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);
   },[showList]);
-  const pickUser=(p)=>{setSelUser(p.id);setSearch("");setShowList(false);setError("");setTimeout(()=>pinWrapRef.current?.querySelector("input")?.focus(),50)};
-  const handleSearchKey=(e)=>{
+  const pickUser=(p)=>{setNameVal(p.name);setShowList(false);setError("");setTimeout(()=>pwRef.current?.focus(),50)};
+  const handleNameKey=(e)=>{
+    if(!showList)return;
     if(e.key==="ArrowDown"){e.preventDefault();setHiIdx(i=>Math.min(i+1,filtered.length-1))}
     else if(e.key==="ArrowUp"){e.preventDefault();setHiIdx(i=>Math.max(i-1,0))}
-    else if(e.key==="Enter"&&filtered[hiIdx]){e.preventDefault();pickUser(filtered[hiIdx])}
+    else if(e.key==="Enter"&&filtered.length>0&&showList){e.preventDefault();pickUser(filtered[hiIdx])}
     else if(e.key==="Escape"){setShowList(false)}};
   const attempt=async()=>{
-    if(!selUser){setError("Select a user");return}
+    const resolved=resolveUser(nameVal);
+    if(!resolved){
+      if(nameVal.trim()){setError("User not found. Select from the list.")}else{setError("Enter your name")}return}
     setLoading(true);setError("");
-    try{await onLogin(selUser,pin)}
+    try{await onLogin(resolved.id,pin)}
     catch(e){setError(e.message||"Login failed")}
     finally{setLoading(false)}};
+  const handleSubmit=(e)=>{e.preventDefault();attempt()};
   return(
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
       <style>{`
@@ -2439,24 +2444,25 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
             display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:22,fontWeight:800,color:T.bl,fontFamily:T.u}}>S</div>
           <div style={{fontSize:24,fontWeight:800,color:T.tx,letterSpacing:-.5}}>Slate</div>
           <div style={{fontSize:11,color:T.mu,fontFamily:T.m,marginTop:4}}>Equipment Management System</div></div>
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <Fl label="User">
-            <div style={{position:"relative"}} ref={searchRef}>
+        <form ref={formRef} onSubmit={handleSubmit} autoComplete="on" style={{display:"flex",flexDirection:"column",gap:16}}>
+          <Fl label="Name">
+            <div style={{position:"relative"}} ref={nameRef}>
               {usersLoading?(
                 <div style={{padding:"7px 11px",borderRadius:6,background:T.card,border:"1px solid "+T.bd,
                   color:T.mu,fontSize:11,fontFamily:T.m}}>Loading users...</div>
-              ):selUser&&!showList?(
-                <div onClick={()=>{setSelUser("");setSearch("");setShowList(true);setTimeout(()=>searchRef.current?.querySelector("input")?.focus(),50)}}
-                  style={{padding:"7px 11px",borderRadius:6,background:T.cardH,border:"1px solid "+T.bd,color:T.tx,
-                    fontSize:11,fontFamily:T.m,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <span>{selectedUser?.name} <span style={{color:T.mu}}>[{selectedUser?.role}]</span></span>
-                  <span style={{color:T.dm,fontSize:9}}>change</span></div>
               ):(
-                <In value={search} autoFocus={showList} onChange={e=>{setSearch(e.target.value);setShowList(true);setError("")}}
-                  onFocus={()=>setShowList(true)} onKeyDown={handleSearchKey}
-                  placeholder={users.length?users.length+" users — type to search...":"Click to search users..."} autoComplete="off"/>
+                <>
+                <input type="text" name="username" autoComplete="username" value={nameVal}
+                  onChange={e=>{setNameVal(e.target.value);if(e.target.value)setShowList(true);setError("")}}
+                  onFocus={()=>{if(nameVal||users.length)setShowList(true)}} onKeyDown={handleNameKey}
+                  placeholder={users.length?users.length+" users — type to search...":"Enter your name..."}
+                  style={{width:"100%",padding:"7px 11px",borderRadius:6,background:T.card,border:"1px solid "+(matchedUser?T.gn:T.bd),color:T.tx,
+                    fontSize:11,fontFamily:T.m,outline:"none",transition:"border .15s"}}/>
+                {matchedUser&&!showList&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                  fontSize:9,color:T.gn,fontFamily:T.m,pointerEvents:"none"}}>{matchedUser.role}</div>}
+                </>
               )}
-              {showList&&<div ref={listRef} style={{position:"absolute",top:"100%",left:0,right:0,marginTop:4,
+              {showList&&!usersLoading&&<div ref={listRef} style={{position:"absolute",top:"100%",left:0,right:0,marginTop:4,
                 background:T.panel,border:"1px solid "+T.bd,borderRadius:8,maxHeight:200,overflowY:"auto",zIndex:10,
                 boxShadow:"0 8px 24px rgba(0,0,0,.25)"}}>
                 {filtered.length===0?<div style={{padding:"10px 12px",fontSize:11,color:T.mu,fontFamily:T.m}}>No users found</div>:
@@ -2475,14 +2481,17 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
             <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginBottom:8}}>{fetchError}</div>
             <Bt sm onClick={()=>{retriesRef.current=0;fetchUsers()}} style={{fontSize:10}}>Retry</Bt></div>}
           <Fl label="Password">
-            <div ref={pinWrapRef}><In type="password" value={pin} onChange={e=>{setPin(e.target.value);setError("")}}
-              placeholder="Enter password" onKeyDown={e=>{if(e.key==="Enter")attempt()}}/></div></Fl>
+            <input ref={pwRef} type="password" name="password" autoComplete="current-password" value={pin}
+              onChange={e=>{setPin(e.target.value);setError("")}}
+              placeholder="Enter password"
+              style={{width:"100%",padding:"7px 11px",borderRadius:6,background:T.card,border:"1px solid "+T.bd,color:T.tx,
+                fontSize:11,fontFamily:T.m,outline:"none",transition:"border .15s"}}/></Fl>
           {error&&<div style={{fontSize:11,color:T.rd,fontFamily:T.m,textAlign:"center",padding:"8px 12px",borderRadius:6,
             background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)"}}>{error}</div>}
           <Bt v="primary" onClick={attempt} disabled={loading} style={{justifyContent:"center",padding:"11px 0",fontSize:13}}>{loading?"Signing in...":"Sign In"}</Bt>
           <div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>Default password: password</div>
-          <div style={{fontSize:8,color:T.dm,fontFamily:T.m,textAlign:"center",opacity:.5,marginTop:4}}>build 2026-02-06d</div>
-        </div></div></div>);}
+          <div style={{fontSize:8,color:T.dm,fontFamily:T.m,textAlign:"center",opacity:.5,marginTop:4}}>build 2026-02-06e</div>
+        </form></div></div>);}
 
 /* ═══════════ SET NEW PASSWORD SCREEN ═══════════ */
 function SetPasswordScreen({userName,onSubmit,onLogout,isDark,toggleTheme}){
@@ -2680,7 +2689,7 @@ export default function App(){
     <div style={{textAlign:"center",maxWidth:400}}><div style={{fontSize:18,fontWeight:700,color:T.rd,marginBottom:8}}>Connection Error</div>
       <div style={{fontSize:11,color:T.mu,fontFamily:T.m,marginBottom:16}}>{loadError}</div>
       <Bt v="primary" onClick={loadData}>Retry</Bt></div></div>);
-  if(!user)return null;
+  if(!user){authCtx.logout();setDataLoaded(false);setCurUser(null);return null;}
 
   const navContent=<>
         <div style={{padding:"0 16px 12px",borderBottom:"1px solid "+T.bd,marginBottom:8}}>
