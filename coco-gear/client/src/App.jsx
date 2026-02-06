@@ -2346,6 +2346,7 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
         *{box-sizing:border-box}::selection{background:${T._selBg}}
         option{background:${T._optBg};color:${T._optColor}}
+        @media(max-width:767px){input,select{font-size:16px!important}}
       `}</style>
       <div style={{width:"92%",maxWidth:380,padding:"28px 24px",borderRadius:16,background:T.panel,border:"1px solid "+T.bd,animation:"mdIn .25s ease-out",position:"relative"}}>
         <style>{`@keyframes mdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
@@ -2439,7 +2440,7 @@ export default function App(){
   const[comps,setComps]=useState([]);const[types,setTypes]=useState([]);const[locs,setLocs]=useState([]);
   const[depts,setDepts]=useState([]);const[personnel,setPersonnel]=useState([]);
   const[kits,setKits]=useState([]);
-  const[curUser,setCurUser]=useState(null);const[isLoggedIn,setIsLoggedIn]=useState(!!authCtx.token);const[mustChangePw,setMustChangePw]=useState(false);const[settings,setSettings]=useState(DEF_SETTINGS);
+  const[curUser,setCurUser]=useState(null);const[mustChangePw,setMustChangePw]=useState(false);const[settings,setSettings]=useState(DEF_SETTINGS);
   const[requests,setRequests]=useState([]);const[logs,setLogs]=useState([]);
   const[reservations,setReservations]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[favorites,setFavorites]=useState([]);
@@ -2454,7 +2455,7 @@ export default function App(){
   const toggleTheme=useCallback(()=>{setIsDark(d=>{const next=!d;applyTheme(next);return next})},[]);
 
   /* Load user list for login (public endpoint) */
-  useEffect(()=>{if(!isLoggedIn){fetch('/api/auth/users').then(r=>r.ok?r.json():[]).then(setLoginUsers).catch(()=>{})}}, [isLoggedIn]);
+  useEffect(()=>{if(!authCtx.token){fetch('/api/auth/users').then(r=>r.ok?r.json():[]).then(setLoginUsers).catch(()=>{})}}, [authCtx.token]);
 
   /* Transform API component data to frontend format */
   const xformComp=c=>({id:c.id,key:c.key,label:c.label,cat:c.category,ser:c.serialized,calibrationRequired:c.calibrationRequired,calibrationIntervalDays:c.calibrationIntervalDays});
@@ -2498,7 +2499,7 @@ export default function App(){
     }catch(e){setLoadError(e.message||"Failed to load data");console.error("Load error:",e)}
   },[]);
 
-  useEffect(()=>{if(isLoggedIn&&authCtx.user)loadData()},[isLoggedIn,authCtx.user]);
+  useEffect(()=>{if(authCtx.token&&authCtx.user&&!mustChangePw)loadData()},[authCtx.token,authCtx.user,mustChangePw]);
 
   /* Helper: refresh specific data after mutations */
   const refreshKits=async()=>{try{const d=await api.kits.list();setKits(d.map(xformKit))}catch(e){}};
@@ -2578,12 +2579,12 @@ export default function App(){
     else if(result.type==="person"){setPg("personnel")}
     setSearchMd(false)};
 
-  if(!isLoggedIn||!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme} onLogin={async(userId,pin)=>{
+  if(!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme} onLogin={async(userId,pin)=>{
     const userData=await authCtx.login(userId,pin);setCurUser(userData.id);
-    if(userData.mustChangePassword){setMustChangePw(true)}else{setIsLoggedIn(true)}}}/>;
-  if(mustChangePw&&!isLoggedIn)return <SetPasswordScreen userName={authCtx.user?.name||"User"} isDark={isDark} toggleTheme={toggleTheme}
+    if(userData.mustChangePassword)setMustChangePw(true)}}/>;
+  if(mustChangePw)return <SetPasswordScreen userName={authCtx.user?.name||"User"} isDark={isDark} toggleTheme={toggleTheme}
     onLogout={()=>{authCtx.logout();setMustChangePw(false);setCurUser(null)}}
-    onSubmit={async(newPw)=>{await api.auth.changePassword(newPw);authCtx.setUser({...authCtx.user,mustChangePassword:false});setMustChangePw(false);setIsLoggedIn(true)}}/>;
+    onSubmit={async(newPw)=>{await api.auth.changePassword(newPw);authCtx.setUser({...authCtx.user,mustChangePassword:false});setMustChangePw(false)}}/>;
   if(!dataLoaded&&!loadError)return(<div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
     <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:T.tx,marginBottom:8}}>Loading Slate...</div>
       <div style={{fontSize:11,color:T.mu,fontFamily:T.m}}>Connecting to server</div></div></div>);
@@ -2634,19 +2635,20 @@ export default function App(){
             <span style={{fontSize:13}}>{isDark?"☀":"☾"}</span>{isDark?"Light Mode":"Dark Mode"}</button></div>
 
         <div style={{padding:"4px 12px 10px",borderTop:"1px solid "+T.bd,marginTop:4}}>
-          <button onClick={()=>{localStorage.removeItem('slate_token');localStorage.removeItem('slate_user');setIsLoggedIn(false);setDataLoaded(false);setCurUser(null);setPg("dashboard");setMobileNav(false)}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+          <button onClick={()=>{authCtx.logout();setDataLoaded(false);setCurUser(null);setPg("dashboard");setMobileNav(false)}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
             width:"100%",padding:"7px 0",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:T.m,color:T.rd,
             background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)",transition:"all .15s",marginTop:6}}
             onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,.12)"}
             onMouseLeave={e=>e.currentTarget.style.background="rgba(239,68,68,.06)"}>Sign Out</button></div></>;
 
   return(
-    <div style={{display:"flex",flexDirection:isMobile?"column":"row",minHeight:"100vh",background:T.bg,color:T.tx,fontFamily:T.u}}>
+    <div style={{display:"flex",flexDirection:isMobile?"column":"row",minHeight:"100vh",background:T.bg,color:T.tx,fontFamily:T.u,overflowX:"hidden",width:"100%"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
         @keyframes mdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         @keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
         *{box-sizing:border-box}::selection{background:rgba(96,165,250,.3)}
+        html,body{overflow-x:hidden;width:100%}
         ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:${T._scrollThumb};border-radius:3px}option{background:${T._optBg};color:${T._optColor}}
         @media(max-width:767px){
