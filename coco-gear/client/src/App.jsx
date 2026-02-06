@@ -219,12 +219,12 @@ function Tg({checked,onChange}){return(
 function ModalWrap({open,onClose,title,wide,children}){if(!open)return null;return(
   <div style={{position:"fixed",inset:0,zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
     <div style={{position:"absolute",inset:0,background:T._isDark?"rgba(0,0,0,.72)":"rgba(0,0,0,.35)",backdropFilter:"blur(6px)"}}/>
-    <div onClick={e=>e.stopPropagation()} style={{position:"relative",width:wide?"min(900px,95vw)":"min(530px,95vw)",maxHeight:"92vh",
+    <div onClick={e=>e.stopPropagation()} style={{position:"relative",width:wide?"min(95vw,900px)":"min(95vw,530px)",maxHeight:"92vh",
       background:T.panel,border:"1px solid "+T.bdH,borderRadius:14,display:"flex",flexDirection:"column",animation:"mdIn .18s ease-out",overflow:"hidden"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 22px",borderBottom:"1px solid "+T.bd}}>
-        <h3 style={{margin:0,fontSize:16,fontWeight:700,fontFamily:T.u,color:T.tx}}>{title}</h3>
-        <button onClick={onClose} style={{all:"unset",cursor:"pointer",color:T.mu,fontSize:16,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:5,background:T.card}}>×</button></div>
-      <div style={{padding:"18px 22px",overflowY:"auto",flex:1}}>{children}</div></div></div>);}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderBottom:"1px solid "+T.bd,gap:8}}>
+        <h3 style={{margin:0,fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx,flex:1,minWidth:0}}>{title}</h3>
+        <button onClick={onClose} style={{all:"unset",cursor:"pointer",color:T.mu,fontSize:16,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:5,background:T.card,flexShrink:0}}>×</button></div>
+      <div style={{padding:"16px",overflowY:"auto",flex:1}}>{children}</div></div></div>);}
 
 /* Confirmation Dialog for dangerous actions */
 function ConfirmDialog({open,onClose,onConfirm,title,message,confirmLabel="Delete",confirmColor=T.rd}){
@@ -238,12 +238,12 @@ function ConfirmDialog({open,onClose,onConfirm,title,message,confirmLabel="Delet
           display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.rd}}>⚠</div>
         <div style={{flex:1}}><div style={{fontSize:16,fontWeight:700,color:T.tx,fontFamily:T.u}}>{title}</div></div></div>
       <div style={{fontSize:12,color:T.mu,fontFamily:T.m,marginBottom:20,lineHeight:1.5}}>{message}</div>
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
         <Bt onClick={onClose}>Cancel</Bt>
         <Bt v="danger" onClick={()=>{onConfirm();onClose()}}>{confirmLabel}</Bt></div></div></div>);}
 
 function SH({title,sub,action}){return(
-  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,gap:12,flexWrap:"wrap"}}>
     <div><h2 style={{margin:0,fontSize:18,fontWeight:700,fontFamily:T.u,color:T.tx}}>{title}</h2>
       {sub&&<p style={{margin:"3px 0 0",fontSize:11,color:T.mu,fontFamily:T.m}}>{sub}</p>}</div>{action}</div>);}
 function DeptBg({dept}){if(!dept)return null;return <Bg color={dept.color||T.mu} bg={(dept.color||T.mu)+"18"}>{dept.name}</Bg>;}
@@ -700,7 +700,7 @@ function AnalyticsPage({analytics,kits,personnel,depts,comps,types,locs}){
             <BarChart data={analytics.last7.map(d=>({label:d.date.slice(5),value:d.inspections}))} height={80} color={T.tl}/></div></div></div>
       
       {/* Fleet Status Donut */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
         <div style={{padding:18,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
           <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Fleet Status</div>
           <div style={{display:"flex",alignItems:"center",gap:20}}>
@@ -724,7 +724,7 @@ function AnalyticsPage({analytics,kits,personnel,depts,comps,types,locs}){
     
     {tab==="utilization"&&<div style={{display:"flex",flexDirection:"column",gap:20}}>
       {/* Most/Least Used */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
         <div style={{padding:18,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
           <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Most Used Kits</div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -808,7 +808,7 @@ function AnalyticsPage({analytics,kits,personnel,depts,comps,types,locs}){
     
     {tab==="departments"&&<div style={{display:"flex",flexDirection:"column",gap:20}}>
       {/* Department performance cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(280px,100%),1fr))",gap:12}}>
         {analytics.deptStats.map(d=><div key={d.dept.id} style={{padding:18,borderRadius:10,background:T.card,border:"1px solid "+T.bd,borderLeft:"4px solid "+d.dept.color}}>
           <div style={{fontSize:14,fontWeight:700,color:T.tx,fontFamily:T.u,marginBottom:10}}>{d.dept.name}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
@@ -972,7 +972,7 @@ function ReportsPage({kits,personnel,depts,comps,types,locs,logs,analytics}){
   
   return(<div>
     <SH title="Reports" sub="Generate and export reports"/>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:10,marginBottom:20}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(240px,100%),1fr))",gap:10,marginBottom:20}}>
       {reports.map(r=><button key={r.id} onClick={()=>setReport(r.id)} style={{all:"unset",cursor:"pointer",padding:16,borderRadius:10,
         background:report===r.id?"rgba(96,165,250,.08)":T.card,border:report===r.id?"1px solid rgba(96,165,250,.25)":"1px solid "+T.bd,transition:"all .15s"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
@@ -1028,7 +1028,7 @@ function MaintenancePage({kits,setKits,types,locs,personnel,addLog,curUserId,onS
     
     {inMaint.length>0&&<div style={{marginBottom:24}}>
       <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.am,fontFamily:T.m,marginBottom:10}}>Currently in Maintenance</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:10}}>
         {inMaint.map(k=>{const ty=types.find(t=>t.id===k.typeId);const lo=locs.find(l=>l.id===k.locId);
           const cur=k.maintenanceHistory[k.maintenanceHistory.length-1];const startedBy=cur?personnel.find(p=>p.id===cur.startedBy):null;
           return(<div key={k.id} style={{padding:16,borderRadius:10,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.15)"}}>
@@ -1276,7 +1276,7 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
       
       {issuedAssets.length>0&&<div style={{marginBottom:20}}>
         <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.pk,fontFamily:T.m,marginBottom:10}}>Checked Out ({issuedAssets.length})</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(280px,100%),1fr))",gap:8}}>
           {issuedAssets.map(a=>{const person=personnel.find(p=>p.id===a.issuedTo);const isMine=a.issuedTo===curUserId;
             const lastIssue=a.issueHistory[a.issueHistory.length-1];
             return(<div key={a.id} style={{padding:14,borderRadius:8,background:isMine?"rgba(244,114,182,.03)":T.card,border:isMine?"1px solid rgba(244,114,182,.15)":"1px solid "+T.bd}}>
@@ -1293,7 +1293,7 @@ function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,
                 <Bt sm v="ind" onClick={()=>setMd("qr-asset:"+a.id)}>QR</Bt></div></div>)})}</div></div>}
       
       <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.gn,fontFamily:T.m,marginBottom:10}}>Available ({availAssets.length})</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(280px,100%),1fr))",gap:8}}>
         {availAssets.map(a=>{const loc=a.locId?locs.find(l=>l.id===a.locId):null;return(
           <div key={a.id} style={{padding:14,borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
@@ -1439,7 +1439,7 @@ function CompAdmin({comps,setComps,types,onRefreshComps}){
       action={<Bt v="primary" onClick={()=>{setFm({key:"",label:"",cat:"Comms",ser:false,calibrationRequired:false,calibrationIntervalDays:""});setMd("add")}}>+ Add</Bt>}/>
     {Object.entries(grouped).map(([cat,items])=><div key={cat} style={{marginBottom:20}}>
       <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.5,color:T.mu,fontFamily:T.m,marginBottom:8}}>{cat} ({items.length})</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:6}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(280px,100%),1fr))",gap:6}}>
         {items.map(c=>{const inUse=types?.filter(t=>t.compIds.includes(c.id)).length||0;return(
           <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
           <div style={{width:6,height:6,borderRadius:3,background:c.ser?T.am:T.ind,flexShrink:0}}/>
@@ -1487,7 +1487,7 @@ function TypeAdmin({types,setTypes,comps,kits,onRefreshTypes}){
   const doDelete=async()=>{if(deleteConfirm){try{await api.types.delete(deleteConfirm.id);await onRefreshTypes()}catch(e){alert(e.message)}}};
   return(<div>
     <SH title="Kit Types" sub={types.length+" templates"} action={<Bt v="primary" onClick={()=>{setFm({name:"",desc:"",compIds:[],compQtys:{},fields:[]});setMd("add")}}>+ Add</Bt>}/>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:12}}>
       {types.map(t=>{const sc=t.compIds.filter(id=>comps.find(c=>c.id===id&&c.ser)).length;const inUse=kits?.filter(k=>k.typeId===t.id).length||0;const tc=totalExpanded(t.compIds,t.compQtys||{});return(
         <div key={t.id} style={{padding:18,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
@@ -1545,7 +1545,7 @@ function LocAdmin({locs,setLocs,kits,onRefreshLocs}){
   const doDelete=async()=>{if(deleteConfirm){try{await api.locations.delete(deleteConfirm.id);await onRefreshLocs()}catch(e){alert(e.message)}}};
   return(<div>
     <SH title="Locations" sub={locs.length+" locations"} action={<Bt v="primary" onClick={()=>{setFm({name:"",sc:""});setMd("add")}}>+ Add</Bt>}/>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(240px,100%),1fr))",gap:8}}>
       {locs.map(l=>{const n=kits.filter(k=>k.locId===l.id).length;return(
         <div key={l.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
           <div style={{width:32,height:32,borderRadius:6,background:"rgba(45,212,191,.08)",border:"1px solid rgba(45,212,191,.2)",
@@ -1577,7 +1577,7 @@ function DeptAdmin({depts,setDepts,personnel,kits,onRefreshDepts}){
   const dColors=["#60a5fa","#818cf8","#a78bfa","#f472b6","#fb923c","#4ade80","#2dd4bf","#fbbf24","#f87171","#22d3ee"];
   return(<div>
     <SH title="Departments" sub={depts.length+" departments"} action={<Bt v="primary" onClick={()=>{setFm({name:"",color:T.bl,headId:""});setMd("add")}}>+ Add</Bt>}/>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(280px,100%),1fr))",gap:10}}>
       {depts.map(d=>{const head=d.headId?personnel.find(p=>p.id===d.headId):null;const dKits=kits.filter(k=>k.deptId===d.id);const dPers=personnel.filter(p=>p.deptId===d.id);
         return(<div key={d.id} style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd,borderLeft:"3px solid "+d.color}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
@@ -1631,7 +1631,7 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
         {dept&&<div style={{width:4,height:16,borderRadius:2,background:dept.color}}/>}
         <span style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.5,color:dept?.color||T.mu,fontFamily:T.m}}>{deptName} ({members.length})</span></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:6}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:6}}>
         {members.map(p=>{const ik=kits.filter(k=>k.issuedTo===p.id);const isProtected=isPrimarySuper(p.id);return(
           <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:8,background:T.card,border:"1px solid "+(isProtected?"rgba(239,68,68,.2)":T.bd)}}>
             <div style={{width:32,height:32,borderRadius:16,background:(rc[p.role])+"18",border:"1px solid "+(rc[p.role])+"44",
@@ -1873,7 +1873,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
       {["all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
         return <button key={v} onClick={()=>setView(v)} style={{all:"unset",cursor:"pointer",padding:"5px 12px",borderRadius:5,fontSize:10,fontFamily:T.m,fontWeight:600,
           background:view===v?"rgba(255,255,255,.08)":"transparent",color:view===v?T.tx:T.mu,border:"1px solid "+(view===v?T.bdH:T.bd)}}>{v} ({ct})</button>})}</div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:8}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(320px,100%),1fr))",gap:8}}>
       {filt.map(kit=>{const person=kit.issuedTo?personnel.find(p=>p.id===kit.issuedTo):null;const lo=locs.find(l=>l.id===kit.locId);const ty=types.find(t=>t.id===kit.typeId);
         const st=stMeta(kit.lastChecked);const isMine=kit.issuedTo===curUserId;const dept=kit.deptId?depts.find(d=>d.id===kit.deptId):null;const na=needsApproval(kit);const inMaint=kit.maintenanceStatus;
         return(<div key={kit.id} style={{padding:14,borderRadius:8,background:isMine?"rgba(244,114,182,.02)":T.card,border:isMine?"1px solid rgba(244,114,182,.15)":"1px solid "+T.bd}}>
@@ -2021,7 +2021,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
         {locs.map(l=><button key={l.id} onClick={()=>setLf(lf===l.id?"ALL":l.id)} style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:5,fontSize:9,fontFamily:T.m,
           background:lf===l.id?"rgba(255,255,255,.08)":"transparent",color:lf===l.id?T.tx:T.mu,border:"1px solid "+(lf===l.id?T.bdH:T.bd)}}>{l.sc} ({lc[l.id]||0})</button>)}</div></div>
     <div className="slate-grid-side" style={{display:"grid",gridTemplateColumns:sel?"1fr 360px":"1fr",gap:0}}>
-      <div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
+      <div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(240px,100%),1fr))",gap:8}}>
         {filt.map(kit=>{const st=stMeta(kit.lastChecked);const ty=types.find(t=>t.id===kit.typeId);const lo=locs.find(l=>l.id===kit.locId);
           const cEx=ty?expandComps(ty.compIds,ty.compQtys||{}):[];const iss=cEx.filter(e=>kit.comps[e.key]&&kit.comps[e.key]!=="GOOD");const isSel=selId===kit.id;
           const person=kit.issuedTo?personnel.find(p=>p.id===kit.issuedTo):null;const dept=kit.deptId?depts.find(d=>d.id===kit.deptId):null;const isFav=favorites.includes(kit.id);
@@ -2207,7 +2207,7 @@ function Dash({kits,types,locs,personnel,depts,requests,analytics,logs,settings,
       <StatCard label="Overdue" value={overdueCt} color={overdueCt?T.rd:T.gn} onClick={()=>onFilterKits("overdue")}/>
       <StatCard label="Pending" value={pendCt} color={pendCt?T.or:T.gn} onClick={pendCt?()=>onNavigate("approvals"):undefined}/></div>
     
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+    <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
       {/* Alerts */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
@@ -2225,7 +2225,7 @@ function Dash({kits,types,locs,personnel,depts,requests,analytics,logs,settings,
         <ActivityFeed logs={logs} kits={kits} personnel={personnel} limit={8}/></div></div>
     
     {/* Location breakdown */}
-    <div style={{marginTop:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+    <div className="slate-resp" style={{marginTop:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>By Location</div>
         {locs.map(l=>{const lk=kits.filter(k=>k.locId===l.id);if(!lk.length)return null;return(
@@ -2401,8 +2401,37 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
             background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)"}}>{error}</div>}
           <Bt v="primary" onClick={attempt} disabled={loading} style={{justifyContent:"center",padding:"11px 0",fontSize:13}}>{loading?"Signing in...":"Sign In"}</Bt>
           <div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>Default password: password</div>
-          <div style={{fontSize:8,color:T.dm,fontFamily:T.m,textAlign:"center",opacity:.5,marginTop:4}}>build 2026-02-06c</div>
+          <div style={{fontSize:8,color:T.dm,fontFamily:T.m,textAlign:"center",opacity:.5,marginTop:4}}>build 2026-02-06d</div>
         </div></div></div>);}
+
+/* ═══════════ SET NEW PASSWORD SCREEN ═══════════ */
+function SetPasswordScreen({userName,onSubmit,onLogout,isDark,toggleTheme}){
+  const[pw,setPw]=useState("");const[pw2,setPw2]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
+  const attempt=async()=>{
+    if(!pw){setError("Please enter a new password");return}
+    if(pw.length<4){setError("Password must be at least 4 characters");return}
+    if(pw!==pw2){setError("Passwords do not match");return}
+    setLoading(true);setError("");
+    try{await onSubmit(pw)}catch(e){setError(e.message||"Failed to update password");setLoading(false)}
+  };
+  return(<div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u,padding:16}}>
+    <div style={{width:"92%",maxWidth:420,padding:"28px 24px",borderRadius:16,background:T.panel,border:"1px solid "+T.bd,
+      boxShadow:"0 8px 32px rgba(0,0,0,.3)"}}>
+      <div style={{textAlign:"center",marginBottom:20}}>
+        <div style={{fontSize:18,fontWeight:800,color:T.tx,marginBottom:4}}>Set New Password</div>
+        <div style={{fontSize:11,color:T.sub}}>Welcome, <b>{userName}</b>. Please create a new password to continue.</div></div>
+      <Fl label="New Password">
+        <In type="password" value={pw} onChange={e=>{setPw(e.target.value);setError("")}}
+          placeholder="Enter new password" onKeyDown={e=>{if(e.key==="Enter")document.getElementById("slate-pw2")?.focus()}}/></Fl>
+      <Fl label="Confirm Password">
+        <In id="slate-pw2" type="password" value={pw2} onChange={e=>{setPw2(e.target.value);setError("")}}
+          placeholder="Re-enter password" onKeyDown={e=>{if(e.key==="Enter")attempt()}}/></Fl>
+      {error&&<div style={{fontSize:11,color:T.rd,fontFamily:T.m,textAlign:"center",padding:"8px 12px",borderRadius:6,
+        background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)",marginBottom:8}}>{error}</div>}
+      <Bt v="primary" onClick={attempt} disabled={loading} style={{justifyContent:"center",padding:"11px 0",fontSize:13,width:"100%"}}>{loading?"Saving...":"Set Password & Continue"}</Bt>
+      <button onClick={onLogout} style={{all:"unset",cursor:"pointer",display:"block",width:"100%",textAlign:"center",
+        fontSize:10,color:T.mu,fontFamily:T.m,marginTop:12}}>Sign out</button>
+    </div></div>);}
 
 export default function App(){
   const authCtx=useAuth();
@@ -2410,7 +2439,7 @@ export default function App(){
   const[comps,setComps]=useState([]);const[types,setTypes]=useState([]);const[locs,setLocs]=useState([]);
   const[depts,setDepts]=useState([]);const[personnel,setPersonnel]=useState([]);
   const[kits,setKits]=useState([]);
-  const[curUser,setCurUser]=useState(null);const[isLoggedIn,setIsLoggedIn]=useState(!!authCtx.token);const[settings,setSettings]=useState(DEF_SETTINGS);
+  const[curUser,setCurUser]=useState(null);const[isLoggedIn,setIsLoggedIn]=useState(!!authCtx.token);const[mustChangePw,setMustChangePw]=useState(false);const[settings,setSettings]=useState(DEF_SETTINGS);
   const[requests,setRequests]=useState([]);const[logs,setLogs]=useState([]);
   const[reservations,setReservations]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[favorites,setFavorites]=useState([]);
@@ -2550,7 +2579,11 @@ export default function App(){
     setSearchMd(false)};
 
   if(!isLoggedIn||!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme} onLogin={async(userId,pin)=>{
-    const userData=await authCtx.login(userId,pin);setCurUser(userData.id);setIsLoggedIn(true)}}/>;
+    const userData=await authCtx.login(userId,pin);setCurUser(userData.id);
+    if(userData.mustChangePassword){setMustChangePw(true)}else{setIsLoggedIn(true)}}}/>;
+  if(mustChangePw&&!isLoggedIn)return <SetPasswordScreen userName={authCtx.user?.name||"User"} isDark={isDark} toggleTheme={toggleTheme}
+    onLogout={()=>{authCtx.logout();setMustChangePw(false);setCurUser(null)}}
+    onSubmit={async(newPw)=>{await api.auth.changePassword(newPw);authCtx.setUser({...authCtx.user,mustChangePassword:false});setMustChangePw(false);setIsLoggedIn(true)}}/>;
   if(!dataLoaded&&!loadError)return(<div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
     <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:T.tx,marginBottom:8}}>Loading Slate...</div>
       <div style={{fontSize:11,color:T.mu,fontFamily:T.m}}>Connecting to server</div></div></div>);
@@ -2618,7 +2651,7 @@ export default function App(){
         ::-webkit-scrollbar-thumb{background:${T._scrollThumb};border-radius:3px}option{background:${T._optBg};color:${T._optColor}}
         @media(max-width:767px){
           .slate-grid-side{grid-template-columns:1fr!important}
-          .slate-grid-cards{grid-template-columns:1fr!important}
+          .slate-resp{grid-template-columns:1fr!important}
           input,select{font-size:16px!important}
         }
       `}</style>
