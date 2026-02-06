@@ -3117,7 +3117,7 @@ export default function App(){
   const isDeveloper=user?.role==="developer";
   const [devViewAs,setDevViewAs]=useState(null);
   const effectiveRole=isDeveloper&&devViewAs?devViewAs:user?.role;
-  const isDirector=isDeveloper||effectiveRole==="director"||effectiveRole==="super"||effectiveRole==="engineer";const isManager=effectiveRole==="manager"||effectiveRole==="admin"||isDirector;
+  const isDirector=(isDeveloper&&!devViewAs)||effectiveRole==="director"||effectiveRole==="super"||effectiveRole==="engineer";const isManager=effectiveRole==="manager"||effectiveRole==="admin"||isDirector;
   const isLead=effectiveRole==="lead"||isManager;const isSuper=isDirector;const isAdmin=isManager;
   const analytics=useAnalytics(kits,personnel,depts,comps,types,logs,reservations);
   const headOf=depts.filter(d=>d.headId===(curUser||authCtx.user?.id)).map(d=>d.id);
