@@ -2031,8 +2031,9 @@ function CompAdmin({comps,setComps,types,onRefreshComps}){
   const grouped=useMemo(()=>{const g={};comps.forEach(c=>{(g[c.cat]=g[c.cat]||[]).push(c)});return g},[comps]);
   const save=async()=>{if(!fm.label.trim())return;
     const k=fm.key.trim()||fm.label.trim().replace(/[^a-zA-Z0-9]/g,"").replace(/^./,ch=>ch.toLowerCase());
-    try{if(md==="add"){await api.components.create({key:k,label:fm.label.trim(),cat:fm.cat,ser:fm.ser,calibrationRequired:fm.calibrationRequired,calibrationIntervalDays:fm.calibrationRequired?Number(fm.calibrationIntervalDays):null})}
-    else{await api.components.update(md,{key:fm.key,label:fm.label.trim(),cat:fm.cat,ser:fm.ser,calibrationRequired:fm.calibrationRequired,calibrationIntervalDays:fm.calibrationRequired?Number(fm.calibrationIntervalDays):null})}
+    try{const payload={key:md==="add"?k:fm.key,label:fm.label.trim(),category:fm.cat,serialized:fm.ser,calibrationRequired:fm.calibrationRequired,calibrationIntervalDays:fm.calibrationRequired?Number(fm.calibrationIntervalDays):null};
+    if(md==="add"){await api.components.create(payload)}
+    else{await api.components.update(md,payload)}
     await onRefreshComps()}catch(e){alert(e.message)}
     setMd(null)};
   const confirmDelete=(comp)=>{const inUse=types?.filter(t=>t.compIds.includes(comp.id)).length||0;
