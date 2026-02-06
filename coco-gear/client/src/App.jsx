@@ -2790,14 +2790,16 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
     <ModalWrap open={md==="addK"||kf&&md&&md!=="addK"&&!String(md).startsWith("insp")&&!String(md).startsWith("hist")&&!String(md).startsWith("qr")} onClose={()=>{setMd(null);setKf(null)}} title={md==="addK"?"Add Kit":"Edit Kit"}>
       {kf&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Type"><Sl options={types.map(t=>({v:t.id,l:t.name}))} value={kf.typeId} onChange={e=>setKf(p=>({...p,typeId:e.target.value,fields:{}}))}/></Fl>
-        <Fl label="Color"><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{Object.keys(CM).map(c=><button key={c} onClick={()=>setKf(p=>({...p,color:c}))} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:5,
-          padding:"4px 8px",borderRadius:5,background:kf.color===c?"rgba(255,255,255,.1)":T.card,border:"1px solid "+(kf.color===c?T.bdH:T.bd)}}><Sw color={c} size={16}/><span style={{fontSize:9,color:kf.color===c?T.tx:T.mu,fontFamily:T.m}}>{c}</span></button>)}</div></Fl>
+        <Fl label="Color"><div style={{display:"flex",alignItems:"center",gap:10}}>
+          <Sw color={kf.color} size={28}/>
+          <Sl options={Object.keys(CM).map(c=>({v:c,l:c}))} value={kf.color} onChange={e=>setKf(p=>({...p,color:e.target.value}))} style={{flex:1}}/></div></Fl>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Fl label="Storage"><Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={kf.locId} onChange={e=>setKf(p=>({...p,locId:e.target.value}))}/></Fl>
+          <Fl label="Storage">{locs.length?<Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={kf.locId} onChange={e=>setKf(p=>({...p,locId:e.target.value}))}/>
+            :<span style={{fontSize:10,color:T.rd,fontFamily:T.m}}>No storage locations — add one first</span>}</Fl>
           <Fl label="Department"><Sl options={[{v:"",l:"-- None --"},...depts.map(d=>({v:d.id,l:d.name}))]} value={kf.deptId||""} onChange={e=>setKf(p=>({...p,deptId:e.target.value}))}/></Fl></div>
         {cType&&cType.fields.map(f=><Fl key={f.key} label={f.label}>{f.type==="toggle"?<Tg checked={!!kf.fields[f.key]} onChange={v=>setKf(p=>({...p,fields:{...p.fields,[f.key]:v}}))}/>
           :<In value={kf.fields[f.key]||""} onChange={e=>setKf(p=>({...p,fields:{...p.fields,[f.key]:e.target.value}}))}/>}</Fl>)}
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>{setMd(null);setKf(null)}}>Cancel</Bt><Bt v="primary" onClick={saveK}>{md==="addK"?"Add":"Save"}</Bt></div></div>}</ModalWrap>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>{setMd(null);setKf(null)}}>Cancel</Bt><Bt v="primary" onClick={saveK} disabled={!kf.locId}>{md==="addK"?"Add":"Save"}</Bt></div></div>}</ModalWrap>
     <ModalWrap open={String(md).startsWith("insp:")} onClose={()=>setMd(null)} title="Inspection" wide>
       {String(md).startsWith("insp:")&&(()=>{const kid=String(md).split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
         if(!k||!ty)return null;return <InspWF kit={k} type={ty} allC={allC} onDone={doneInsp} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
