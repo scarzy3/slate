@@ -156,10 +156,18 @@ const QR=(()=>{
   return{generate}
 })();
 /* QR data helpers */
-const qrKitData=id=>"kit:"+id;
-const qrAssetData=id=>"asset:"+id;
-const qrSerialData=(kitId,compKey,serial)=>"ser:"+kitId.slice(0,8)+":"+compKey+":"+serial;
+const qrBase=()=>window.location.origin;
+const qrKitData=id=>qrBase()+"/s/kit/"+id;
+const qrAssetData=id=>qrBase()+"/s/asset/"+id;
+const qrSerialData=(kitId,compKey,serial)=>qrBase()+"/s/verify/"+kitId.slice(0,8)+"/"+encodeURIComponent(compKey)+"/"+encodeURIComponent(serial);
 const parseQR=val=>{if(!val)return null;const s=val.trim();
+  /* URL-based QR codes (scannable from iPhone camera) */
+  try{const u=new URL(s);const p=u.pathname;
+    if(p.startsWith("/s/kit/"))return{type:"kit",id:p.slice(7)};
+    if(p.startsWith("/s/asset/"))return{type:"asset",id:p.slice(9)};
+    if(p.startsWith("/s/verify/")){const parts=p.slice(10).split("/").map(decodeURIComponent);return{type:"serial",parts}}
+  }catch(e){}
+  /* Legacy plain-text formats */
   if(s.startsWith("kit:"))return{type:"kit",id:s.slice(4)};
   if(s.startsWith("asset:"))return{type:"asset",id:s.slice(6)};
   if(s.startsWith("ser:"))return{type:"serial",parts:s.slice(4).split(":")};
@@ -393,7 +401,7 @@ function QRDetailView({qrData,label,sub,serials,kitId,onClose}){
       <Bt onClick={onClose}>Close</Bt></div></div>);}
 
 /* ═══════════ GLOBAL SCAN ACTION ═══════════ */
-function ScanAction({scanMd,setScanMd,kits,types,locs,comps:allC,personnel,depts,settings,curUserId,isAdmin,isSuper,apiCheckout,apiReturn,onRefreshKits,onNavigateToKit}){
+function ScanAction({scanMd,setScanMd,kits,types,locs,comps:allC,personnel,depts,settings,curUserId,isAdmin,isSuper,apiCheckout,apiReturn,onRefreshKits,onNavigateToKit,reservations}){
   if(!scanMd)return null;
   const closeScan=()=>setScanMd(null);
 
@@ -424,6 +432,7 @@ function ScanAction({scanMd,setScanMd,kits,types,locs,comps:allC,personnel,depts
     const inMaint=!!kit.maintenanceStatus;const isMine=kit.issuedTo===curUserId;
     const canCheckout=!kit.issuedTo&&!inMaint&&(settings.allowUserCheckout||isAdmin||isSuper);
     const canReturn=!!kit.issuedTo&&(isMine||isAdmin||isSuper);
+    const upcoming=(reservations||[]).filter(r=>r.kitId===kit.id&&(r.status==="confirmed"||r.status==="pending")&&new Date(r.endDate)>=new Date());
     return(<ModalWrap open onClose={closeScan} title={"Kit "+kit.color}>
       <div style={{display:"flex",flexDirection:"column",gap:14,padding:4}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -441,6 +450,16 @@ function ScanAction({scanMd,setScanMd,kits,types,locs,comps:allC,personnel,depts
                 {inMaint?"In Maintenance ("+kit.maintenanceStatus+")":person?(isMine?"Checked Out to You":"Checked Out to "+person.name):"Available"}</div>
               {person&&!isMine&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginTop:2}}>{person.title||""}</div>}
             </div></div></div>
+        {/* Reservation warnings */}
+        {upcoming.length>0&&<div style={{padding:"10px 14px",borderRadius:8,background:"rgba(251,146,60,.04)",border:"1px solid rgba(251,146,60,.18)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+            <span style={{fontSize:13}}>!</span>
+            <span style={{fontSize:11,fontWeight:700,color:T.or,fontFamily:T.u}}>
+              {upcoming.length===1?"Upcoming Reservation":upcoming.length+" Upcoming Reservations"}</span></div>
+          {upcoming.map(r=>{const who=personnel.find(p=>p.id===r.personId);return(
+            <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:"1px solid rgba(251,146,60,.1)",gap:8}}>
+              <div style={{fontSize:10,color:T.tx,fontFamily:T.m,fontWeight:600}}>{who?.name||"Unknown"}</div>
+              <div style={{fontSize:9,color:T.or,fontFamily:T.m}}>{fmtDate(r.startDate)} - {fmtDate(r.endDate)}</div></div>)})}</div>}
         {/* Action buttons */}
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {canCheckout&&<Bt v="primary" onClick={()=>setScanMd("checkout:"+kit.id)} style={{flex:1,justifyContent:"center",padding:"10px 0",fontSize:13}}>Checkout Kit</Bt>}
@@ -662,9 +681,14 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
       {needSer&&serComps.length>0&&<div>
         <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.am,fontFamily:T.m,marginBottom:8}}>Serials</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-          {serComps.map(c=><div key={c._key} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:6,background:"rgba(251,191,36,.02)",border:"1px solid rgba(251,191,36,.08)"}}>
-            <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1}}>{instLabel(c)}</span>
-            <In value={serials[c._key]} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{width:100,fontSize:9,padding:"3px 6px"}}/></div>)}</div></div>}
+          {serComps.map(c=>{const expected=kit.serials[c._key];const entered=serials[c._key];const match=entered&&expected&&entered===expected;const mismatch=entered&&expected&&entered!==expected;
+            return(<div key={c._key} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:6,
+              background:match?"rgba(34,197,94,.04)":mismatch?"rgba(239,68,68,.04)":"rgba(251,191,36,.02)",
+              border:"1px solid "+(match?"rgba(34,197,94,.15)":mismatch?"rgba(239,68,68,.15)":"rgba(251,191,36,.08)")}}>
+            <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1,minWidth:0}}>{instLabel(c)}</span>
+            <In value={entered} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{width:100,fontSize:9,padding:"3px 6px"}}/>
+            {match&&<span style={{fontSize:10,color:T.gn,fontWeight:700,flexShrink:0}}>✓</span>}
+            {mismatch&&<span style={{fontSize:10,color:T.rd,fontWeight:700,flexShrink:0}}>✗</span>}</div>)})}</div></div>}
       <div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:6}}>Photos ({photos.length})</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {photos.map(ph=><div key={ph.id} style={{width:60,height:60,borderRadius:6,background:`url(${ph.data}) center/cover`,border:"1px solid "+T.bd}}/>)}
@@ -685,7 +709,10 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
       <div style={{fontSize:20,fontWeight:700,fontFamily:T.u,color:T.tx}}>{instLabel(cur)}</div>
       {cur.ser&&needSer&&<div style={{marginTop:6}}><Bg color={T.am} bg="rgba(251,191,36,.08)">S/N Required</Bg></div>}</div>
     {cur.ser&&needSer&&<div style={{padding:"10px 16px",borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.12)"}}>
-      <In value={serials[cur._key]||""} onChange={e=>setSerials(p=>({...p,[cur._key]:e.target.value}))} placeholder={"S/N for "+instLabel(cur)}/></div>}
+      {kit.serials[cur._key]&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginBottom:6}}>Expected: <b style={{color:T.am}}>{kit.serials[cur._key]}</b></div>}
+      <div style={{display:"flex",gap:6,alignItems:"center"}}><In value={serials[cur._key]||""} onChange={e=>setSerials(p=>({...p,[cur._key]:e.target.value}))} placeholder={"S/N for "+instLabel(cur)} style={{flex:1}}/>
+        <Bt sm v={serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]===kit.serials[cur._key]?"success":serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]!==kit.serials[cur._key]?"danger":"ghost"}
+          style={{padding:"6px 10px",fontSize:10,flexShrink:0}}>{serials[cur._key]?serials[cur._key]===kit.serials[cur._key]?"✓ Match":"✗ Mismatch":"Verify"}</Bt></div></div>}
     <div style={{display:"flex",gap:10,justifyContent:"center"}}>{Object.entries(cSty).map(([key,s])=>{const a=res[cur._key]===key;return(
       <button key={key} onClick={()=>mark(key)} style={{all:"unset",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5,
         padding:"18px 24px",borderRadius:10,minWidth:90,background:a?s.bg:"rgba(255,255,255,.02)",border:a?"2px solid "+s.fg:"1px solid "+T.bd,transition:"all .15s"}}>
@@ -1966,7 +1993,7 @@ function MyProfile({user,personnel,setPersonnel,kits,assets,depts,onRefreshPerso
   </div>);}
 
 /* ═══════════ KIT ISSUANCE ═══════════ */
-function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,curUserId,settings,requests,setRequests,addLog,onNavigateToKit}){
+function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,curUserId,settings,requests,setRequests,addLog,onNavigateToKit,reservations}){
   const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[view,setView]=useState("all");
   const filt=useMemo(()=>{let list=kits;
     if(view==="issued")list=list.filter(k=>k.issuedTo);if(view==="available")list=list.filter(k=>!k.issuedTo&&!k.maintenanceStatus);
@@ -1998,6 +2025,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(320px,100%),1fr))",gap:8}}>
       {filt.map(kit=>{const person=kit.issuedTo?personnel.find(p=>p.id===kit.issuedTo):null;const lo=locs.find(l=>l.id===kit.locId);const ty=types.find(t=>t.id===kit.typeId);
         const st=stMeta(kit.lastChecked);const isMine=kit.issuedTo===curUserId;const dept=kit.deptId?depts.find(d=>d.id===kit.deptId):null;const na=needsApproval(kit);const inMaint=kit.maintenanceStatus;
+        const upcoming=(reservations||[]).filter(r=>r.kitId===kit.id&&(r.status==="confirmed"||r.status==="pending")&&new Date(r.endDate)>=new Date());
         return(<div key={kit.id} style={{padding:14,borderRadius:8,background:isMine?"rgba(244,114,182,.02)":T.card,border:isMine?"1px solid rgba(244,114,182,.15)":"1px solid "+T.bd}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
             <Sw color={kit.color} size={28}/>
@@ -2014,7 +2042,11 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
             {(isMine||isAdmin||isSuper)&&<Bt v="warn" sm onClick={()=>setMd("return:"+kit.id)}>Return</Bt>}</div>
           :<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(34,197,94,.03)",border:"1px solid rgba(34,197,94,.1)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.gn}}/><span style={{fontSize:10,color:T.gn,fontFamily:T.m,flex:1}}>Available</span>
-            {(settings.allowUserCheckout||isAdmin||isSuper)&&<Bt v={na?"orange":"primary"} sm onClick={()=>setMd("checkout:"+kit.id)}>{na?"Request":"Checkout"}</Bt>}</div>}</div>)})}</div>
+            {(settings.allowUserCheckout||isAdmin||isSuper)&&<Bt v={na?"orange":"primary"} sm onClick={()=>setMd("checkout:"+kit.id)}>{na?"Request":"Checkout"}</Bt>}</div>}
+          {upcoming.length>0&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:6,background:"rgba(251,146,60,.04)",border:"1px solid rgba(251,146,60,.12)",marginTop:6}}>
+            <span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600}}>!</span>
+            <span style={{fontSize:9,color:T.or,fontFamily:T.m,flex:1}}>Reserved: {upcoming.map(r=>{const who=personnel.find(p=>p.id===r.personId);return(who?.name||"?")+" "+fmtDate(r.startDate)}).join(", ")}</span></div>}
+        </div>)})}</div>
     {!filt.length&&<div style={{padding:40,textAlign:"center",color:T.dm,fontFamily:T.m}}>No kits match</div>}
     <ModalWrap open={String(md).startsWith("checkout:")} onClose={()=>setMd(null)} title="Checkout Kit" wide>
       {String(md).startsWith("checkout:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
@@ -2549,6 +2581,14 @@ export default function App(){
 
   useEffect(()=>{if(authCtx.token&&authCtx.user&&!mustChangePw)loadData()},[authCtx.token,authCtx.user,mustChangePw]);
 
+  /* Deep link: handle /s/kit/{id} and /s/verify/{...} URLs from external QR scans */
+  useEffect(()=>{if(!dataLoaded)return;const p=window.location.pathname;
+    if(p.startsWith("/s/kit/")){const id=p.slice(7);setScanMd("kit:"+id);window.history.replaceState(null,"","/");return}
+    if(p.startsWith("/s/verify/")){const parts=p.slice(10).split("/").map(decodeURIComponent);
+      const raw="ser:"+parts.join(":");setScanMd("serial:"+raw);window.history.replaceState(null,"","/");return}
+    if(p.startsWith("/s/asset/")){window.history.replaceState(null,"","/");return}
+  },[dataLoaded]);
+
   /* Helper: refresh specific data after mutations */
   const refreshKits=async()=>{try{const d=await api.kits.list();setKits(d.map(xformKit))}catch(e){}};
   const refreshConsumables=async()=>{try{const d=await api.consumables.list();setConsumables(d.map(xformConsumable))}catch(e){}};
@@ -2746,7 +2786,7 @@ export default function App(){
           initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)}/>}
         {pg==="issuance"&&<KitIssuance kits={kits} setKits={setKits} types={types} locs={locs} personnel={personnel} allC={comps} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests} addLog={addLog}
-          onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}}/>}
+          reservations={reservations} onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}}/>}
         {pg==="analytics"&&canAccess({access:"admin",perm:"analytics"})&&<AnalyticsPage analytics={analytics} kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs}/>}
         {pg==="reports"&&canAccess({access:"admin",perm:"reports"})&&<ReportsPage kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs} logs={logs} analytics={analytics}/>}
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}
@@ -2774,7 +2814,7 @@ export default function App(){
 
       {settings.enableQR!==false&&<ScanAction scanMd={scanMd} setScanMd={setScanMd} kits={kits} types={types} locs={locs} comps={comps}
         personnel={personnel} depts={depts} settings={settings} curUserId={curUser} isAdmin={isAdmin} isSuper={isSuper}
-        apiCheckout={apiCheckout} apiReturn={apiReturn} onRefreshKits={refreshKits}
+        apiCheckout={apiCheckout} apiReturn={apiReturn} onRefreshKits={refreshKits} reservations={reservations}
         onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}}/>}
     </div>);}
 
