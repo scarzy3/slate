@@ -302,9 +302,9 @@ router.post('/checkout', validate(checkoutSchema), async (req, res) => {
     if (kit.maintenanceStatus) return res.status(409).json({ error: 'Kit in maintenance' });
 
     const isAdmin = ['developer','director','super','engineer','manager','admin'].includes(req.user.role);
-    const recipientId = isAdmin && personId ? personId : req.user.id;
+    const recipientId = personId || req.user.id;
 
-    // Check if approval needed
+    // Check if approval needed (operators requesting cross-dept kits still need approval)
     if (!isAdmin && kit.deptId) {
       const settings = await prisma.systemSetting.findMany();
       const requireApproval = settings.find(s => s.key === 'requireDeptApproval')?.value ?? true;
@@ -355,10 +355,7 @@ router.post('/return', validate(returnSchema), async (req, res) => {
     if (!kit) return res.status(404).json({ error: 'Kit not found' });
     if (!kit.issuedToId) return res.status(409).json({ error: 'Kit not issued' });
 
-    const isAdmin = ['developer','director','super','engineer','manager','admin'].includes(req.user.role);
-    if (!isAdmin && kit.issuedToId !== req.user.id) {
-      return res.status(403).json({ error: 'Only the holder or admin can return' });
-    }
+    // Any authenticated user can return a kit (operators are primary users for returns)
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.kit.update({ where: { id: kitId }, data: { issuedToId: null } });
