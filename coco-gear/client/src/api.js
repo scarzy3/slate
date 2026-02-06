@@ -119,6 +119,7 @@ export const reservations = {
   create: (data) => request('/reservations', { method: 'POST', body: data }),
   approve: (id) => request(`/reservations/${id}/approve`, { method: 'PUT' }),
   cancel: (id) => request(`/reservations/${id}/cancel`, { method: 'PUT' }),
+  delete: (id) => request(`/reservations/${id}`, { method: 'DELETE' }),
 };
 
 // ─── Trips ───

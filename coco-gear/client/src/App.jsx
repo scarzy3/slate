@@ -1690,6 +1690,7 @@ function ReservationsPage({reservations,setReservations,kits,personnel,trips,cur
 
   const approveRes=async(id)=>{try{await api.reservations.approve(id);await onRefreshReservations()}catch(e){alert(e.message)}};
   const cancelRes=async(id)=>{try{await api.reservations.cancel(id);await onRefreshReservations()}catch(e){alert(e.message)}};
+  const deleteRes=async(id)=>{try{await api.reservations.delete(id);await onRefreshReservations()}catch(e){alert(e.message)}};
   
   /* Calendar helpers */
   const year=viewDate.getFullYear();const month=viewDate.getMonth();
@@ -1769,7 +1770,8 @@ function ReservationsPage({reservations,setReservations,kits,personnel,trips,cur
                 {r.purpose&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,fontStyle:"italic",marginTop:4}}>{r.purpose}</div>}
                 {(isMine||isAdmin)&&<div style={{display:"flex",gap:4,marginTop:8}}>
                   {isAdmin&&r.status==="pending"&&<Bt v="success" sm onClick={()=>approveRes(r.id)}>Approve</Bt>}
-                  <Bt v="danger" sm onClick={()=>cancelRes(r.id)}>Cancel</Bt></div>}</div>)})}
+                  {r.status!=="cancelled"&&<Bt sm onClick={()=>cancelRes(r.id)}>Cancel</Bt>}
+                  <Bt v="danger" sm onClick={()=>deleteRes(r.id)}>Delete</Bt></div>}</div>)})}
           </div>:<div style={{padding:16,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No reservations</div>}
           <Bt v="primary" sm style={{marginTop:12,width:"100%"}} onClick={()=>{
             setFm(p=>({...p,startDate:selectedDateStr,endDate:selectedDateStr}));setMd("new")}}>+ Reserve for this day</Bt></div>}
@@ -3263,7 +3265,7 @@ export default function App(){
     _type:k._type,_location:k._location,_department:k._department,_issuedTo:k._issuedTo,_trip:k._trip||null,
   });
   const xformLog=l=>({id:l.id,action:l.action,target:l.target,targetId:l.targetId,by:l.userId,date:l.date,details:l.details||{}});
-  const xformReservation=r=>({id:r.id,kitId:r.kitId,personId:r.personId,tripId:r.tripId||null,tripName:r.trip?.name||null,startDate:r.startDate,endDate:r.endDate,purpose:r.purpose||"",status:r.status,createdDate:r.createdAt});
+  const xformReservation=r=>({id:r.id,kitId:r.kitId,personId:r.personId,tripId:r.tripId||null,tripName:r.trip?.name||null,startDate:(r.startDate||"").slice(0,10),endDate:(r.endDate||"").slice(0,10),purpose:r.purpose||"",status:r.status,createdDate:r.createdAt});
   const xformConsumable=c=>({id:c.id,name:c.name,sku:c.sku||"",category:c.category,qty:c.qty,minQty:c.minQty,unit:c.unit||"ea"});
   const xformAsset=a=>({id:a.id,name:a.name,serial:a.serial,category:a.category,locId:a.locId,issuedTo:a.issuedToId||null,
     issueHistory:(a.issueHistory||[]).map(h=>({id:h.id,personId:h.personId,issuedDate:h.issuedDate,returnedDate:h.returnedDate,issuedBy:h.issuedById})),
