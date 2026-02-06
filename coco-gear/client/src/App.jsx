@@ -442,8 +442,8 @@ function ScanAction({scanMd,setScanMd,kits,types,locs,comps:allC,personnel,depts
     const dept=kit.deptId?depts.find(d=>d.id===kit.deptId):null;
     const person=kit.issuedTo?personnel.find(p=>p.id===kit.issuedTo):null;
     const inMaint=!!kit.maintenanceStatus;const isMine=kit.issuedTo===curUserId;
-    const canCheckout=!kit.issuedTo&&!inMaint&&(settings.allowUserCheckout||isAdmin||isSuper);
-    const canReturn=!!kit.issuedTo&&(isMine||isAdmin||isSuper);
+    const canCheckout=!kit.issuedTo&&!inMaint;
+    const canReturn=!!kit.issuedTo;
     const upcoming=(reservations||[]).filter(r=>r.kitId===kit.id&&(r.status==="confirmed"||r.status==="pending")&&new Date(r.endDate)>=new Date());
     return(<ModalWrap open onClose={closeScan} title={"Kit "+kit.color}>
       <div style={{display:"flex",flexDirection:"column",gap:14,padding:4}}>
@@ -2355,8 +2355,6 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
   const generalItems=[
     {k:"requireDeptApproval",l:"Require dept head approval",d:"For department-locked kits"},
     {k:"allowUserLocationUpdate",l:"Allow user location updates",d:"Users can update kit locations"},
-    {k:"allowUserInspect",l:"Allow user inspections",d:"Users can run inspections"},
-    {k:"allowUserCheckout",l:"Allow user self-checkout",d:"Users can checkout to themselves"},
   ];
   const serialItems=[
     {k:"requireSerialsOnCheckout",l:"Require serials on checkout",d:"S/N entry during checkout"},
@@ -2589,7 +2587,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
   return(<div>
     <SH title="Checkout / Return" sub={issuedCt+" out | "+(kits.length-issuedCt)+" available | "+myCt+" mine"}
       action={<div style={{display:"flex",gap:6}}>
-        {(isAdmin||isSuper)&&<Bt v="primary" onClick={()=>setMd("adminIssue")}>Admin Issue</Bt>}</div>}/>
+        <Bt v="primary" onClick={()=>setMd("adminIssue")}>Issue To...</Bt></div>}/>
     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
       <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:200,maxWidth:"100%"}}/>
       {[...(hasDept?["dept"]:[]),"all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="dept"?deptCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
@@ -2613,10 +2611,10 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
             <div style={{width:5,height:5,borderRadius:"50%",background:T.am}}/><span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance ({kit.maintenanceStatus})</span></div>
           :person?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:isMine?"rgba(244,114,182,.06)":"rgba(244,114,182,.03)",border:"1px solid rgba(244,114,182,.12)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.pk}}/><span style={{fontSize:10,fontWeight:600,color:T.pk,fontFamily:T.m,flex:1}}>{isMine?"YOU":person.name}</span>
-            {(isMine||isAdmin||isSuper)&&<Bt v="warn" sm onClick={()=>setMd("return:"+kit.id)}>Return</Bt>}</div>
+            <Bt v="warn" sm onClick={()=>setMd("return:"+kit.id)}>Return</Bt></div>
           :<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(34,197,94,.03)",border:"1px solid rgba(34,197,94,.1)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.gn}}/><span style={{fontSize:10,color:T.gn,fontFamily:T.m,flex:1}}>Available</span>
-            {(settings.allowUserCheckout||isAdmin||isSuper)&&<Bt v={na?"orange":"primary"} sm onClick={()=>setMd("checkout:"+kit.id)}>{na?"Request":"Checkout"}</Bt>}</div>}
+            <Bt v={na?"orange":"primary"} sm onClick={()=>setMd("checkout:"+kit.id)}>{na?"Request":"Checkout"}</Bt></div>}
           {kit._trip&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:6,background:"rgba(168,85,247,.04)",border:"1px solid rgba(168,85,247,.12)",marginTop:6}}>
             <span style={{fontSize:10,color:T.pu,fontFamily:T.m,fontWeight:600}}>▸</span>
             <span style={{fontSize:9,color:T.pu,fontFamily:T.m,flex:1}}>Trip: {kit._trip.name}</span></div>}
@@ -2686,7 +2684,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
     if(!search)return true;const q=search.toLowerCase();const lo=locs.find(l=>l.id===k.locId);
     return k.color.toLowerCase().includes(q)||(lo?.name||"").toLowerCase().includes(q)||Object.values(k.fields).some(v=>String(v).toLowerCase().includes(q))||Object.values(k.serials).some(v=>v?.toLowerCase().includes(q))}),[kits,lf,df,search,locs,statusFilter,overdueIds]);
   const lc=useMemo(()=>{const c={};kits.forEach(k=>{c[k.locId]=(c[k.locId]||0)+1});return c},[kits]);
-  const cType=kf?types.find(t=>t.id===kf.typeId):null;const canInspect=settings.allowUserInspect||isAdmin||isSuper;
+  const cType=kf?types.find(t=>t.id===kf.typeId):null;const canInspect=true;
   const toggleFav=id=>setFavorites(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
   
   /* Status filter counts */
