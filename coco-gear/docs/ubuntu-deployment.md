@@ -466,7 +466,7 @@ http://YOUR_SERVER_IP:3000
 
 Replace `YOUR_SERVER_IP` with the IP address from Part 1 (e.g., `http://164.90.150.23:3000`).
 
-**What you should see:** The Slate login page with a searchable user picker. Start typing a name to filter the list, or scroll through all users. On first startup, the app automatically creates a default **Admin** user with PIN **1234**. If the seed data loaded successfully, you'll also see the sample users (all use PIN **1234**).
+**What you should see:** The Slate login page with a searchable user picker. Start typing a name to filter the list, or scroll through all users. On first startup, the app automatically creates a default **Admin** user with password **password**. If the seed data loaded successfully, you'll also see the sample users (all use password **password**).
 
 **If the page doesn't load:** The server's firewall might be blocking port 3000. Run this command on the server:
 
@@ -602,7 +602,7 @@ Wait a few minutes for DNS to propagate, then open your browser and go to `http:
 
 **Requires:** A domain name (Part 9). You cannot get HTTPS with just an IP address.
 
-HTTPS encrypts the connection between the browser and the server. It's what gives you the padlock icon in the browser. Without it, login PINs are sent in plain text, which is a security risk.
+HTTPS encrypts the connection between the browser and the server. It's what gives you the padlock icon in the browser. Without it, passwords are sent in plain text, which is a security risk.
 
 ### Step 10.1: Install Certbot
 
@@ -953,7 +953,7 @@ sudo systemctl restart nginx
 
 ### "The login page shows no users"
 
-The app automatically creates a default **Admin** user (PIN: **1234**) on startup if no users exist. If you still don't see any users, check the logs:
+The app automatically creates a default **Admin** user (password: **password**) on startup if no users exist. If you still don't see any users, check the logs:
 ```bash
 cd /opt/slate/coco-gear
 docker compose logs app
@@ -1001,7 +1001,7 @@ docker compose down -v
 docker compose up -d --build
 ```
 
-The `-v` flag deletes all stored data. Only do this if you really want to start over. The app will re-run the seed script to load demo data. If for some reason the seed fails, the server will still create a default Admin user (PIN: 1234) so you can log in.
+The `-v` flag deletes all stored data. Only do this if you really want to start over. The app will re-run the seed script to load demo data. If for some reason the seed fails, the server will still create a default Admin user (password: password) so you can log in.
 
 ---
 
@@ -1079,17 +1079,17 @@ Internet
 
 If the app starts and finds **no users** in the database, it automatically creates a default admin account:
 
-| Name | Role | PIN |
-|------|------|-----|
-| Admin | Super Admin | 1234 |
+| Name | Role | Password |
+|------|------|----------|
+| Admin | Super Admin | password |
 
-This ensures you can always log in, even if the seed script fails. You'll see a banner in the server logs when this happens. **Change this PIN after your first login** by going to your profile settings.
+This ensures you can always log in, even if the seed script fails. You'll see a banner in the server logs when this happens. **Change this password after your first login** by going to your profile settings.
 
 ### Sample data
 
 On first startup, the seed script loads demo data for testing. **The seed only runs once** — if it detects existing users, it skips automatically, so your real data is never overwritten on container restarts.
 
-**8 sample users** (all use PIN **1234**):
+**8 sample users** (all use password **password**):
 
 | Name | Role | Department |
 |------|------|------------|
@@ -1114,9 +1114,9 @@ docker compose restart app
 
 ### Security features already built into the app
 
-- **PIN-based login** with bcrypt hashing (PINs are never stored in plain text)
+- **Password-based login** with bcrypt hashing (passwords are never stored in plain text)
 - **Searchable login screen** — type to filter users by name, role, or title instead of scrolling through a long dropdown
-- **Automatic default admin** — if no users exist, a default Admin user (PIN: 1234) is created on server startup so the app is always accessible
+- **Automatic default admin** — if no users exist, a default Admin user (password: password) is created on server startup so the app is always accessible
 - **Role-based access control** — Super Admin > Admin > User — each level has different permissions
 - **JWT authentication** — secure, stateless login sessions
 - **File upload restrictions** — only image files (JPEG, PNG, GIF, WebP), max 10 MB each, max 10 per request

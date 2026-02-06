@@ -43,7 +43,7 @@ async function main() {
     prisma.location.deleteMany(),
   ]);
 
-  const pin = await bcrypt.hash('1234', SALT_ROUNDS);
+  const pin = await bcrypt.hash('password', SALT_ROUNDS);
 
   // ─── Locations ───
   const locs = await Promise.all([
@@ -340,7 +340,7 @@ async function main() {
 
   console.log('\nSeed complete!');
   console.log('\nDefault credentials:');
-  console.log('  All users PIN: 1234');
+  console.log('  All users password: password');
   console.log('  Super Admin: Jordan Martinez');
   console.log('  Admin: Taylor Nguyen');
 }

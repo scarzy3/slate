@@ -22,7 +22,7 @@ router.get('/users', async (req, res) => {
   }
 });
 
-// POST /login - verify PIN and return JWT + user data
+// POST /login - verify password and return JWT + user data
 router.post('/login', validate(loginSchema), async (req, res) => {
   try {
     const { userId, pin } = req.body;
