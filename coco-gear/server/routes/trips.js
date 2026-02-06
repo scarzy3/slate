@@ -401,7 +401,7 @@ router.delete('/:id/notes/:noteId', async (req, res) => {
     if (!note) return res.status(404).json({ error: 'Note not found' });
 
     // Only author or admin can delete
-    if (note.authorId !== req.user.id && req.user.role !== 'super' && req.user.role !== 'admin') {
+    if (note.authorId !== req.user.id && !['director','super','engineer','manager','admin'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Not authorized to delete this note' });
     }
 
