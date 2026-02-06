@@ -1316,7 +1316,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
           <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
             <Bg color={T.ind} bg="rgba(129,140,248,.1)">{t.kits.length} kits</Bg>
             <Bg color={T.tl} bg="rgba(45,212,191,.1)">{t.personnelCount||t.personnel?.length||0} personnel</Bg>
-            {t.boatCount>0&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">{t.boatCount} boats</Bg>}
+            {t.boatCount>0&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">{t.boatCount} USV{t.boatCount!==1?"s":""}</Bg>}
             {t.reservationCount>0&&<Bg color={T.pu} bg="rgba(168,85,247,.1)">{t.reservationCount} reservations</Bg>}
             {t.kits.length>0&&<div style={{display:"flex",gap:2,alignItems:"center",marginLeft:4}}>
               {t.kits.slice(0,5).map(k=><div key={k.id} style={{width:14,height:14,borderRadius:7,background:CM[k.color]||"#888",border:"1px solid rgba(0,0,0,.2)"}} title={k.color}/>)}
@@ -1364,7 +1364,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
 
     {/* Status timeline indicator */}
     <div style={{display:"flex",gap:12,marginBottom:16,overflowX:"auto",padding:"2px 0"}}>
-      {[{l:"Kits",v:tripKits.length,c:T.ind,i:"▤"},{l:"Boats",v:tripBoats.length,c:T.bl,i:"⛵"},{l:"Personnel",v:tripPers.length,c:T.tl,i:"◎"},
+      {[{l:"Kits",v:tripKits.length,c:T.ind,i:"▤"},{l:"USVs",v:tripBoats.length,c:T.bl,i:"⛵"},{l:"Personnel",v:tripPers.length,c:T.tl,i:"◎"},
         {l:"Reservations",v:tripRes.length,c:T.pu,i:"◷"},
         {l:daysUntilStart>0?"Starts in":"Started",v:daysUntilStart>0?daysUntilStart+"d":Math.abs(daysUntilStart)+"d ago",c:daysUntilStart>0?T.bl:T.gn,i:"◷"},
         {l:daysUntilEnd>0?"Ends in":"Ended",v:daysUntilEnd>0?daysUntilEnd+"d":Math.abs(daysUntilEnd)+"d ago",c:daysUntilEnd>0?T.am:T.rd,i:"◷"},
@@ -1374,7 +1374,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
 
     {/* Tabs */}
     <Tabs tabs={[{id:"overview",l:"Overview"},{id:"personnel",l:"Personnel ("+tripPers.length+")"},{id:"equipment",l:"Equipment ("+tripKits.length+")"},
-      {id:"boats",l:"Boats ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
+      {id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
 
     {/* ── OVERVIEW TAB ── */}
     {detailTab==="overview"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -1416,12 +1416,12 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
                   {holder&&<div style={{fontSize:8,color:T.am,fontFamily:T.m}}>→ {holder.name}</div>}</div></div>)})}
             {tripKits.length>6&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>+{tripKits.length-6} more kits</div>}</div>}</div>
 
-      {/* Boats preview */}
+      {/* USVs preview */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div style={{fontSize:11,fontWeight:700,color:T.tx,fontFamily:T.u}}>Boats</div>
+          <div style={{fontSize:11,fontWeight:700,color:T.tx,fontFamily:T.u}}>USVs</div>
           <Bt v="ghost" sm onClick={()=>setDetailTab("boats")}>View all →</Bt></div>
-        {tripBoats.length===0?<div style={{fontSize:10,color:T.dm,fontFamily:T.m,textAlign:"center",padding:10}}>No boats assigned</div>:
+        {tripBoats.length===0?<div style={{fontSize:10,color:T.dm,fontFamily:T.m,textAlign:"center",padding:10}}>No USVs assigned</div>:
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {tripBoats.slice(0,6).map(b=><div key={b.tripBoatId} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:6,
               background:(boatRoleColors[b.role]||T.bl)+"0a",border:"1px solid "+(boatRoleColors[b.role]||T.bl)+"22"}}>
@@ -1515,12 +1515,12 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
                   <Bg color={r.status==="confirmed"?T.gn:r.status==="pending"?T.or:T.rd} bg={(r.status==="confirmed"?T.gn:r.status==="pending"?T.or:T.rd)+"18"}>{r.status}</Bg></div>)})}</div></div>}
         </div>}</div>}
 
-    {/* ── BOATS TAB ── */}
+    {/* ── USVs TAB ── */}
     {detailTab==="boats"&&<div>
       {isAdmin&&editable&&<div style={{display:"flex",gap:8,marginBottom:16}}>
-        <Bt v="primary" onClick={()=>{setAddBoatIds([]);setAddBoatRole("primary");setAddBoatMd(true)}}>+ Assign Boats</Bt></div>}
+        <Bt v="primary" onClick={()=>{setAddBoatIds([]);setAddBoatRole("primary");setAddBoatMd(true)}}>+ Assign USVs</Bt></div>}
 
-      {tripBoats.length===0?<div style={{padding:30,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No boats assigned to this trip yet</div>:
+      {tripBoats.length===0?<div style={{padding:30,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No USVs assigned to this trip yet</div>:
         <div>
           {/* Summary by role */}
           <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
@@ -1534,10 +1534,10 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⛵</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u}}>{b.name}</div>
-                <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{b.type}{b.registration?" · "+b.registration:""}</div>
+                <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{b.type}{b.hullId?" · "+b.hullId:""}</div>
                 <div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
                   <Bg color={boatRoleColors[b.role]||T.bl} bg={(boatRoleColors[b.role]||T.bl)+"18"}>{boatRoleLabels[b.role]||b.role}</Bg>
-                  {b.capacity&&<Bg color={T.mu} bg="rgba(148,163,184,.1)">{b.capacity} pax</Bg>}</div>
+                  {b.length&&<Bg color={T.mu} bg="rgba(148,163,184,.1)">{b.length} m</Bg>}</div>
                 {b.notes&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:2}}>{b.notes}</div>}</div>
               {isAdmin&&editable&&<Bt v="ghost" sm onClick={()=>removeBoat(b.tripBoatId)} style={{color:T.rd,fontSize:9}}>×</Bt>}</div>)}</div></div>}</div>}
 
@@ -1629,15 +1629,15 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
           <Bt onClick={()=>setAddPersonMd(false)}>Cancel</Bt>
           <Bt v="primary" onClick={doAddPersonnel} disabled={!addPersonIds.length}>{addPersonIds.length} people — Add to Trip</Bt></div></div></ModalWrap>
 
-    {/* Assign boats modal */}
-    <ModalWrap open={addBoatMd} onClose={()=>setAddBoatMd(false)} title="Assign Boats to Trip" wide>
+    {/* Assign USVs modal */}
+    <ModalWrap open={addBoatMd} onClose={()=>setAddBoatMd(false)} title="Assign USVs to Trip" wide>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
-          <Fl label="Boat Role"><Sl options={Object.entries(boatRoleLabels).map(([v,l])=>({v,l}))} value={addBoatRole}
+          <Fl label="USV Role"><Sl options={Object.entries(boatRoleLabels).map(([v,l])=>({v,l}))} value={addBoatRole}
             onChange={e=>setAddBoatRole(e.target.value)} style={{minWidth:120}}/></Fl></div>
-        <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Select boats to assign ({addBoatIds.length} selected)</div>
+        <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Select USVs to assign ({addBoatIds.length} selected)</div>
         <div style={{maxHeight:400,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
-          {availableBoats.length===0&&<div style={{padding:20,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No available boats. Add boats in Configuration → Boats first.</div>}
+          {availableBoats.length===0&&<div style={{padding:20,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No available USVs. Add USVs in Configuration → USVs first.</div>}
           {availableBoats.map(b=>{const isChecked=addBoatIds.includes(b.id);return(
             <div key={b.id} onClick={()=>setAddBoatIds(p=>isChecked?p.filter(x=>x!==b.id):[...p,b.id])}
               style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,cursor:"pointer",
@@ -1647,14 +1647,14 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
               <span style={{fontSize:14}}>⛵</span>
               <div style={{flex:1}}>
                 <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{b.name}</div>
-                <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{b.type}{b.registration?" · "+b.registration:""}{b.capacity?" · "+b.capacity+" pax":""}</div></div></div>)})}</div>
+                <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{b.type}{b.hullId?" · "+b.hullId:""}{b.length?" · "+b.length+" m":""}</div></div></div>)})}</div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <Bt onClick={()=>setAddBoatMd(false)}>Cancel</Bt>
-          <Bt v="primary" onClick={doAssignBoats} disabled={!addBoatIds.length}>{addBoatIds.length} boats — Assign</Bt></div></div></ModalWrap>
+          <Bt v="primary" onClick={doAssignBoats} disabled={!addBoatIds.length}>{addBoatIds.length} USVs — Assign</Bt></div></div></ModalWrap>
 
     {/* Delete confirmation */}
     <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={deleteTrip}
-      title="Delete Trip?" message={"This will permanently delete this trip and remove all kit/personnel/boat assignments. This cannot be undone."}
+      title="Delete Trip?" message={"This will permanently delete this trip and remove all kit/personnel/USV assignments. This cannot be undone."}
       confirmLabel="Delete Trip" confirmColor={T.rd}/>
   </div>);}
 
@@ -2198,26 +2198,26 @@ function DeptAdmin({depts,setDepts,personnel,kits,onRefreshDepts}){
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
       title="Delete Department?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? Personnel in this department will become unassigned.`}/></div>);}
 
-/* ═══════════ BOATS ADMIN ═══════════ */
+/* ═══════════ USV ADMIN ═══════════ */
 function BoatAdmin({boats,onRefreshBoats}){
-  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",type:"",registration:"",capacity:"",homePort:"",status:"available",notes:""});
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",type:"",hullId:"",length:"",homePort:"",status:"available",notes:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const statusColors={available:T.gn,maintenance:T.am,decommissioned:T.rd};
   const statusLabels={available:"Available",maintenance:"Maintenance",decommissioned:"Decommissioned"};
   const save=async()=>{if(!fm.name.trim())return;
-    try{const payload={name:fm.name.trim(),type:fm.type.trim(),registration:fm.registration.trim(),
-      capacity:fm.capacity?parseInt(fm.capacity,10):null,homePort:fm.homePort.trim(),status:fm.status,notes:fm.notes.trim()};
+    try{const payload={name:fm.name.trim(),type:fm.type.trim(),hullId:fm.hullId.trim(),
+      length:fm.length?parseFloat(fm.length):null,homePort:fm.homePort.trim(),status:fm.status,notes:fm.notes.trim()};
       if(md==="add"){await api.boats.create(payload)}
       else{await api.boats.update(md,payload)}
       await onRefreshBoats()}catch(e){alert(e.message)}setMd(null)};
   const confirmDelete=(boat)=>{
     const activeTrips=boat.trips?.filter(t=>t.tripStatus==="active"||t.tripStatus==="planning")||[];
-    if(activeTrips.length>0){alert("Cannot delete: boat is assigned to "+activeTrips.length+" active trip(s)");return}
+    if(activeTrips.length>0){alert("Cannot delete: USV is assigned to "+activeTrips.length+" active trip(s)");return}
     setDeleteConfirm(boat)};
   const doDelete=async()=>{if(deleteConfirm){try{await api.boats.delete(deleteConfirm.id);await onRefreshBoats()}catch(e){alert(e.message)}}};
-  const emptyFm=()=>({name:"",type:"",registration:"",capacity:"",homePort:"",status:"available",notes:""});
+  const emptyFm=()=>({name:"",type:"",hullId:"",length:"",homePort:"",status:"available",notes:""});
   return(<div>
-    <SH title="Boats" sub={boats.length+" vessels"} action={<Bt v="primary" onClick={()=>{setFm(emptyFm());setMd("add")}}>+ Add Boat</Bt>}/>
+    <SH title="USVs" sub={boats.length+" vessel"+(boats.length!==1?"s":"")} action={<Bt v="primary" onClick={()=>{setFm(emptyFm());setMd("add")}}>+ Add USV</Bt>}/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(300px,100%),1fr))",gap:8}}>
       {boats.map(b=>{const activeTrips=b.trips?.filter(t=>t.tripStatus==="active"||t.tripStatus==="planning")||[];return(
         <div key={b.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
@@ -2225,28 +2225,28 @@ function BoatAdmin({boats,onRefreshBoats}){
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⛵</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:13,fontWeight:600,color:T.tx,fontFamily:T.u}}>{b.name}</div>
-            <div style={{fontSize:10,color:T.dm,fontFamily:T.m}}>{b.type}{b.registration?" · "+b.registration:""}{b.capacity?" · "+b.capacity+" pax":""}</div>
+            <div style={{fontSize:10,color:T.dm,fontFamily:T.m}}>{b.type}{b.hullId?" · "+b.hullId:""}{b.length?" · "+b.length+" m":""}</div>
             <div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
               <Bg color={statusColors[b.status]} bg={(statusColors[b.status])+"18"}>{statusLabels[b.status]}</Bg>
               {b.homePort&&<Bg color={T.mu} bg="rgba(148,163,184,.1)">{b.homePort}</Bg>}
               {activeTrips.length>0&&<Bg color={T.ind} bg="rgba(129,140,248,.1)">{activeTrips.length} trip{activeTrips.length!==1?"s":""}</Bg>}</div></div>
-          <Bt v="ghost" sm onClick={()=>{setFm({name:b.name,type:b.type,registration:b.registration,capacity:b.capacity||"",homePort:b.homePort,status:b.status,notes:b.notes});setMd(b.id)}}>Edit</Bt>
+          <Bt v="ghost" sm onClick={()=>{setFm({name:b.name,type:b.type,hullId:b.hullId,length:b.length||"",homePort:b.homePort,status:b.status,notes:b.notes});setMd(b.id)}}>Edit</Bt>
           <Bt v="ghost" sm onClick={()=>confirmDelete(b)} style={{color:T.rd}}>Del</Bt></div>)})}</div>
-    <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Add Boat":"Edit Boat"} wide>
+    <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Add USV":"Edit USV"} wide>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Fl label="Boat Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))} placeholder="e.g. Zodiac MK-V"/></Fl>
-          <Fl label="Type"><In value={fm.type} onChange={e=>setFm(p=>({...p,type:e.target.value}))} placeholder="e.g. RIB, RHIB, Skiff"/></Fl></div>
+          <Fl label="USV Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))} placeholder="e.g. WAM-V 16"/></Fl>
+          <Fl label="Type"><In value={fm.type} onChange={e=>setFm(p=>({...p,type:e.target.value}))} placeholder="e.g. WAM-V, Heron, Sailbuoy"/></Fl></div>
         <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          <Fl label="Registration / Hull #"><In value={fm.registration} onChange={e=>setFm(p=>({...p,registration:e.target.value}))}/></Fl>
-          <Fl label="Capacity (pax)"><In type="number" value={fm.capacity} onChange={e=>setFm(p=>({...p,capacity:e.target.value}))}/></Fl>
+          <Fl label="Hull / Serial #"><In value={fm.hullId} onChange={e=>setFm(p=>({...p,hullId:e.target.value}))}/></Fl>
+          <Fl label="Length (m)"><In type="number" step="0.1" value={fm.length} onChange={e=>setFm(p=>({...p,length:e.target.value}))}/></Fl>
           <Fl label="Home Port"><In value={fm.homePort} onChange={e=>setFm(p=>({...p,homePort:e.target.value}))}/></Fl></div>
         <Fl label="Status"><Sl options={[{v:"available",l:"Available"},{v:"maintenance",l:"Maintenance"},{v:"decommissioned",l:"Decommissioned"}]}
           value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl>
-        <Fl label="Notes"><In value={fm.notes} onChange={e=>setFm(p=>({...p,notes:e.target.value}))} placeholder="Any notes about this vessel..."/></Fl>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add Boat":"Save"}</Bt></div></div></ModalWrap>
+        <Fl label="Notes"><In value={fm.notes} onChange={e=>setFm(p=>({...p,notes:e.target.value}))} placeholder="Any notes about this USV..."/></Fl>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add USV":"Save"}</Bt></div></div></ModalWrap>
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
-      title="Delete Boat?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
+      title="Delete USV?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ PERSONNEL ═══════════ */
 function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
@@ -2961,7 +2961,7 @@ const NAV_SECTIONS=[
     {id:"locations",l:"Locations",i:"⌖",access:"manager",perm:"locations"},
     {id:"departments",l:"Departments",i:"▣",access:"manager",perm:"departments"},
     {id:"personnel",l:"Personnel",i:"◎",access:"manager",perm:"personnel"},
-    {id:"boats",l:"Boats",i:"⛵",access:"manager"},
+    {id:"boats",l:"USVs",i:"⛵",access:"manager"},
     {id:"settings",l:"Settings",i:"⚙",access:"director"},
   ]},
 ];
@@ -2972,16 +2972,16 @@ function NavSection({section,pg,setPg,collapsed,onToggle,canAccess,getBadge}){
   const hasLabel=!!section.label;
   return(<div style={{marginBottom:hasLabel?8:0}}>
     {hasLabel&&<button onClick={onToggle} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:6,
-      padding:"6px 16px",width:"100%",boxSizing:"border-box"}}>
+      padding:"6px 16px",width:"100%",boxSizing:"border-box",overflow:"hidden"}}>
       <span style={{fontSize:8,color:T.dm,transition:"transform .15s",transform:collapsed?"rotate(-90deg)":"rotate(0)"}}>▼</span>
       <span style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.5,color:T.dm,fontFamily:T.m,fontWeight:600}}>{section.label}</span></button>}
     {!collapsed&&<div style={{display:"flex",flexDirection:"column",gap:1}}>
       {visibleItems.map(n=>{const badge=getBadge(n.id);return(
         <button key={n.id} onClick={()=>setPg(n.id)} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
           padding:"6px 16px",margin:"0 8px",borderRadius:6,fontSize:11,fontWeight:pg===n.id?600:400,fontFamily:T.u,
-          background:pg===n.id?T.cardH:"transparent",color:pg===n.id?T.tx:T.mu,transition:"all .12s",
-          borderLeft:pg===n.id?"2px solid "+T.bl:"2px solid transparent"}}>
-          <span style={{fontSize:9,opacity:.5,fontFamily:T.m,width:12}}>{n.i}</span>{n.l}
+          background:pg===n.id?T.cardH:"transparent",color:pg===n.id?T.tx:T.mu,transition:"all .12s",boxSizing:"border-box",
+          borderLeft:pg===n.id?"2px solid "+T.bl:"2px solid transparent",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+          <span style={{fontSize:9,opacity:.5,fontFamily:T.m,width:12,flexShrink:0}}>{n.i}</span><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{n.l}</span>
           {badge>0&&<span style={{marginLeft:"auto",fontSize:8,fontWeight:700,color:n.id==="approvals"?T.or:T.rd,
             background:n.id==="approvals"?"rgba(251,146,60,.12)":"rgba(239,68,68,.12)",padding:"1px 5px",borderRadius:8,fontFamily:T.m}}>{badge}</span>}
         </button>)})}</div>}</div>);}
@@ -3179,10 +3179,10 @@ export default function App(){
     personnel:(t.personnel||[]).map(p=>({id:p.id,userId:p.user?.id,name:p.user?.name,title:p.user?.title,sysRole:p.user?.role,
       deptId:p.user?.deptId,tripRole:p.role,notes:p.notes||""})),
     notes:(t.notes||[]).map(n=>({id:n.id,content:n.content,category:n.category,authorName:n.author?.name,authorId:n.authorId,createdAt:n.createdAt})),
-    boats:(t.boats||[]).map(tb=>({tripBoatId:tb.id,boatId:tb.boat?.id,name:tb.boat?.name,type:tb.boat?.type,registration:tb.boat?.registration,
-      capacity:tb.boat?.capacity,status:tb.boat?.status,role:tb.role,notes:tb.notes||""})),
+    boats:(t.boats||[]).map(tb=>({tripBoatId:tb.id,boatId:tb.boat?.id,name:tb.boat?.name,type:tb.boat?.type,hullId:tb.boat?.hullId,
+      length:tb.boat?.length,status:tb.boat?.status,role:tb.role,notes:tb.notes||""})),
     personnelCount:t._count?.personnel||0,reservationCount:t._count?.reservations||0,boatCount:t._count?.boats||0});
-  const xformBoat=b=>({id:b.id,name:b.name,type:b.type||"",registration:b.registration||"",capacity:b.capacity,
+  const xformBoat=b=>({id:b.id,name:b.name,type:b.type||"",hullId:b.hullId||"",length:b.length,
     homePort:b.homePort||"",status:b.status,notes:b.notes||"",
     trips:(b.trips||[]).map(tb=>({tripBoatId:tb.id,tripId:tb.trip?.id,tripName:tb.trip?.name,tripStatus:tb.trip?.status,role:tb.role,notes:tb.notes||""}))});
   const xformPerson=p=>({id:p.id,name:p.name,title:p.title||"",role:p.role,deptId:p.deptId});
@@ -3431,7 +3431,7 @@ export default function App(){
           {navContent}</nav></>}
 
       {/* Desktop sidebar */}
-      {!isMobile&&<nav style={{width:200,flexShrink:0,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",display:"flex",flexDirection:"column",overflowY:"auto"}}>
+      {!isMobile&&<nav style={{width:200,flexShrink:0,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",display:"flex",flexDirection:"column",overflowY:"auto",overflowX:"hidden"}}>
         {navContent}</nav>}
 
       <main style={{flex:1,padding:isMobile?"14px 12px":"20px 26px",overflowY:"auto",overflowX:"hidden"}}>
