@@ -29,6 +29,7 @@ export const kitTypeSchema = z.object({
     label: z.string().min(1),
     type: z.enum(['text', 'number', 'toggle']).default('text'),
   })).optional().default([]),
+  deptIds: z.array(z.string().uuid()).optional().default([]),
 });
 
 // ─── Kit ───
