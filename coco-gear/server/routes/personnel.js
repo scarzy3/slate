@@ -11,8 +11,8 @@ const router = Router();
 
 const SALT_ROUNDS = 10;
 
-// GET / - list all users (admin+, perm: personnel)
-router.get('/', authMiddleware, requireAdminPerm('personnel'), async (req, res) => {
+// GET / - list all users (any authenticated user — needed for kit checkout/return display)
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -35,8 +35,8 @@ router.get('/', authMiddleware, requireAdminPerm('personnel'), async (req, res) 
   }
 });
 
-// GET /:id - single user
-router.get('/:id', authMiddleware, requireAdminPerm('personnel'), async (req, res) => {
+// GET /:id - single user (any authenticated user)
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },

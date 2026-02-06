@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useAuth } from './auth.jsx';
 import api from './api.js';
+import jsQR from 'jsqr';
 
 /* ═══════════════════════════════════════════════════════════════════
    SLATE — Full-featured asset management system
@@ -170,7 +171,7 @@ const DEF_SETTINGS={
   requireSerialsOnCheckout:true,requireSerialsOnReturn:true,requireSerialsOnInspect:true,
   allowUserInspect:true,allowUserCheckout:true,
   inspectionDueThreshold:30,overdueReturnThreshold:14,
-  enableReservations:true,enableMaintenance:true,enableConsumables:true,
+  enableReservations:true,enableMaintenance:true,enableConsumables:true,enableQR:true,
   /* Admin permissions - what admins can access */
   adminPerms:{
     analytics:true,reports:true,maintenance:true,consumables:true,
@@ -300,21 +301,32 @@ function QRSvg({data,size=160,padding=2}){
       <rect key={r*n+c} x={(c+padding)*cs} y={(r+padding)*cs} width={cs+.5} height={cs+.5} fill="#000"/>:null))}</svg>);}
 
 function QRScanner({onScan,onClose}){
-  const vidRef=useRef(null);const streamRef=useRef(null);
+  const vidRef=useRef(null);const canvasRef=useRef(null);const streamRef=useRef(null);
   const[err,setErr]=useState("");const[manual,setManual]=useState("");const[active,setActive]=useState(true);
   useEffect(()=>{
     if(!active)return;let animId=null;let stopped=false;
     const start=async()=>{
       try{
-        if(!('BarcodeDetector' in window)){setErr("Camera scanning not supported. Use manual entry below.");setActive(false);return}
-        const detector=new BarcodeDetector({formats:['qr_code']});
         const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
         streamRef.current=stream;
         if(vidRef.current){vidRef.current.srcObject=stream;await vidRef.current.play()}
+        const useNative='BarcodeDetector' in window;
+        const detector=useNative?new BarcodeDetector({formats:['qr_code']}):null;
+        const canvas=canvasRef.current;const ctx=canvas?canvas.getContext('2d',{willReadFrequently:true}):null;
         const scan=async()=>{
           if(stopped||!vidRef.current)return;
-          try{const codes=await detector.detect(vidRef.current);
-            if(codes.length>0){onScan(codes[0].rawValue);return}}catch(e){}
+          try{
+            if(detector){
+              const codes=await detector.detect(vidRef.current);
+              if(codes.length>0){onScan(codes[0].rawValue);return}
+            }else if(ctx&&vidRef.current.videoWidth){
+              canvas.width=vidRef.current.videoWidth;canvas.height=vidRef.current.videoHeight;
+              ctx.drawImage(vidRef.current,0,0);
+              const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:"dontInvert"});
+              if(code){onScan(code.data);return}
+            }
+          }catch(e){}
           animId=requestAnimationFrame(scan)};
         scan();
       }catch(e){setErr("Camera access denied. Use manual entry.");setActive(false)}};
@@ -326,6 +338,7 @@ function QRScanner({onScan,onClose}){
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     {active&&<div style={{position:"relative",borderRadius:10,overflow:"hidden",background:"#000",aspectRatio:"4/3"}}>
       <video ref={vidRef} style={{width:"100%",height:"100%",objectFit:"cover"}} playsInline muted/>
+      <canvas ref={canvasRef} style={{display:"none"}}/>
       <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
         <div style={{width:"55%",height:"55%",border:"2px solid rgba(96,165,250,.6)",borderRadius:12}}/></div>
       <div style={{position:"absolute",bottom:10,left:0,right:0,textAlign:"center",fontSize:10,color:"rgba(255,255,255,.7)",fontFamily:T.m}}>
@@ -1668,6 +1681,7 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     {k:"enableReservations",l:"Enable reservations",d:"Kit booking system"},
     {k:"enableMaintenance",l:"Enable maintenance tracking",d:"Repair and service tracking"},
     {k:"enableConsumables",l:"Enable consumables",d:"Stock management"},
+    {k:"enableQR",l:"Enable QR codes",d:"QR code generation, printing, and scanning"},
   ];
   const numItems=[
     {k:"inspectionDueThreshold",l:"Inspection due threshold",d:"Days before inspection overdue",unit:"days"},
@@ -1825,7 +1839,7 @@ function MyProfile({user,personnel,setPersonnel,kits,assets,depts,onRefreshPerso
   </div>);}
 
 /* ═══════════ KIT ISSUANCE ═══════════ */
-function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,curUserId,settings,requests,setRequests,addLog}){
+function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,curUserId,settings,requests,setRequests,addLog,onNavigateToKit}){
   const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[view,setView]=useState("all");
   const filt=useMemo(()=>{let list=kits;
     if(view==="issued")list=list.filter(k=>k.issuedTo);if(view==="available")list=list.filter(k=>!k.issuedTo&&!k.maintenanceStatus);
@@ -1848,7 +1862,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
   return(<div>
     <SH title="Checkout / Return" sub={issuedCt+" out | "+(kits.length-issuedCt)+" available | "+myCt+" mine"}
       action={<div style={{display:"flex",gap:6}}>
-        <Bt sm onClick={()=>setMd("qr-scan")}>Scan QR</Bt>
+        {settings.enableQR!==false&&<Bt sm onClick={()=>setMd("qr-scan")}>Scan QR</Bt>}
         {(isAdmin||isSuper)&&<Bt v="primary" onClick={()=>setMd("adminIssue")}>Admin Issue</Bt>}</div>}/>
     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
       <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:200}}/>
@@ -1866,7 +1880,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}><Bg color={st.fg} bg={st.bg}>{st.tag}</Bg>{dept&&<DeptBg dept={dept}/>}</div></div>
           {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!inMaint&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
             <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={kit.locId} onChange={e=>{const newLocId=e.target.value;setKits(p=>p.map(k=>k.id===kit.id?{...k,locId:newLocId}:k));
-              api.kits.updateLocation(kit.id,newLocId).then(()=>refreshKits()).catch(err=>console.error("Location update error:",err))}} style={{flex:1,fontSize:9,padding:"4px 8px"}}/></div>}
+              api.kits.updateLocation(kit.id,newLocId).then(()=>{if(onRefreshKits)onRefreshKits()}).catch(err=>console.error("Location update error:",err))}} style={{flex:1,fontSize:9,padding:"4px 8px"}}/></div>}
           {inMaint?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.am}}/><span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance ({kit.maintenanceStatus})</span></div>
           :person?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:isMine?"rgba(244,114,182,.06)":"rgba(244,114,182,.03)",border:"1px solid rgba(244,114,182,.12)"}}>
@@ -1884,17 +1898,46 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
         if(!k||!ty)return null;return <SerialEntryForm kit={k} type={ty} allC={allC} existingSerials={k.serials} mode="return" onDone={data=>doReturn(kid,data)} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
     <ModalWrap open={md==="adminIssue"} onClose={()=>setMd(null)} title="Admin Issue" wide>
       {md==="adminIssue"&&<AdminIssuePicker kits={kits} types={types} locs={locs} personnel={personnel} allC={allC} settings={settings} onIssue={(kid,pid,data)=>doAdminIssue(kid,pid,data)} onCancel={()=>setMd(null)}/>}</ModalWrap>
-    {/* QR Scanner for quick checkout/return */}
-    <ModalWrap open={md==="qr-scan"} onClose={()=>setMd(null)} title="Scan QR to Checkout/Return">
+    {/* QR Scanner — navigates to kit detail */}
+    <ModalWrap open={md==="qr-scan"} onClose={()=>setMd(null)} title="Scan QR Code">
       {md==="qr-scan"&&<QRScanner onScan={val=>{
         const parsed=parseQR(val);
-        if(parsed?.type==="kit"){const k=kits.find(x=>x.id===parsed.id);
-          if(k){if(k.issuedTo){setMd("return:"+k.id)}else if(!k.maintenanceStatus){setMd("checkout:"+k.id)}else{setMd(null)}return}}
+        if(parsed?.type==="kit"){
+          if(onNavigateToKit){onNavigateToKit(parsed.id);setMd(null);return}
+          const k=kits.find(x=>x.id===parsed.id);
+          if(k){if(k.issuedTo){setMd("return:"+k.id)}else if(!k.maintenanceStatus){setMd("checkout:"+k.id)}else{setMd(null)}}return}
+        if(parsed?.type==="serial"){setMd("verify:"+val);return}
         /* Fallback: search by color */
         const q=val.toLowerCase();const match=kits.find(k=>k.color.toLowerCase()===q||Object.values(k.serials).some(s=>s?.toLowerCase()===q));
-        if(match){if(match.issuedTo){setMd("return:"+match.id)}else if(!match.maintenanceStatus){setMd("checkout:"+match.id)}else{setMd(null)}}
+        if(match&&onNavigateToKit){onNavigateToKit(match.id);setMd(null)}
+        else if(match){if(match.issuedTo){setMd("return:"+match.id)}else if(!match.maintenanceStatus){setMd("checkout:"+match.id)}else{setMd(null)}}
         else{setSearch(val);setMd(null)}
-      }} onClose={()=>setMd(null)}/>}</ModalWrap></div>);}
+      }} onClose={()=>setMd(null)}/>}</ModalWrap>
+    {/* Serial verification modal */}
+    <ModalWrap open={String(md).startsWith("verify:")} onClose={()=>setMd(null)} title="Serial Verification">
+      {String(md).startsWith("verify:")&&(()=>{
+        const raw=md.slice(7);const parsed=parseQR(raw);
+        if(parsed?.type!=="serial"||!parsed.parts)return <div style={{color:T.mu,fontFamily:T.m,fontSize:11}}>Invalid serial QR code</div>;
+        const[kitIdShort,compKey,serial]=parsed.parts;
+        const kit=kits.find(k=>k.id.startsWith(kitIdShort));
+        if(!kit)return <div style={{padding:20,textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:T.rd,marginBottom:8}}>Kit Not Found</div>
+          <div style={{fontSize:11,color:T.mu,fontFamily:T.m}}>No kit matches ID starting with "{kitIdShort}"</div></div>;
+        const ty=types.find(t=>t.id===kit.typeId);const recordedSerial=kit.serials?.[compKey];
+        const match=recordedSerial&&recordedSerial===serial;
+        return(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:12}}>
+          <div style={{width:64,height:64,borderRadius:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,
+            background:match?"rgba(34,197,94,.1)":"rgba(239,68,68,.1)",border:"2px solid "+(match?T.gn:T.rd)}}>{match?"✓":"✗"}</div>
+          <div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:700,color:match?T.gn:T.rd}}>{match?"Serial Verified":"Mismatch"}</div>
+            <div style={{fontSize:11,color:T.mu,fontFamily:T.m,marginTop:4}}>Kit: {kit.color} ({ty?.name||"?"})</div></div>
+          <div style={{width:"100%",display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",borderRadius:6,background:T.card,border:"1px solid "+T.bd}}>
+              <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Scanned</span>
+              <span style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m}}>{serial}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",borderRadius:6,background:T.card,border:"1px solid "+T.bd}}>
+              <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>On File</span>
+              <span style={{fontSize:10,fontWeight:600,color:recordedSerial?T.tx:T.dm,fontFamily:T.m}}>{recordedSerial||"Not recorded"}</span></div></div>
+          <div style={{display:"flex",gap:8}}>{onNavigateToKit&&<Bt v="primary" sm onClick={()=>{onNavigateToKit(kit.id);setMd(null)}}>View Kit</Bt>}
+            <Bt sm onClick={()=>setMd(null)}>Close</Bt></div></div>)})()}</ModalWrap></div>);}
 
 function AdminIssuePicker({kits,types,locs,personnel,allC,settings,onIssue,onCancel}){
   const[selKit,setSelKit]=useState("");const[selPerson,setSelPerson]=useState("");const[phase,setPhase]=useState("pick");
@@ -1906,20 +1949,22 @@ function AdminIssuePicker({kits,types,locs,personnel,allC,settings,onIssue,onCan
     <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={onCancel}>Cancel</Bt><Bt v="primary" onClick={()=>setPhase("serials")} disabled={!selKit||!selPerson}>Next</Bt></div></div>);}
 
 /* ═══════════ KIT INVENTORY ═══════════ */
-function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics}){
-  const[selId,setSelId]=useState(null);const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[lf,setLf]=useState("ALL");
+function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics,onRefreshKits,initialSelectedKit,onClearSelectedKit}){
+  const[selId,setSelId]=useState(initialSelectedKit||null);const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[lf,setLf]=useState("ALL");
   const[statusFilter,setStatusFilter]=useState(initialFilter);
   const[kf,setKf]=useState(null);const sel=kits.find(k=>k.id===selId);
   
   /* Sync with external filter */
   useEffect(()=>{setStatusFilter(initialFilter)},[initialFilter]);
+  /* Navigate to specific kit from external source (QR scan etc) */
+  useEffect(()=>{if(initialSelectedKit){setSelId(initialSelectedKit);if(onClearSelectedKit)onClearSelectedKit()}},[initialSelectedKit]);
   const changeStatusFilter=(f)=>{setStatusFilter(f);if(onFilterChange)onFilterChange(f)};
   
   const openAdd=()=>{const ft=types[0];setKf({typeId:ft?.id||"",color:"BLACK",locId:locs[0]?.id||"",fields:{},deptId:""});setMd("addK")};
   const saveK=async()=>{if(!kf)return;
     try{if(md==="addK"){await api.kits.create({typeId:kf.typeId,color:kf.color,locId:kf.locId,deptId:kf.deptId||null,fields:kf.fields})}
     else{await api.kits.update(md,{typeId:kf.typeId,color:kf.color,locId:kf.locId,deptId:kf.deptId||null,fields:kf.fields})}
-    await refreshKits()}catch(e){alert(e.message)}
+    if(onRefreshKits)await onRefreshKits()}catch(e){alert(e.message)}
     setMd(null);setKf(null)};
   const doneInsp=async data=>{const kid=String(md).split(":")[1];
     try{await apiInspect(kid,curUserId,data.notes,data.results)}catch(e){/* apiInspect logs error */}
@@ -1952,8 +1997,8 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
   
   return(<div>
     <SH title="Kit Inventory" sub={kits.length+" kits"} action={<div style={{display:"flex",gap:6}}>
-      <Bt sm onClick={()=>setMd("qr-scan")}>Scan QR</Bt>
-      <Bt sm v="ind" onClick={()=>setMd("qr-bulk")}>Print QR Codes</Bt>
+      {settings.enableQR!==false&&<Bt sm onClick={()=>setMd("qr-scan")}>Scan QR</Bt>}
+      {settings.enableQR!==false&&<Bt sm v="ind" onClick={()=>setMd("qr-bulk")}>Print QR Codes</Bt>}
       {(isAdmin||isSuper)&&<Bt v="primary" onClick={openAdd} disabled={!types.length}>+ Add Kit</Bt>}</div>}/>
     
     {/* Status filter tabs */}
@@ -2024,18 +2069,18 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
               <div key={c._key} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 7px",borderRadius:4,background:"rgba(255,255,255,.012)"}}>
                 <span style={{color:s.fg,fontSize:9,fontWeight:700,width:16}}>{s.ic}</span><span style={{fontSize:8,color:(sel.comps[c._key]||"GOOD")==="GOOD"?T.mu:T.tx,fontFamily:T.m}}>{lbl}</span></div>)})}</div></div>}
           {/* Inline QR Code */}
-          <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:8,background:"rgba(129,140,248,.03)",border:"1px solid rgba(129,140,248,.1)",marginBottom:8,cursor:"pointer"}}
+          {settings.enableQR!==false&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:8,background:"rgba(129,140,248,.03)",border:"1px solid rgba(129,140,248,.1)",marginBottom:8,cursor:"pointer"}}
             onClick={()=>setMd("qr:"+sel.id)}>
             <QRSvg data={qrKitData(sel.id)} size={56} padding={1}/>
             <div style={{flex:1}}>
               <div style={{fontSize:10,fontWeight:600,color:T.ind,fontFamily:T.m}}>QR Code</div>
-              <div style={{fontSize:8,color:T.dm,fontFamily:T.m}}>Click to view full size, print, or see serialized items</div></div></div>
+              <div style={{fontSize:8,color:T.dm,fontFamily:T.m}}>Click to view full size, print, or see serialized items</div></div></div>}
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {canInspect&&!sel.maintenanceStatus&&<Bt v="success" sm onClick={()=>setMd("insp:"+sel.id)}>Inspect</Bt>}
             {(isAdmin||isSuper)&&<Bt v="primary" sm onClick={()=>{setKf({typeId:sel.typeId,color:sel.color,locId:sel.locId,fields:{...sel.fields},deptId:sel.deptId||""});setMd(sel.id)}}>Edit</Bt>}
-            <Bt sm v="ind" onClick={()=>setMd("qr:"+sel.id)}>QR Code</Bt>
+            {settings.enableQR!==false&&<Bt sm v="ind" onClick={()=>setMd("qr:"+sel.id)}>QR Code</Bt>}
             <Bt sm onClick={()=>setMd("hist:"+sel.id)}>History</Bt>
-            {(isAdmin||isSuper)&&<Bt v="danger" sm onClick={async()=>{try{await api.kits.delete(sel.id);await refreshKits();setSelId(null)}catch(e){alert(e.message)}}} style={{marginLeft:"auto"}}>Delete</Bt>}</div></div>)})()}</div>
+            {(isAdmin||isSuper)&&<Bt v="danger" sm onClick={async()=>{try{await api.kits.delete(sel.id);if(onRefreshKits)await onRefreshKits();setSelId(null)}catch(e){alert(e.message)}}} style={{marginLeft:"auto"}}>Delete</Bt>}</div></div>)})()}</div>
     <ModalWrap open={md==="addK"||kf&&md&&md!=="addK"&&!String(md).startsWith("insp")&&!String(md).startsWith("hist")&&!String(md).startsWith("qr")} onClose={()=>{setMd(null);setKf(null)}} title={md==="addK"?"Add Kit":"Edit Kit"}>
       {kf&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Type"><Sl options={types.map(t=>({v:t.id,l:t.name}))} value={kf.typeId} onChange={e=>setKf(p=>({...p,typeId:e.target.value,fields:{}}))}/></Fl>
@@ -2075,10 +2120,36 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
       {md==="qr-scan"&&<QRScanner onScan={val=>{
         const parsed=parseQR(val);
         if(parsed?.type==="kit"){const k=kits.find(x=>x.id===parsed.id);if(k){setSelId(k.id);setMd(null);return}}
+        if(parsed?.type==="serial"){setMd("verify:"+val);return}
         /* Fallback: search by color or serial */
         const q=val.toLowerCase();const match=kits.find(k=>k.color.toLowerCase()===q||Object.values(k.serials).some(s=>s?.toLowerCase()===q));
         if(match){setSelId(match.id);setMd(null)}else{setMd(null);setSearch(val)}
       }} onClose={()=>setMd(null)}/>}</ModalWrap>
+    {/* Serial verification modal */}
+    <ModalWrap open={String(md).startsWith("verify:")} onClose={()=>setMd(null)} title="Serial Verification">
+      {String(md).startsWith("verify:")&&(()=>{
+        const raw=md.slice(7);const parsed=parseQR(raw);
+        if(parsed?.type!=="serial"||!parsed.parts)return <div style={{color:T.mu,fontFamily:T.m,fontSize:11}}>Invalid serial QR code</div>;
+        const[kitIdShort,compKey,serial]=parsed.parts;
+        const kit=kits.find(k=>k.id.startsWith(kitIdShort));
+        if(!kit)return <div style={{padding:20,textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,color:T.rd,marginBottom:8}}>Kit Not Found</div>
+          <div style={{fontSize:11,color:T.mu,fontFamily:T.m}}>No kit matches ID starting with "{kitIdShort}"</div></div>;
+        const ty=types.find(t=>t.id===kit.typeId);const recordedSerial=kit.serials?.[compKey];
+        const match=recordedSerial&&recordedSerial===serial;
+        return(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:12}}>
+          <div style={{width:64,height:64,borderRadius:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,
+            background:match?"rgba(34,197,94,.1)":"rgba(239,68,68,.1)",border:"2px solid "+(match?T.gn:T.rd)}}>{match?"✓":"✗"}</div>
+          <div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:700,color:match?T.gn:T.rd}}>{match?"Serial Verified":"Mismatch"}</div>
+            <div style={{fontSize:11,color:T.mu,fontFamily:T.m,marginTop:4}}>Kit: {kit.color} ({ty?.name||"?"})</div></div>
+          <div style={{width:"100%",display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",borderRadius:6,background:T.card,border:"1px solid "+T.bd}}>
+              <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Scanned</span>
+              <span style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m}}>{serial}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",borderRadius:6,background:T.card,border:"1px solid "+T.bd}}>
+              <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>On File</span>
+              <span style={{fontSize:10,fontWeight:600,color:recordedSerial?T.tx:T.dm,fontFamily:T.m}}>{recordedSerial||"Not recorded"}</span></div></div>
+          <div style={{display:"flex",gap:8}}><Bt v="primary" sm onClick={()=>{setSelId(kit.id);setMd(null)}}>View Kit</Bt>
+            <Bt sm onClick={()=>setMd(null)}>Close</Bt></div></div>)})()}</ModalWrap>
     {/* Bulk QR Print modal */}
     <ModalWrap open={md==="qr-bulk"} onClose={()=>setMd(null)} title="Print QR Codes" wide>
       {md==="qr-bulk"&&<QRPrintSheet items={filt.map(k=>{const ty=types.find(t=>t.id===k.typeId);const lo=locs.find(l=>l.id===k.locId);
@@ -2262,7 +2333,7 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
   const attempt=async()=>{
     if(!selUser){setError("Select a user");return}
     setLoading(true);setError("");
-    try{const result=await api.auth.login(selUser,pin);onLogin(result)}
+    try{await onLogin(selUser,pin)}
     catch(e){setError(e.message||"Login failed")}
     finally{setLoading(false)}};
   return(
@@ -2272,7 +2343,7 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
         *{box-sizing:border-box}::selection{background:${T._selBg}}
         option{background:${T._optBg};color:${T._optColor}}
       `}</style>
-      <div style={{width:380,padding:36,borderRadius:16,background:T.panel,border:"1px solid "+T.bd,animation:"mdIn .25s ease-out",position:"relative"}}>
+      <div style={{width:"92%",maxWidth:380,padding:"28px 24px",borderRadius:16,background:T.panel,border:"1px solid "+T.bd,animation:"mdIn .25s ease-out",position:"relative"}}>
         <style>{`@keyframes mdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
         <button onClick={toggleTheme} style={{all:"unset",cursor:"pointer",position:"absolute",top:14,right:14,
           width:30,height:30,borderRadius:15,display:"flex",alignItems:"center",justifyContent:"center",
@@ -2326,6 +2397,7 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
             background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)"}}>{error}</div>}
           <Bt v="primary" onClick={attempt} disabled={loading} style={{justifyContent:"center",padding:"11px 0",fontSize:13}}>{loading?"Signing in...":"Sign In"}</Bt>
           <div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>Default PIN: 1234</div>
+          <div style={{fontSize:8,color:T.dm,fontFamily:T.m,textAlign:"center",opacity:.5,marginTop:4}}>build 2026-02-06b</div>
         </div></div></div>);}
 
 export default function App(){
@@ -2338,7 +2410,7 @@ export default function App(){
   const[requests,setRequests]=useState([]);const[logs,setLogs]=useState([]);
   const[reservations,setReservations]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[favorites,setFavorites]=useState([]);
-  const[searchMd,setSearchMd]=useState(false);const[kitFilter,setKitFilter]=useState("all");
+  const[searchMd,setSearchMd]=useState(false);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);
   const[collapsedSections,setCollapsedSections]=useState({});
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
   const[loginUsers,setLoginUsers]=useState([]);
@@ -2470,8 +2542,8 @@ export default function App(){
     else if(result.type==="person"){setPg("personnel")}
     setSearchMd(false)};
 
-  if(!isLoggedIn||!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme} onLogin={result=>{
-    setCurUser(result.user.id);setIsLoggedIn(true);localStorage.setItem('slate_token',result.token);localStorage.setItem('slate_user',JSON.stringify(result.user))}}/>;
+  if(!isLoggedIn||!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme} onLogin={async(userId,pin)=>{
+    const userData=await authCtx.login(userId,pin);setCurUser(userData.id);setIsLoggedIn(true)}}/>;
   if(!dataLoaded&&!loadError)return(<div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
     <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:T.tx,marginBottom:8}}>Loading Slate...</div>
       <div style={{fontSize:11,color:T.mu,fontFamily:T.m}}>Connecting to server</div></div></div>);
@@ -2543,9 +2615,11 @@ export default function App(){
           analytics={analytics} logs={logs} settings={settings} curUserId={curUser} favorites={favorites} setFavorites={setFavorites} onNavigate={handleNavigate} onAction={handleQuickAction} onFilterKits={handleFilterKits}/>}
         {pg==="kits"&&<KitInv kits={kits} setKits={setKits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} settings={settings} favorites={favorites} setFavorites={setFavorites} addLog={addLog} curUserId={curUser}
-          initialFilter={kitFilter} onFilterChange={setKitFilter} analytics={analytics}/>}
+          initialFilter={kitFilter} onFilterChange={setKitFilter} analytics={analytics} onRefreshKits={refreshKits}
+          initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)}/>}
         {pg==="issuance"&&<KitIssuance kits={kits} setKits={setKits} types={types} locs={locs} personnel={personnel} allC={comps} depts={depts}
-          isAdmin={isAdmin} isSuper={isSuper} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests} addLog={addLog}/>}
+          isAdmin={isAdmin} isSuper={isSuper} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests} addLog={addLog}
+          onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}}/>}
         {pg==="analytics"&&canAccess({access:"admin",perm:"analytics"})&&<AnalyticsPage analytics={analytics} kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs}/>}
         {pg==="reports"&&canAccess({access:"admin",perm:"reports"})&&<ReportsPage kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs} logs={logs} analytics={analytics}/>}
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}
