@@ -55,8 +55,8 @@ const CM={
 };
 const uid=()=>crypto.randomUUID();
 const CATS=["Comms","Power","Cables","Cases","Optics","Other"];
-const SYS_ROLE_LABELS={director:"Director",super:"Director",engineer:"Engineer",manager:"Manager",admin:"Manager",lead:"Lead",user:"Operator"};
-const sysRoleColor=r=>({director:T.rd,super:T.rd,engineer:T.rd,manager:T.am,admin:T.am,lead:T.or,user:T.bl}[r]||T.bl);
+const SYS_ROLE_LABELS={developer:"Developer",director:"Director",super:"Director",engineer:"Engineer",manager:"Manager",admin:"Manager",lead:"Lead",user:"Operator"};
+const sysRoleColor=r=>({developer:T.gn,director:T.rd,super:T.rd,engineer:T.rd,manager:T.am,admin:T.am,lead:T.or,user:T.bl}[r]||T.bl);
 const td=()=>new Date().toISOString().slice(0,10);
 const now=()=>new Date().toISOString();
 const daysAgo=d=>{if(!d)return null;return Math.floor((Date.now()-new Date(d).getTime())/864e5)};
@@ -1324,7 +1324,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
           <Fl label="End Date"><In type="date" value={fm.endDate?.slice(0,10)||fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl>
           <Fl label="Status"><Sl options={[{v:"planning",l:"Planning"},{v:"active",l:"Active"},{v:"completed",l:"Completed"},{v:"cancelled",l:"Cancelled"}]}
             value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl></div>
-        <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
+        <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["developer","director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
           } value={fm.leadId} onChange={e=>setFm(p=>({...p,leadId:e.target.value}))}/></Fl>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt>
           <Bt v="primary" onClick={saveTrip} disabled={!fm.name.trim()||!fm.startDate||!fm.endDate}>{md==="add"?"Create Trip":"Save Changes"}</Bt></div></div></ModalWrap></div>);
@@ -1530,7 +1530,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,isAdmin,isSupe
           <Fl label="End Date"><In type="date" value={fm.endDate?.slice(0,10)||fm.endDate} onChange={e=>setFm(p=>({...p,endDate:e.target.value}))}/></Fl>
           <Fl label="Status"><Sl options={[{v:"planning",l:"Planning"},{v:"active",l:"Active"},{v:"completed",l:"Completed"},{v:"cancelled",l:"Cancelled"}]}
             value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl></div>
-        <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
+        <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["developer","director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
           } value={fm.leadId} onChange={e=>setFm(p=>({...p,leadId:e.target.value}))}/></Fl>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt>
           <Bt v="primary" onClick={saveTrip} disabled={!fm.name.trim()||!fm.startDate||!fm.endDate}>{md==="add"?"Create Trip":"Save Changes"}</Bt></div></div></ModalWrap>
@@ -2131,13 +2131,13 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
   const[deleteConfirm,setDeleteConfirm]=useState(null);
 
   /* First director is protected and cannot be deleted */
-  const primaryDirector=personnel.find(p=>p.role==="director"||p.role==="super"||p.role==="engineer");
+  const primaryDirector=personnel.find(p=>p.role==="developer"||p.role==="director"||p.role==="super"||p.role==="engineer");
   const isPrimarySuper=(id)=>primaryDirector?.id===id;
 
   const save=async()=>{if(!fm.name.trim())return;
     try{if(md==="add"){await api.personnel.create({name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||"password"})}
     else{
-      if(isPrimarySuper(md)&&!["director","super","engineer"].includes(fm.role)){alert("Cannot change role of primary director");return}
+      if(isPrimarySuper(md)&&!["developer","director","super","engineer"].includes(fm.role)){alert("Cannot change role of primary director");return}
       const data={name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null};
       if(fm.pin)data.pin=fm.pin;
       await api.personnel.update(md,data)}
@@ -2145,6 +2145,7 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
     setMd(null)};
 
   const confirmDelete=(person)=>{
+    if(person.role==="developer"){alert("Cannot delete the developer account");return}
     const ik=kits.filter(k=>k.issuedTo===person.id);
     if(ik.length>0){alert("Cannot delete: user has "+ik.length+" kit(s) checked out");return}
     if(isPrimarySuper(person.id)){alert("Cannot delete the primary administrator");return}
@@ -2152,7 +2153,7 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
 
   const doDelete=async()=>{if(deleteConfirm){try{await api.personnel.delete(deleteConfirm.id);await onRefreshPersonnel()}catch(e){alert(e.message)}}};
   
-  const rc={director:T.rd,super:T.rd,engineer:T.rd,manager:T.am,admin:T.am,lead:T.or,user:T.bl};
+  const rc={developer:T.gn,director:T.rd,super:T.rd,engineer:T.rd,manager:T.am,admin:T.am,lead:T.or,user:T.bl};
   const grouped=useMemo(()=>{const g={"Unassigned":[]};depts.forEach(d=>{g[d.name]=[]});
     personnel.forEach(p=>{const d=p.deptId?depts.find(x=>x.id===p.deptId):null;(g[d?.name||"Unassigned"]=g[d?.name||"Unassigned"]||[]).push(p)});return g},[personnel,depts]);
   return(<div>
@@ -2638,7 +2639,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
 
 /* ═══════════ APPROVALS ═══════════ */
 function ApprovalsPage({requests,setRequests,kits,setKits,personnel,depts,allC,types,curUserId,addLog,onRefreshKits}){
-  const user=personnel.find(p=>p.id===curUserId);const isDir=["director","super","engineer","manager","admin","lead"].includes(user?.role);
+  const user=personnel.find(p=>p.id===curUserId);const isDir=["developer","director","super","engineer","manager","admin","lead"].includes(user?.role);
   const headOf=depts.filter(d=>d.headId===curUserId).map(d=>d.id);
   const visible=requests.filter(r=>isDir||headOf.includes(r.deptId));
   const pending=visible.filter(r=>r.status==="pending");const resolved=visible.filter(r=>r.status!=="pending");
@@ -2673,7 +2674,7 @@ function Dash({kits,types,locs,comps,personnel,depts,trips,requests,analytics,lo
   const availCt=kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
   const maintCt=analytics.inMaintenance.length;const overdueCt=analytics.overdueReturns.length;
   const inspDueCt=analytics.overdueInspection.length;const calDueCt=analytics.calibrationDue.length;
-  const tier=["director","super","engineer"].includes(userRole)?"director":["manager","admin"].includes(userRole)?"manager":userRole==="lead"?"lead":"user";
+  const tier=["developer","director","super","engineer"].includes(userRole)?"director":["manager","admin"].includes(userRole)?"manager":userRole==="lead"?"lead":"user";
   const activeTrips=(trips||[]).filter(t=>t.status==="active"||t.status==="planning");
   const myDeptId=personnel.find(p=>p.id===curUserId)?.deptId;
   const myDeptKits=myDeptId?kits.filter(k=>k.deptId===myDeptId):[];
@@ -3113,8 +3114,11 @@ export default function App(){
   const saveSettings=async(s)=>{try{await api.settings.update(s)}catch(e){console.error("Settings save error:",e)}};
 
   const user=curUser?personnel.find(p=>p.id===curUser):authCtx.user?personnel.find(p=>p.id===authCtx.user.id):personnel[0];
-  const isDirector=user?.role==="director"||user?.role==="super"||user?.role==="engineer";const isManager=user?.role==="manager"||user?.role==="admin"||isDirector;
-  const isLead=user?.role==="lead"||isManager;const isSuper=isDirector;const isAdmin=isManager;
+  const isDeveloper=user?.role==="developer";
+  const [devViewAs,setDevViewAs]=useState(null);
+  const effectiveRole=isDeveloper&&devViewAs?devViewAs:user?.role;
+  const isDirector=isDeveloper||effectiveRole==="director"||effectiveRole==="super"||effectiveRole==="engineer";const isManager=effectiveRole==="manager"||effectiveRole==="admin"||isDirector;
+  const isLead=effectiveRole==="lead"||isManager;const isSuper=isDirector;const isAdmin=isManager;
   const analytics=useAnalytics(kits,personnel,depts,comps,types,logs,reservations);
   const headOf=depts.filter(d=>d.headId===(curUser||authCtx.user?.id)).map(d=>d.id);
   const isApprover=isLead||headOf.length>0;
@@ -3167,8 +3171,8 @@ export default function App(){
   
   const toggleSection=(id)=>setCollapsedSections(p=>({...p,[id]:!p[id]}));
   
-  const roleColor=sysRoleColor(user?.role);
-  const roleLabel=SYS_ROLE_LABELS[user?.role]||"Operator";
+  const roleColor=isDeveloper?sysRoleColor(devViewAs||"developer"):sysRoleColor(user?.role);
+  const roleLabel=isDeveloper?(devViewAs?SYS_ROLE_LABELS[devViewAs]+" (dev)":"Developer"):SYS_ROLE_LABELS[user?.role]||"Operator";
 
   const handleQuickAction=(action,kitId)=>{
     if(action==="return"||action==="checkout"||action==="inspect"){setPg("issuance")}
@@ -3200,7 +3204,17 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
             <div style={{width:6,height:6,borderRadius:"50%",background:roleColor,boxShadow:"0 0 8px "+roleColor+"55"}}/>
             <span style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.5,color:roleColor,fontFamily:T.m,fontWeight:600}}>{roleLabel}</span></div>
-          <div style={{fontSize:15,fontWeight:800,fontFamily:T.u,letterSpacing:-.3}}>Slate</div></div>
+          <div style={{fontSize:15,fontWeight:800,fontFamily:T.u,letterSpacing:-.3}}>Slate</div>
+          {isDeveloper&&<select value={devViewAs||""} onChange={e=>setDevViewAs(e.target.value||null)}
+            style={{marginTop:6,width:"100%",padding:"4px 6px",fontSize:9,fontFamily:T.m,fontWeight:600,
+              background:T.card,color:T.tx,border:"1px solid "+T.gn+"44",borderRadius:4,cursor:"pointer",outline:"none"}}>
+            <option value="">View as: Developer</option>
+            <option value="director">View as: Director</option>
+            <option value="engineer">View as: Engineer</option>
+            <option value="manager">View as: Manager</option>
+            <option value="lead">View as: Lead</option>
+            <option value="user">View as: Operator</option>
+          </select>}</div>
 
         <button onClick={()=>{setSearchMd(true);setMobileNav(false)}} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
           margin:"0 10px 6px",padding:"7px 12px",borderRadius:6,background:T.card,border:"1px solid "+T.bd,
@@ -3292,7 +3306,7 @@ export default function App(){
 
       <main style={{flex:1,padding:isMobile?"14px 12px":"20px 26px",overflowY:"auto",overflowX:"hidden"}}>
         {pg==="dashboard"&&<Dash kits={kits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts} trips={trips} requests={requests}
-          analytics={analytics} logs={logs} settings={settings} curUserId={curUser} userRole={user?.role} favorites={favorites} setFavorites={setFavorites} onNavigate={handleNavigate} onAction={handleQuickAction} onFilterKits={handleFilterKits}/>}
+          analytics={analytics} logs={logs} settings={settings} curUserId={curUser} userRole={effectiveRole} favorites={favorites} setFavorites={setFavorites} onNavigate={handleNavigate} onAction={handleQuickAction} onFilterKits={handleFilterKits}/>}
         {pg==="kits"&&<KitInv kits={kits} setKits={setKits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} settings={settings} favorites={favorites} setFavorites={setFavorites} addLog={addLog} curUserId={curUser}
           initialFilter={kitFilter} onFilterChange={setKitFilter} analytics={analytics} onRefreshKits={refreshKits}
