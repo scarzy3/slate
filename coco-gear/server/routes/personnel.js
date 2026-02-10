@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireAdminPerm, requireRole } from '../middleware/rbac.js';
-import { validate, personnelSchema, personnelUpdateSchema } from '../utils/validation.js';
+import { validate, personnelSchema, personnelUpdateSchema, bulkImportSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -18,6 +18,7 @@ router.get('/', authMiddleware, async (req, res) => {
       select: {
         id: true,
         name: true,
+        email: true,
         title: true,
         role: true,
         deptId: true,
@@ -43,6 +44,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
       select: {
         id: true,
         name: true,
+        email: true,
         title: true,
         role: true,
         deptId: true,
@@ -67,13 +69,22 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // POST / - create user (admin+, perm: personnel)
 router.post('/', authMiddleware, requireAdminPerm('personnel'), validate(personnelSchema), async (req, res) => {
   try {
-    const { name, title, role, deptId, pin } = req.validated;
+    const { name, email, title, role, deptId, pin } = req.validated;
+
+    // Check email uniqueness if provided
+    if (email) {
+      const existingEmail = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+      if (existingEmail) {
+        return res.status(409).json({ error: `Email ${email} is already in use` });
+      }
+    }
 
     const pinHash = await bcrypt.hash(pin, SALT_ROUNDS);
 
     const user = await prisma.user.create({
       data: {
         name,
+        email: email ? email.toLowerCase() : null,
         title,
         role,
         deptId,
@@ -82,6 +93,7 @@ router.post('/', authMiddleware, requireAdminPerm('personnel'), validate(personn
       select: {
         id: true,
         name: true,
+        email: true,
         title: true,
         role: true,
         deptId: true,
@@ -103,7 +115,7 @@ router.post('/', authMiddleware, requireAdminPerm('personnel'), validate(personn
 router.put('/:id', authMiddleware, requireAdminPerm('personnel'), validate(personnelUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, title, role, deptId, pin } = req.validated;
+    const { name, email, title, role, deptId, pin } = req.validated;
 
     const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) {
@@ -127,6 +139,7 @@ router.put('/:id', authMiddleware, requireAdminPerm('personnel'), validate(perso
 
     const data = {};
     if (name !== undefined) data.name = name;
+    if (email !== undefined) data.email = email ? email.toLowerCase() : null;
     if (title !== undefined) data.title = title;
     if (role !== undefined) data.role = role;
     if (deptId !== undefined) data.deptId = deptId;
@@ -141,6 +154,7 @@ router.put('/:id', authMiddleware, requireAdminPerm('personnel'), validate(perso
       select: {
         id: true,
         name: true,
+        email: true,
         title: true,
         role: true,
         deptId: true,
@@ -197,6 +211,91 @@ router.delete('/:id', authMiddleware, requireAdminPerm('personnel'), async (req,
     return res.json({ message: 'User deleted' });
   } catch (err) {
     console.error('Delete user error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /import - bulk import team members (admin+, perm: personnel)
+router.post('/import', authMiddleware, requireAdminPerm('personnel'), validate(bulkImportSchema), async (req, res) => {
+  try {
+    const { members } = req.validated;
+
+    // Validate email domain against allowed domain setting
+    const domainSetting = await prisma.systemSetting.findUnique({ where: { key: 'allowedEmailDomain' } });
+    const allowedDomain = domainSetting?.value;
+
+    if (allowedDomain) {
+      const invalidEmails = members.filter(m => {
+        const domain = m.email.toLowerCase().split('@')[1];
+        return domain !== allowedDomain.toLowerCase();
+      });
+      if (invalidEmails.length > 0) {
+        return res.status(400).json({
+          error: `Some emails don't match the allowed domain @${allowedDomain}`,
+          invalidEmails: invalidEmails.map(m => m.email),
+        });
+      }
+    }
+
+    // Check for duplicate emails in the request
+    const emails = members.map(m => m.email.toLowerCase());
+    const uniqueEmails = new Set(emails);
+    if (uniqueEmails.size !== emails.length) {
+      return res.status(400).json({ error: 'Duplicate emails in import list' });
+    }
+
+    // Check for existing emails in database
+    const existingUsers = await prisma.user.findMany({
+      where: { email: { in: emails } },
+      select: { email: true },
+    });
+    if (existingUsers.length > 0) {
+      return res.status(409).json({
+        error: 'Some emails already exist',
+        existingEmails: existingUsers.map(u => u.email),
+      });
+    }
+
+    // Create all users with default password
+    const defaultPin = await bcrypt.hash('password', SALT_ROUNDS);
+    const created = [];
+
+    for (const member of members) {
+      const user = await prisma.user.create({
+        data: {
+          name: member.name,
+          email: member.email.toLowerCase(),
+          title: member.title || '',
+          role: member.role || 'user',
+          deptId: member.deptId || null,
+          pin: defaultPin,
+          mustChangePassword: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          title: true,
+          role: true,
+          deptId: true,
+          createdAt: true,
+          department: { select: { id: true, name: true, color: true } },
+        },
+      });
+      created.push(user);
+    }
+
+    await auditLog('personnel_bulk_import', 'user', null, req.user.id, {
+      count: created.length,
+      emails: emails,
+    });
+
+    return res.status(201).json({
+      message: `${created.length} team member(s) imported successfully`,
+      users: created,
+    });
+  } catch (err) {
+    console.error('Bulk import error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

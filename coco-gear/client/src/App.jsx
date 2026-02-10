@@ -2278,19 +2278,49 @@ function BoatAdmin({boats,onRefreshBoats,settings}){
       title="Delete USV?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ PERSONNEL ═══════════ */
-function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
-  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",title:"",role:"user",deptId:"",pin:""});
+function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel,settings:appSettings}){
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",email:"",title:"",role:"user",deptId:"",pin:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
+  const[importMd,setImportMd]=useState(false);const[importText,setImportText]=useState("");const[importParsed,setImportParsed]=useState([]);
+  const[importError,setImportError]=useState("");const[importLoading,setImportLoading]=useState(false);const[importRole,setImportRole]=useState("user");const[importDept,setImportDept]=useState("");
+  const allowedDomain=appSettings?.allowedEmailDomain||"";
+  const parseImportText=(text)=>{
+    setImportText(text);setImportError("");
+    const lines=text.split("\n").map(l=>l.trim()).filter(Boolean);
+    const parsed=[];
+    for(const line of lines){
+      // Support formats: "name, email" or "email" or "name <email>"
+      let name="",email="";
+      const angleMatch=line.match(/^(.+?)\s*<([^>]+@[^>]+)>/);
+      if(angleMatch){name=angleMatch[1].trim();email=angleMatch[2].trim()}
+      else if(line.includes(",")){const parts=line.split(",").map(s=>s.trim());name=parts[0];email=parts[1]||""}
+      else if(line.includes("@")){email=line;name=email.split("@")[0].replace(/[._-]/g," ").replace(/\b\w/g,c=>c.toUpperCase())}
+      if(email&&email.includes("@"))parsed.push({name,email:email.toLowerCase(),title:"",role:importRole,deptId:importDept||null})}
+    setImportParsed(parsed)};
+  const doImport=async()=>{
+    if(!importParsed.length){setImportError("No valid entries to import");return}
+    // Check for domain violations
+    if(allowedDomain){const bad=importParsed.filter(m=>m.email.split("@")[1]!==allowedDomain.toLowerCase());
+      if(bad.length){setImportError("Some emails don't match @"+allowedDomain+": "+bad.map(b=>b.email).join(", "));return}}
+    // Check for existing emails
+    const existingEmails=personnel.filter(p=>p.email).map(p=>p.email.toLowerCase());
+    const dupes=importParsed.filter(m=>existingEmails.includes(m.email));
+    if(dupes.length){setImportError("Already exist: "+dupes.map(d=>d.email).join(", "));return}
+    setImportLoading(true);setImportError("");
+    try{await api.personnel.import(importParsed.map(m=>({...m,role:importRole,deptId:importDept||null})));
+      await onRefreshPersonnel();setImportMd(false);setImportText("");setImportParsed([])}
+    catch(e){setImportError(e.message||"Import failed")}
+    finally{setImportLoading(false)}};
 
   /* Developer account is always the primary protected user; falls back to first director-level user */
   const primaryDirector=personnel.find(p=>p.role==="developer")||personnel.find(p=>p.role==="director"||p.role==="super"||p.role==="engineer");
   const isPrimarySuper=(id)=>primaryDirector?.id===id;
 
   const save=async()=>{if(!fm.name.trim())return;
-    try{if(md==="add"){await api.personnel.create({name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||"password"})}
+    try{if(md==="add"){await api.personnel.create({name:fm.name.trim(),email:fm.email?.trim()||undefined,title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null,pin:fm.pin||"password"})}
     else{
       if(isPrimarySuper(md)&&!["developer","director","super","engineer"].includes(fm.role)){alert("Cannot change role of primary director");return}
-      const data={name:fm.name.trim(),title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null};
+      const data={name:fm.name.trim(),email:fm.email?.trim()||null,title:fm.title.trim(),role:fm.role,deptId:fm.deptId||null};
       if(fm.pin)data.pin=fm.pin;
       await api.personnel.update(md,data)}
     await onRefreshPersonnel()}catch(e){alert(e.message)}
@@ -2309,7 +2339,9 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
   const grouped=useMemo(()=>{const g={"Unassigned":[]};depts.forEach(d=>{g[d.name]=[]});
     personnel.forEach(p=>{const d=p.deptId?depts.find(x=>x.id===p.deptId):null;(g[d?.name||"Unassigned"]=g[d?.name||"Unassigned"]||[]).push(p)});return g},[personnel,depts]);
   return(<div>
-    <SH title="Personnel" sub={personnel.length+" people"} action={<Bt v="primary" onClick={()=>{setFm({name:"",title:"",role:"user",deptId:"",pin:""});setMd("add")}}>+ Add</Bt>}/>
+    <SH title="Personnel" sub={personnel.length+" people"} action={<div style={{display:"flex",gap:8}}>
+      <Bt v="ind" onClick={()=>{setImportMd(true);setImportText("");setImportParsed([]);setImportError("")}}>Import Team</Bt>
+      <Bt v="primary" onClick={()=>{setFm({name:"",email:"",title:"",role:"user",deptId:"",pin:""});setMd("add")}}>+ Add</Bt></div>}/>
     {Object.entries(grouped).filter(([,members])=>members.length>0).map(([deptName,members])=>{const dept=depts.find(d=>d.name===deptName);return(<div key={deptName} style={{marginBottom:20}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
         {dept&&<div style={{width:4,height:16,borderRadius:2,background:dept.color}}/>}
@@ -2321,17 +2353,18 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:rc[p.role],fontFamily:T.m}}>{p.name.split(" ").map(n=>n[0]).join("")}</div>
             <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u}}>{p.name}</span>
               {isProtected&&<span style={{fontSize:8,color:T.rd,fontFamily:T.m}}>★ PRIMARY</span>}</div>
-              <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{p.title||"No title"}</div>
+              <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{p.title||"No title"}{p.email&&<span style={{marginLeft:6,fontSize:9,color:T.dm}}>{p.email}</span>}</div>
               <div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}}>
                 <Bg color={rc[p.role]||T.bl} bg={(rc[p.role]||T.bl)+"18"}>{SYS_ROLE_LABELS[p.role]||p.role}</Bg>
                 {ik.length>0&&<Bg color={T.pk} bg="rgba(244,114,182,.08)">{ik.length} kit{ik.length>1?"s":""}</Bg>}</div></div>
-            <Bt v="ghost" sm onClick={()=>{setFm({name:p.name,title:p.title||"",role:p.role,deptId:p.deptId||"",pin:p.pin||""});setMd(p.id)}}>Edit</Bt>
+            <Bt v="ghost" sm onClick={()=>{setFm({name:p.name,email:p.email||"",title:p.title||"",role:p.role,deptId:p.deptId||"",pin:""});setMd(p.id)}}>Edit</Bt>
             <Bt v="ghost" sm onClick={()=>confirmDelete(p)} style={{color:T.rd}} disabled={ik.length>0||isProtected}
               title={isProtected?"Primary director cannot be deleted":ik.length>0?"Has kits checked out":""}>Del</Bt></div>)})}</div></div>)})}
     
     <ModalWrap open={!!md&&md!=="delete"} onClose={()=>setMd(null)} title={md==="add"?"Add Person":"Edit Person"}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Name"><In value={fm.name} onChange={e=>setFm(p=>({...p,name:e.target.value}))}/></Fl>
+        <Fl label="Email" sub="optional"><In type="email" value={fm.email} onChange={e=>setFm(p=>({...p,email:e.target.value}))} placeholder="user@saronic.com"/></Fl>
         <Fl label="Title"><In value={fm.title} onChange={e=>setFm(p=>({...p,title:e.target.value}))} placeholder="e.g. Project Manager, Engineer"/></Fl>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
           <Fl label="Role"><Sl options={[{v:"user",l:"Operator"},{v:"lead",l:"Lead"},{v:"manager",l:"Manager"},{v:"engineer",l:"Engineer"},{v:"director",l:"Director"}]} value={fm.role} onChange={e=>setFm(p=>({...p,role:e.target.value}))}
@@ -2343,7 +2376,39 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add":"Save"}</Bt></div></div></ModalWrap>
     
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
-      title="Delete User?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
+      title="Delete User?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/>
+
+    <ModalWrap open={importMd} onClose={()=>setImportMd(false)} title="Import Team Members" wide>
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        <div style={{padding:12,borderRadius:8,background:"rgba(129,140,248,.04)",border:"1px solid rgba(129,140,248,.15)"}}>
+          <div style={{fontSize:11,color:T.ind,fontFamily:T.m,fontWeight:600,marginBottom:4}}>Paste emails or names + emails</div>
+          <div style={{fontSize:10,color:T.dm,fontFamily:T.m,lineHeight:1.5}}>
+            Supported formats (one per line):<br/>
+            jane@{allowedDomain||"company.com"}<br/>
+            Jane Smith, jane@{allowedDomain||"company.com"}<br/>
+            Jane Smith {"<"}jane@{allowedDomain||"company.com"}{">"}</div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Fl label="Default Role"><Sl options={[{v:"user",l:"Operator"},{v:"lead",l:"Lead"},{v:"manager",l:"Manager"}]} value={importRole} onChange={e=>{setImportRole(e.target.value);if(importText)parseImportText(importText)}}/></Fl>
+          <Fl label="Default Department"><Sl options={[{v:"",l:"-- None --"},...depts.map(d=>({v:d.id,l:d.name}))]} value={importDept} onChange={e=>{setImportDept(e.target.value);if(importText)parseImportText(importText)}}/></Fl></div>
+        <Fl label="Team Members">
+          <Ta rows={8} value={importText} onChange={e=>parseImportText(e.target.value)}
+            placeholder={"jane@"+(allowedDomain||"company.com")+"\nJohn Smith, john@"+(allowedDomain||"company.com")+"\nBob Jones <bob@"+(allowedDomain||"company.com")+">"}/></Fl>
+        {importParsed.length>0&&<div>
+          <div style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m,marginBottom:8}}>Preview ({importParsed.length} member{importParsed.length!==1?"s":""})</div>
+          <div style={{maxHeight:200,overflowY:"auto",borderRadius:8,border:"1px solid "+T.bd}}>
+            {importParsed.map((m,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",
+              background:i%2===0?"transparent":T.card,borderBottom:i<importParsed.length-1?"1px solid "+T.bd:"none"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{m.name}</div>
+                <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{m.email}</div></div>
+              <Bg color={T.bl} bg="rgba(96,165,250,.08)">user</Bg></div>)}</div></div>}
+        {importError&&<div style={{fontSize:11,color:T.rd,fontFamily:T.m,padding:"8px 12px",borderRadius:6,
+          background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)"}}>{importError}</div>}
+        <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>All imported members get the default password "password" and must change it on first login.</div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <Bt onClick={()=>setImportMd(false)}>Cancel</Bt>
+          <Bt v="ind" onClick={doImport} disabled={importLoading||!importParsed.length}>{importLoading?"Importing...":"Import "+importParsed.length+" Member"+(importParsed.length!==1?"s":"")}</Bt></div>
+      </div></ModalWrap></div>);}
 
 /* ═══════════ SETTINGS (SUPER ADMIN) ═══════════ */
 function SettingsPage({settings,setSettings,onSaveSettings}){
@@ -2371,6 +2436,7 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     {k:"enableConsumables",l:"Enable consumables",d:"Stock management"},
     {k:"enableQR",l:"Enable QR codes",d:"QR code generation, printing, and scanning"},
     {k:"autoReserveOnTrip",l:"Auto-reserve on trip creation",d:"Automatically create reservations for equipment, boats, and personnel when assigned to trips"},
+    {k:"enableSelfSignup",l:"Enable team self-signup",d:"Allow new members to create their own accounts using a verified email domain"},
   ];
   const boatFieldItems=[
     {k:"type",l:"Type",d:"USV model/type (e.g. WAM-V, Heron)"},
@@ -2421,7 +2487,12 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
           <In type="number" value={settings[it.k]} onChange={e=>updateSetting(it.k,Number(e.target.value))} style={{width:70,textAlign:"right"}}/>
           <span style={{fontSize:10,color:T.mu,fontFamily:T.m,width:30}}>{it.unit}</span></div>)}</>}
       {tab==="serials"&&serialItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
-      {tab==="features"&&featureItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
+      {tab==="features"&&<>{featureItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
+        {settings.enableSelfSignup&&<div style={{padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd,display:"flex",alignItems:"center",gap:14}}>
+          <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>Allowed Email Domain</div>
+            <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>Only users with this email domain can self-register</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11,color:T.mu,fontFamily:T.m}}>@</span>
+          <In value={settings.allowedEmailDomain||""} onChange={e=>updateSetting("allowedEmailDomain",e.target.value)} style={{width:180}} placeholder="saronic.com"/></div></div>}</>}
       {tab==="usvFields"&&<>
         <div style={{padding:12,borderRadius:8,background:"rgba(96,165,250,.03)",border:"1px solid rgba(96,165,250,.12)",marginBottom:8}}>
           <div style={{fontSize:10,color:T.bl,fontFamily:T.m}}>Choose which fields are visible when adding or viewing USVs. Name and Status are always shown.</div></div>
@@ -3056,7 +3127,7 @@ function NavSection({section,pg,setPg,collapsed,onToggle,canAccess,getBadge}){
         </button>)})}</div>}</div>);}
 
 /* ═══════════ LOGIN SCREEN ═══════════ */
-function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
+function LoginScreen({personnel,onLogin,isDark,toggleTheme,signupDomain,onShowSignup}){
   const[nameVal,setNameVal]=useState("");const[pin,setPin]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
   const[showList,setShowList]=useState(false);const[hiIdx,setHiIdx]=useState(0);
   const[users,setUsers]=useState(personnel||[]);const[usersLoading,setUsersLoading]=useState(true);const[fetchError,setFetchError]=useState("");
@@ -3174,7 +3245,59 @@ function LoginScreen({personnel,onLogin,isDark,toggleTheme}){
           <Bt v="primary" onClick={attempt} disabled={loading} style={{justifyContent:"center",padding:"11px 0",fontSize:13}}>{loading?"Signing in...":"Sign In"}</Bt>
           <div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>Default password: password</div>
           <div style={{fontSize:8,color:T.dm,fontFamily:T.m,textAlign:"center",opacity:.5,marginTop:4}}>build 2026-02-06e</div>
-        </form></div></div>);}
+        </form>
+        {signupDomain&&<div style={{marginTop:16,textAlign:"center"}}>
+          <div style={{fontSize:10,color:T.dm,fontFamily:T.m,marginBottom:6}}>New to Slate?</div>
+          <button onClick={()=>onShowSignup&&onShowSignup()} style={{all:"unset",cursor:"pointer",fontSize:11,fontWeight:600,color:T.bl,fontFamily:T.m}}>Sign up with your @{signupDomain} email</button>
+        </div>}
+      </div></div>);}
+
+/* ═══════════ SIGNUP SCREEN ═══════════ */
+function SignupScreen({domain,onSignup,onBack,isDark,toggleTheme}){
+  const[name,setName]=useState("");const[email,setEmail]=useState("");const[pw,setPw]=useState("");const[pw2,setPw2]=useState("");
+  const[title,setTitle]=useState("");const[error,setError]=useState("");const[loading,setLoading]=useState(false);
+  const attempt=async()=>{
+    if(!name.trim()){setError("Name is required");return}
+    if(!email.trim()){setError("Email is required");return}
+    const emailDomain=email.toLowerCase().split("@")[1];
+    if(emailDomain!==domain.toLowerCase()){setError("Only @"+domain+" emails are allowed");return}
+    if(pw.length<4){setError("Password must be at least 4 characters");return}
+    if(pw!==pw2){setError("Passwords do not match");return}
+    setLoading(true);setError("");
+    try{await onSignup({name:name.trim(),email:email.trim().toLowerCase(),password:pw,title:title.trim()})}
+    catch(e){setError(e.message||"Signup failed");setLoading(false)}};
+  return(
+    <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.u}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        *{box-sizing:border-box}::selection{background:${T._selBg}}
+        @media(max-width:767px){input,select{font-size:16px!important}}
+      `}</style>
+      <div style={{width:"92%",maxWidth:420,padding:"28px 24px",borderRadius:16,background:T.panel,border:"1px solid "+T.bd,animation:"mdIn .25s ease-out",position:"relative"}}>
+        <style>{`@keyframes mdIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+        <button onClick={toggleTheme} style={{all:"unset",cursor:"pointer",position:"absolute",top:14,right:14,
+          width:30,height:30,borderRadius:15,display:"flex",alignItems:"center",justifyContent:"center",
+          fontSize:14,background:isDark?"rgba(255,255,255,.06)":"rgba(0,0,0,.06)",border:"1px solid "+T.bd,
+          color:T.mu,transition:"all .15s"}} title={isDark?"Switch to light mode":"Switch to dark mode"}>
+          {isDark?"☀":"☾"}</button>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{width:56,height:56,borderRadius:28,background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.25)",
+            display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:22,fontWeight:800,color:T.gn,fontFamily:T.u}}>S</div>
+          <div style={{fontSize:22,fontWeight:800,color:T.tx,letterSpacing:-.5}}>Join Slate</div>
+          <div style={{fontSize:11,color:T.mu,fontFamily:T.m,marginTop:4}}>Sign up with your @{domain} email</div></div>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <Fl label="Full Name"><In value={name} onChange={e=>{setName(e.target.value);setError("")}} placeholder="e.g. Jane Smith"/></Fl>
+          <Fl label="Email"><In type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("")}} placeholder={"you@"+domain}/></Fl>
+          <Fl label="Title" sub="optional"><In value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Field Engineer"/></Fl>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <Fl label="Password"><In type="password" value={pw} onChange={e=>{setPw(e.target.value);setError("")}} placeholder="Min 4 characters"/></Fl>
+            <Fl label="Confirm Password"><In type="password" value={pw2} onChange={e=>{setPw2(e.target.value);setError("")}} placeholder="Re-enter password"/></Fl></div>
+          {error&&<div style={{fontSize:11,color:T.rd,fontFamily:T.m,textAlign:"center",padding:"8px 12px",borderRadius:6,
+            background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.15)"}}>{error}</div>}
+          <Bt v="success" onClick={attempt} disabled={loading} style={{justifyContent:"center",padding:"11px 0",fontSize:13}}>{loading?"Creating account...":"Create Account"}</Bt>
+          <div style={{textAlign:"center"}}>
+            <button onClick={onBack} style={{all:"unset",cursor:"pointer",fontSize:11,color:T.mu,fontFamily:T.m}}>Already have an account? Sign in</button></div>
+        </div></div></div>);}
 
 /* ═══════════ SET NEW PASSWORD SCREEN ═══════════ */
 function SetPasswordScreen({userName,onSubmit,onLogout,isDark,toggleTheme}){
@@ -3219,6 +3342,7 @@ export default function App(){
   const[collapsedSections,setCollapsedSections]=useState({});
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
   const[loginUsers,setLoginUsers]=useState([]);
+  const[showSignup,setShowSignup]=useState(false);const[signupDomain,setSignupDomain]=useState("");
   const[isDark,setIsDark]=useState(()=>localStorage.getItem("slate_theme")!=="light");
   const[mobileNav,setMobileNav]=useState(false);
   const[isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
@@ -3227,7 +3351,8 @@ export default function App(){
   const toggleTheme=useCallback(()=>{setIsDark(d=>{const next=!d;applyTheme(next);return next})},[]);
 
   /* Load user list for login (public endpoint) */
-  useEffect(()=>{if(!authCtx.token){fetch('/api/auth/users').then(r=>r.ok?r.json():[]).then(setLoginUsers).catch(()=>{})}}, [authCtx.token]);
+  useEffect(()=>{if(!authCtx.token){fetch('/api/auth/users').then(r=>r.ok?r.json():[]).then(setLoginUsers).catch(()=>{});
+    fetch('/api/auth/signup-info').then(r=>r.ok?r.json():null).then(d=>{if(d?.enabled&&d?.domain)setSignupDomain(d.domain);else setSignupDomain("")}).catch(()=>{})}}, [authCtx.token]);
 
   /* Transform API component data to frontend format */
   const xformComp=c=>({id:c.id,key:c.key,label:c.label,cat:c.category,ser:c.serialized,calibrationRequired:c.calibrationRequired,calibrationIntervalDays:c.calibrationIntervalDays});
@@ -3254,7 +3379,7 @@ export default function App(){
   const xformBoat=b=>({id:b.id,name:b.name,type:b.type||"",hullId:b.hullId||"",length:b.length,
     homePort:b.homePort||"",status:b.status,notes:b.notes||"",
     trips:(b.trips||[]).map(tb=>({tripBoatId:tb.id,tripId:tb.trip?.id,tripName:tb.trip?.name,tripStatus:tb.trip?.status,role:tb.role,notes:tb.notes||""}))});
-  const xformPerson=p=>({id:p.id,name:p.name,title:p.title||"",role:p.role,deptId:p.deptId});
+  const xformPerson=p=>({id:p.id,name:p.name,email:p.email||"",title:p.title||"",role:p.role,deptId:p.deptId});
   const xformKit=(k)=>({
     id:k.id,typeId:k.typeId,color:k.color,locId:k.locId,deptId:k.deptId,tripId:k.tripId||null,
     fields:k.fields||{},lastChecked:k.lastChecked,comps:k.comps||{},serials:k.serials||{},calibrationDates:k.calibrationDates||{},
@@ -3396,7 +3521,14 @@ export default function App(){
     else if(result.type==="person"){setPg("personnel")}
     setSearchMd(false)};
 
-  if(!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme} onLogin={async(userId,pin)=>{
+  if(!authCtx.token&&showSignup&&signupDomain)return <SignupScreen domain={signupDomain} isDark={isDark} toggleTheme={toggleTheme}
+    onBack={()=>setShowSignup(false)}
+    onSignup={async(data)=>{const res=await api.auth.signup(data);
+      localStorage.setItem('slate_token',res.token);localStorage.setItem('slate_user',JSON.stringify(res.user));
+      authCtx.setUser(res.user);setCurUser(res.user.id);setShowSignup(false);window.location.reload()}}/>;
+  if(!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme}
+    signupDomain={signupDomain} onShowSignup={()=>setShowSignup(true)}
+    onLogin={async(userId,pin)=>{
     const userData=await authCtx.login(userId,pin);setCurUser(userData.id);
     if(userData.mustChangePassword)setMustChangePw(true)}}/>;
   if(mustChangePw)return <SetPasswordScreen userName={authCtx.user?.name||"User"} isDark={isDark} toggleTheme={toggleTheme}
@@ -3544,7 +3676,7 @@ export default function App(){
         {pg==="components"&&canAccess({access:"admin",perm:"components"})&&<CompAdmin comps={comps} setComps={setComps} types={types} onRefreshComps={refreshComps}/>}
         {pg==="locations"&&canAccess({access:"admin",perm:"locations"})&&<LocAdmin locs={locs} setLocs={setLocs} kits={kits} onRefreshLocs={refreshLocs}/>}
         {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} locs={locs} onRefreshDepts={refreshDepts}/>}
-        {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
+        {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts} onRefreshPersonnel={refreshPersonnel} settings={settings}/>}
         {pg==="boats"&&canAccess({access:"lead",perm:"boats"})&&<BoatAdmin boats={boats} onRefreshBoats={refreshBoats} settings={settings}/>}
         {pg==="settings"&&isSuper&&<SettingsPage settings={settings} setSettings={setSettings} onSaveSettings={saveSettings}/>}
         {pg==="profile"&&<MyProfile user={user} personnel={personnel} setPersonnel={setPersonnel} kits={kits} assets={assets} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}

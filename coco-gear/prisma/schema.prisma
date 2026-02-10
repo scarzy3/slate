@@ -11,6 +11,7 @@ datasource db {
 model User {
   id        String   @id @default(uuid())
   name      String
+  email     String?  @unique
   title     String?
   role      String   @default("user") // developer | director | engineer | manager | lead | user
   pin       String   // bcrypt hashed

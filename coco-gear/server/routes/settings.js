@@ -30,6 +30,8 @@ const DEFAULT_SETTINGS = {
     notes: true,
   },
   autoReserveOnTrip: true,
+  enableSelfSignup: true,
+  allowedEmailDomain: 'saronic.com',
   adminPerms: {
     analytics: true,
     reports: true,
