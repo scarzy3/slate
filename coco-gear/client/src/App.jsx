@@ -2282,8 +2282,8 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",title:"",role:"user",deptId:"",pin:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
 
-  /* First director is protected and cannot be deleted */
-  const primaryDirector=personnel.find(p=>p.role==="developer"||p.role==="director"||p.role==="super"||p.role==="engineer");
+  /* Developer account is always the primary protected user; falls back to first director-level user */
+  const primaryDirector=personnel.find(p=>p.role==="developer")||personnel.find(p=>p.role==="director"||p.role==="super"||p.role==="engineer");
   const isPrimarySuper=(id)=>primaryDirector?.id===id;
 
   const save=async()=>{if(!fm.name.trim())return;
