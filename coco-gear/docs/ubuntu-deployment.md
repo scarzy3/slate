@@ -495,7 +495,7 @@ This tells Nginx to forward all web traffic to the app:
 ```bash
 sudo tee /etc/nginx/sites-available/cocogear > /dev/null << 'EOF'
 server {
-    listen 80;
+    listen 80 default_server;
     server_name _;
 
     client_max_body_size 100M;

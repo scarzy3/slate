@@ -248,7 +248,7 @@ apt-get install -y nginx
 # Create Nginx config
 cat > /etc/nginx/sites-available/cocogear << 'NGINX'
 server {
-    listen 80;
+    listen 80 default_server;
     server_name _;
 
     client_max_body_size 100M;
