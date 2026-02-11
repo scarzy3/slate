@@ -8,13 +8,13 @@ function AlertsPanel({analytics,kits,settings,onNavigate,onFilterKits}){
       action:()=>onFilterKits&&onFilterKits("overdue"),actionLabel:"View overdue"})});
   analytics.overdueInspection.forEach(k=>alerts.push({id:uid(),type:"inspection",severity:daysAgo(k.lastChecked)>60?"high":"medium",
     title:`Kit ${k.color} needs inspection`,sub:k.lastChecked?`Last: ${fmtDate(k.lastChecked)}`:"Never inspected",kitId:k.id,
-    action:()=>onNavigate&&onNavigate("issuance"),actionLabel:"Go to checkout"}));
+    action:()=>onNavigate&&onNavigate("kits",k.id,"inspect"),actionLabel:"Inspect"}));
   analytics.calibrationDue.forEach(c=>alerts.push({id:uid(),type:"calibration",severity:c.dueIn<0?"high":"medium",
     title:`${c.comp.label} calibration ${c.dueIn<0?"overdue":"due"}`,sub:`Kit ${c.kit.color} - ${c.dueIn<0?Math.abs(c.dueIn)+" days overdue":"in "+c.dueIn+" days"}`,kitId:c.kit.id,
-    action:()=>onNavigate&&onNavigate("maintenance"),actionLabel:"Maintenance"}));
+    action:()=>onNavigate&&onNavigate("maintenance",c.kit.id),actionLabel:"Maintenance"}));
   analytics.inMaintenance.forEach(k=>alerts.push({id:uid(),type:"maintenance",severity:"low",
     title:`Kit ${k.color} in maintenance`,sub:k.maintenanceStatus,kitId:k.id,
-    action:()=>onFilterKits&&onFilterKits("maintenance"),actionLabel:"View maintenance"}));
+    action:()=>onNavigate&&onNavigate("maintenance",k.id),actionLabel:"View maintenance"}));
   const sevOrder={high:0,medium:1,low:2};const sorted=[...alerts].sort((a,b)=>sevOrder[a.severity]-sevOrder[b.severity]);
   const sevColors={high:T.rd,medium:T.am,low:T.mu};
   const typeIcons={overdue:"\u23F0",inspection:"\uD83D\uDD0D",calibration:"\uD83D\uDCD0",maintenance:"\uD83D\uDD27"};

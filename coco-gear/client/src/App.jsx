@@ -74,7 +74,7 @@ export default function App(){
   const[requests,setRequests]=useState([]);const[logs,setLogs]=useState([]);
   const[reservations,setReservations]=useState([]);const[trips,setTrips]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[boats,setBoats]=useState([]);const[favorites,setFavorites]=useState([]);
-  const[searchMd,setSearchMd]=useState(false);const[scanMd,setScanMd]=useState(null);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);
+  const[searchMd,setSearchMd]=useState(false);const[scanMd,setScanMd]=useState(null);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);const[navAction,setNavAction]=useState(null);
   const[collapsedSections,setCollapsedSections]=useState({});
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
   const[loginUsers,setLoginUsers]=useState([]);
@@ -250,7 +250,7 @@ export default function App(){
   const handleQuickAction=(action,kitId)=>{
     if(action==="return"||action==="checkout"||action==="inspect"){setPg("issuance")}
   };
-  const handleNavigate=(page,id)=>{setPg(page)};
+  const handleNavigate=(page,kitId,action)=>{if(kitId)setNavKitId(kitId);if(action)setNavAction(action);setPg(page)};
   const handleFilterKits=(filter)=>{setKitFilter(filter);setPg("kits")};
   const handleSearchSelect=(result)=>{
     if(result.type==="kit"){setPg("kits")}
@@ -390,7 +390,7 @@ export default function App(){
         {pg==="kits"&&<KitInv kits={kits} setKits={setKits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} settings={settings} favorites={favorites} setFavorites={setFavorites} addLog={addLog} curUserId={curUser}
           initialFilter={kitFilter} onFilterChange={setKitFilter} analytics={analytics} onRefreshKits={refreshKits}
-          initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)} apiInspect={apiInspect}/>}
+          initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)} initialAction={navAction} onClearAction={()=>setNavAction(null)} apiInspect={apiInspect}/>}
         {pg==="issuance"&&<KitIssuance kits={kits} setKits={setKits} types={types} locs={locs} personnel={personnel} allC={comps} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests} addLog={addLog}
           reservations={reservations} onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}}

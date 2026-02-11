@@ -10,7 +10,7 @@ import SerialManageForm from '../forms/SerialManageForm.jsx';
 import InspWF from '../forms/InspWF.jsx';
 import api from '../api.js';
 
-function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics,onRefreshKits,initialSelectedKit,onClearSelectedKit,apiInspect}){
+function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics,onRefreshKits,initialSelectedKit,onClearSelectedKit,initialAction,onClearAction,apiInspect}){
   const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
   const[selId,setSelId]=useState(initialSelectedKit||null);const[md,setMd]=useState(null);const[histExp,setHistExp]=useState(null);const[search,setSearch]=useState("");const[lf,setLf]=useState("ALL");
   const[df,setDf]=useState(()=>userDeptId&&!isSuper?userDeptId:"ALL");
@@ -21,6 +21,10 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
   useEffect(()=>{setStatusFilter(initialFilter)},[initialFilter]);
   /* Navigate to specific kit from external source (QR scan etc) */
   useEffect(()=>{if(initialSelectedKit){setSelId(initialSelectedKit);if(onClearSelectedKit)onClearSelectedKit()}},[initialSelectedKit]);
+  /* Auto-open action modal (e.g. inspect) when navigated from alerts */
+  useEffect(()=>{if(initialAction&&initialSelectedKit){
+    if(initialAction==="inspect"){setMd("insp:"+initialSelectedKit)}
+    if(onClearAction)onClearAction()}},[initialAction,initialSelectedKit]);
   const changeStatusFilter=(f)=>{setStatusFilter(f);if(onFilterChange)onFilterChange(f)};
 
   const openAdd=()=>{const ft=types[0];setKf({typeId:ft?.id||"",color:"BLACK",locId:locs[0]?.id||"",fields:{},deptId:""});setMd("addK")};
