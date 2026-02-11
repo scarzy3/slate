@@ -2300,8 +2300,8 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel,se
     catch(e){setImportError(e.message||"Import failed")}
     finally{setImportLoading(false)}};
 
-  /* Developer account is always the primary protected user; falls back to first director-level user */
-  const primaryDirector=personnel.find(p=>p.role==="developer")||personnel.find(p=>p.role==="director"||p.role==="super"||p.role==="engineer");
+  /* Developer account is always the primary protected user (earliest-created wins); falls back to first director-level user */
+  const primaryDirector=[...personnel].filter(p=>p.role==="developer").sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt))[0]||personnel.find(p=>p.role==="director"||p.role==="super"||p.role==="engineer");
   const isPrimarySuper=(id)=>primaryDirector?.id===id;
 
   const save=async()=>{if(!fm.name.trim())return;
