@@ -14,7 +14,7 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd,mode="inspect
   const[step,setStep]=useState(0);const[res,setRes]=useState(()=>{const init={};cs.forEach(c=>{init[c._key]=kit.comps[c._key]||"GOOD"});return init});
   const serComps=cs.filter(c=>c.ser);
   const[serials,setSerials]=useState(()=>{const init={};serComps.forEach(c=>{init[c._key]=""});return init});
-  const[notes,setNotes]=useState("");const[insp,setInsp]=useState("");const[photos,setPhotos]=useState([]);
+  const[notes,setNotes]=useState("");const[photos,setPhotos]=useState([]);
   const isRev=step>=tot;const cur=cs[step];
   const mark=s=>{setRes(p=>({...p,[cur._key]:s}));if(step<tot-1)setTimeout(()=>setStep(p=>p+1),150);else setTimeout(()=>setStep(tot),150)};
   const counts=useMemo(()=>{const c={GOOD:0,MISSING:0,DAMAGED:0};cs.forEach(comp=>{c[res[comp._key]||"GOOD"]++});return c},[res,cs]);
@@ -56,10 +56,9 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd,mode="inspect
           {photos.map(ph=><div key={ph.id} style={{width:60,height:60,borderRadius:6,background:`url(${ph.data}) center/cover`,border:"1px solid "+T.bd}}/>)}
           <label style={{width:60,height:60,borderRadius:6,background:T.card,border:"1px dashed "+T.bd,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:20,color:T.dm}}>
             +<input type="file" accept="image/*" onChange={handlePhoto} style={{display:"none"}}/></label></div></div>
-      {mode==="inspect"&&<Fl label="Inspector"><In value={insp} onChange={e=>setInsp(e.target.value)} placeholder="Your name"/></Fl>}
       <Fl label="Notes"><Ta value={notes} onChange={e=>setNotes(e.target.value)} rows={2}/></Fl>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={onCancel}>Cancel</Bt>
-        <Bt v={mv} onClick={()=>onDone({results:res,serials,notes,inspector:insp,date:td(),photos})} disabled={!allSerFilled}>
+        <Bt v={mv} onClick={()=>onDone({results:res,serials,notes,date:td(),photos})} disabled={!allSerFilled}>
           {allSerFilled?"Confirm "+ml:"Fill S/N first"}</Bt></div></div>)}
   return(<div style={{display:"flex",flexDirection:"column",gap:16,minHeight:340}}>
     <div style={{flex:1,display:"flex",flexDirection:"column",gap:16}}>
