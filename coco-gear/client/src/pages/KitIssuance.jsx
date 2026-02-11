@@ -4,6 +4,7 @@ import { stMeta, fmtDate } from '../theme/helpers.js';
 import { Sw, Bg, Bt, Fl, In, Sl, SH, ModalWrap, DeptBg } from '../components/ui/index.js';
 import SerialEntryForm from '../forms/SerialEntryForm.jsx';
 import IssueToPicker from '../forms/IssueToPicker.jsx';
+import api from '../api.js';
 
 function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,curUserId,settings,requests,setRequests,addLog,onNavigateToKit,reservations,apiCheckout,apiReturn,onRefreshKits}){
   const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;

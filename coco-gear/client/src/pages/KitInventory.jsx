@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { T, CM } from '../theme/theme.js';
-import { stMeta, cSty, expandComps, fmtDate, daysAgo } from '../theme/helpers.js';
+import { stMeta, cSty, expandComps, fmtDate, daysAgo, now } from '../theme/helpers.js';
 import { Sw, Bg, Bt, Fl, In, Sl, Tg, SH, Tabs, ModalWrap, DeptBg } from '../components/ui/index.js';
 import QRSvg from '../components/qr/QRSvg.jsx';
 import QRPrintSheet from '../components/qr/QRPrintSheet.jsx';
@@ -122,7 +122,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
           {dept&&<div style={{marginBottom:10}}><DeptBg dept={dept}/></div>}
           {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!sel.maintenanceStatus&&<div style={{marginBottom:14}}><Fl label="Storage">
             <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={sel.locId} onChange={e=>{setKits(p=>p.map(k=>k.id===sel.id?{...k,locId:e.target.value}:k));
-              addLog("location_change","kit",sel.id,curUserId,new Date().toISOString(),{kitColor:sel.color,to:locs.find(l=>l.id===e.target.value)?.name})}}/></Fl></div>}
+              addLog("location_change","kit",sel.id,curUserId,now(),{kitColor:sel.color,to:locs.find(l=>l.id===e.target.value)?.name})}}/></Fl></div>}
           {sel.maintenanceStatus&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
             <span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance: {sel.maintenanceStatus}</span></div>}
           {person&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(244,114,182,.04)",border:"1px solid rgba(244,114,182,.15)"}}>

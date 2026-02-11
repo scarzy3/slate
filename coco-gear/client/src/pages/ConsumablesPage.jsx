@@ -1,7 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { T } from '../theme/theme.js';
-import { uid, fmtDate } from '../theme/helpers.js';
-import { Bg, Bt, Fl, In, Sl, SH, Tabs, ModalWrap, ConfirmDialog } from '../components/ui/index.js';
+import { CATS } from '../theme/helpers.js';
+import { Bg, Bt, Fl, In, Ta, Sl, SH, Tabs, ModalWrap, ProgressBar } from '../components/ui/index.js';
+import QRDetailView from '../components/qr/QRDetailView.jsx';
+import QRPrintSheet from '../components/qr/QRPrintSheet.jsx';
+import { qrAssetData } from '../components/qr/qrHelpers.js';
 import api from '../api.js';
 
 function ConsumablesPage({consumables,setConsumables,assets,setAssets,personnel,locs,addLog,curUserId,isAdmin,onRefreshConsumables,onRefreshAssets}){

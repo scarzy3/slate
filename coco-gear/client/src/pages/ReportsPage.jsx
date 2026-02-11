@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { T } from '../theme/theme.js';
-import { fmtDate, daysAgo, SYS_ROLE_LABELS, expandComps, cSty } from '../theme/helpers.js';
+import { td, fmtDate, daysAgo, SYS_ROLE_LABELS, expandComps, cSty } from '../theme/helpers.js';
 import { Sw, Bg, Bt, Fl, In, Sl, SH, Tabs } from '../components/ui/index.js';
 
 function ReportsPage({kits,personnel,depts,comps,types,locs,logs,analytics}){
