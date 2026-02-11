@@ -148,7 +148,7 @@ export default function App(){
     }catch(e){setLoadError(e.message||"Failed to load data");console.error("Load error:",e)}
   },[]);
 
-  useEffect(()=>{if(authCtx.token&&authCtx.user&&!mustChangePw)loadData()},[authCtx.token,authCtx.user,mustChangePw]);
+  useEffect(()=>{if(authCtx.isLoggedIn&&!mustChangePw)loadData()},[authCtx.isLoggedIn,mustChangePw]);
 
   /* Deep link: handle /s/kit/{id} and /s/verify/{...} URLs from external QR scans */
   useEffect(()=>{if(!dataLoaded)return;const p=window.location.pathname;
