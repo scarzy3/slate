@@ -2,10 +2,12 @@ import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import { Router } from 'express';
 import { generateToken, authMiddleware } from '../middleware/auth.js';
-import { validate, loginSchema } from '../utils/validation.js';
+import { validate, loginSchema, signupSchema } from '../utils/validation.js';
+import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
 const router = Router();
+const SALT_ROUNDS = 10;
 
 // GET /users - public user list for login screen (id, name, title, role only)
 router.get('/users', async (req, res) => {
@@ -50,6 +52,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
+        email: user.email,
         title: user.title,
         role: user.role,
         deptId: user.deptId,
@@ -58,6 +61,92 @@ router.post('/login', validate(loginSchema), async (req, res) => {
     });
   } catch (err) {
     console.error('Login error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /signup-info - public endpoint to check if self-signup is enabled and get the allowed domain
+router.get('/signup-info', async (req, res) => {
+  try {
+    const enabledSetting = await prisma.systemSetting.findUnique({ where: { key: 'enableSelfSignup' } });
+    const domainSetting = await prisma.systemSetting.findUnique({ where: { key: 'allowedEmailDomain' } });
+
+    // Default to enabled with saronic.com if no settings have been saved yet
+    const enabled = enabledSetting ? enabledSetting.value === true : true;
+    const domain = domainSetting?.value || 'saronic.com';
+
+    return res.json({ enabled, domain: enabled ? domain : '' });
+  } catch (err) {
+    console.error('Signup info error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /signup - self-registration with domain-restricted email
+router.post('/signup', validate(signupSchema), async (req, res) => {
+  try {
+    const { name, email, password, title } = req.validated;
+
+    // Check if self-signup is enabled (defaults to true)
+    const enabledSetting = await prisma.systemSetting.findUnique({ where: { key: 'enableSelfSignup' } });
+    const selfSignupEnabled = enabledSetting ? enabledSetting.value === true : true;
+    if (!selfSignupEnabled) {
+      return res.status(403).json({ error: 'Self-signup is not enabled' });
+    }
+
+    // Validate email domain (defaults to saronic.com)
+    const domainSetting = await prisma.systemSetting.findUnique({ where: { key: 'allowedEmailDomain' } });
+    const allowedDomain = domainSetting?.value || 'saronic.com';
+    if (!allowedDomain) {
+      return res.status(403).json({ error: 'No allowed email domain configured' });
+    }
+
+    const emailDomain = email.toLowerCase().split('@')[1];
+    if (emailDomain !== allowedDomain.toLowerCase()) {
+      return res.status(403).json({ error: `Only @${allowedDomain} email addresses are allowed` });
+    }
+
+    // Check if email already exists
+    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (existing) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+
+    const pinHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email: email.toLowerCase(),
+        title,
+        role: 'user',
+        pin: pinHash,
+        mustChangePassword: false,
+      },
+    });
+
+    await auditLog('self_signup', 'user', user.id, user.id, { name, email: email.toLowerCase() });
+
+    const token = generateToken({
+      id: user.id,
+      role: user.role,
+      deptId: user.deptId,
+    });
+
+    return res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        title: user.title,
+        role: user.role,
+        deptId: user.deptId,
+        mustChangePassword: false,
+      },
+    });
+  } catch (err) {
+    console.error('Signup error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -74,6 +163,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     return res.json({
       id: user.id,
       name: user.name,
+      email: user.email,
       title: user.title,
       role: user.role,
       deptId: user.deptId,
@@ -105,6 +195,7 @@ router.put('/me', authMiddleware, async (req, res) => {
     return res.json({
       id: user.id,
       name: user.name,
+      email: user.email,
       title: user.title,
       role: user.role,
       deptId: user.deptId,

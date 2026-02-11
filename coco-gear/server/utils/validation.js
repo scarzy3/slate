@@ -66,6 +66,7 @@ export const departmentSchema = z.object({
 // ─── Personnel ───
 export const personnelSchema = z.object({
   name: z.string().min(1).max(200),
+  email: z.string().email().max(200).optional(),
   title: z.string().max(200).optional().default(''),
   role: z.enum(['developer', 'director', 'engineer', 'manager', 'lead', 'user']).default('user'),
   deptId: z.string().uuid().nullable().optional(),
@@ -74,10 +75,30 @@ export const personnelSchema = z.object({
 
 export const personnelUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
+  email: z.string().email().max(200).nullable().optional(),
   title: z.string().max(200).optional(),
   role: z.enum(['developer', 'director', 'engineer', 'manager', 'lead', 'user']).optional(),
   deptId: z.string().uuid().nullable().optional(),
   pin: z.string().min(1).max(128).optional(),
+});
+
+// ─── Self-Signup ───
+export const signupSchema = z.object({
+  name: z.string().min(1).max(200),
+  email: z.string().email().max(200),
+  password: z.string().min(4).max(128),
+  title: z.string().max(200).optional().default(''),
+});
+
+// ─── Bulk Import ───
+export const bulkImportSchema = z.object({
+  members: z.array(z.object({
+    name: z.string().min(1).max(200),
+    email: z.string().email().max(200),
+    title: z.string().max(200).optional().default(''),
+    role: z.enum(['director', 'engineer', 'manager', 'lead', 'user']).default('user'),
+    deptId: z.string().uuid().nullable().optional(),
+  })).min(1).max(100),
 });
 
 // ─── Consumable ───
@@ -230,6 +251,8 @@ export const settingsSchema = z.object({
     notes: z.boolean().optional(),
   }).optional(),
   autoReserveOnTrip: z.boolean().optional(),
+  enableSelfSignup: z.boolean().optional(),
+  allowedEmailDomain: z.string().max(200).optional(),
   adminPerms: z.object({
     analytics: z.boolean().optional(),
     reports: z.boolean().optional(),

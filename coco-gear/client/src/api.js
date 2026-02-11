@@ -28,6 +28,8 @@ async function request(path, options = {}) {
 export const auth = {
   getUsers: () => request('/auth/users'),
   login: (userId, pin) => request('/auth/login', { method: 'POST', body: { userId, pin } }),
+  signupInfo: () => request('/auth/signup-info'),
+  signup: (data) => request('/auth/signup', { method: 'POST', body: data }),
   me: () => request('/auth/me'),
   updateProfile: (data) => request('/auth/me', { method: 'PUT', body: data }),
   changePassword: (newPassword) => request('/auth/me/password', { method: 'PUT', body: { newPassword } }),
@@ -89,6 +91,7 @@ export const personnel = {
   create: (data) => request('/personnel', { method: 'POST', body: data }),
   update: (id, data) => request(`/personnel/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/personnel/${id}`, { method: 'DELETE' }),
+  import: (members) => request('/personnel/import', { method: 'POST', body: { members } }),
 };
 
 // ─── Consumables ───
