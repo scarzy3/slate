@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
-import { validate, kitSchema, kitUpdateSchema, checkoutSchema, returnSchema, inspectionSchema } from '../utils/validation.js';
+import { validate, kitSchema, kitUpdateSchema, checkoutSchema, returnSchema, inspectionSchema, kitSerialUpdateSchema } from '../utils/validation.js';
 import auditLog from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -431,6 +431,33 @@ router.post('/inspect', validate(inspectionSchema), async (req, res) => {
     res.json(serializeKit(updated));
   } catch (err) {
     console.error('Inspect error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /:id/serials - directly update kit serials (admin+)
+router.put('/:id/serials', requireRole('admin'), validate(kitSerialUpdateSchema), async (req, res) => {
+  try {
+    const { serials } = req.validated;
+    const kit = await prisma.kit.findUnique({ where: { id: req.params.id }, include: KIT_INCLUDE });
+    if (!kit) return res.status(404).json({ error: 'Kit not found' });
+
+    await prisma.$transaction(async (tx) => {
+      for (const [key, serial] of Object.entries(serials)) {
+        const { componentId, slotIndex } = parseCompKey(key);
+        await tx.kitSerial.upsert({
+          where: { kitId_componentId_slotIndex: { kitId: req.params.id, componentId, slotIndex } },
+          create: { kitId: req.params.id, componentId, slotIndex, serial },
+          update: { serial },
+        });
+      }
+    });
+
+    const updated = await prisma.kit.findUnique({ where: { id: req.params.id }, include: KIT_INCLUDE });
+    await auditLog('serial_update', 'kit', req.params.id, req.user.id, { kitColor: kit.color, serialCount: Object.keys(serials).length });
+    res.json(serializeKit(updated));
+  } catch (err) {
+    console.error('Update serials error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
