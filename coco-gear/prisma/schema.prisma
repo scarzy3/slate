@@ -382,8 +382,8 @@ model KitPhoto {
 model IssueHistory {
   id              String    @id @default(uuid())
   kitId           String
-  personId        String
-  issuedById      String
+  personId        String?
+  issuedById      String?
   issuedDate      DateTime  @default(now())
   returnedDate    DateTime?
   returnNotes     String?
@@ -394,8 +394,8 @@ model IssueHistory {
   createdAt       DateTime  @default(now())
 
   kit      Kit  @relation(fields: [kitId], references: [id], onDelete: Cascade)
-  person   User @relation("IssuedTo", fields: [personId], references: [id])
-  issuedBy User @relation("IssuedBy", fields: [issuedById], references: [id])
+  person   User? @relation("IssuedTo", fields: [personId], references: [id], onDelete: SetNull)
+  issuedBy User? @relation("IssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
 
   @@index([kitId])
   @@index([personId])
@@ -405,7 +405,7 @@ model IssueHistory {
 model CheckoutRequest {
   id           String    @id @default(uuid())
   kitId        String
-  personId     String
+  personId     String?
   deptId       String?
   status       String    @default("pending") // pending | approved | denied
   serials      Json?
@@ -415,9 +415,9 @@ model CheckoutRequest {
   createdAt    DateTime  @default(now())
 
   kit        Kit         @relation(fields: [kitId], references: [id], onDelete: Cascade)
-  person     User        @relation("Requester", fields: [personId], references: [id])
+  person     User?       @relation("Requester", fields: [personId], references: [id], onDelete: SetNull)
   department Department? @relation(fields: [deptId], references: [id], onDelete: SetNull)
-  resolvedBy User?       @relation("Resolver", fields: [resolvedById], references: [id])
+  resolvedBy User?       @relation("Resolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   @@index([status])
 }
@@ -426,7 +426,7 @@ model CheckoutRequest {
 model Reservation {
   id          String   @id @default(uuid())
   kitId       String
-  personId    String
+  personId    String?
   tripId      String?
   startDate   DateTime
   endDate     DateTime
@@ -434,9 +434,9 @@ model Reservation {
   status      String   @default("pending") // pending | confirmed | cancelled
   createdAt   DateTime @default(now())
 
-  kit    Kit  @relation(fields: [kitId], references: [id], onDelete: Cascade)
-  person User @relation(fields: [personId], references: [id])
-  trip   Trip? @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  kit    Kit   @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  person User?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  trip   Trip?  @relation(fields: [tripId], references: [id], onDelete: SetNull)
 
   @@index([kitId])
   @@index([tripId])
@@ -452,13 +452,13 @@ model MaintenanceHistory {
   notes         String?
   startDate     DateTime  @default(now())
   endDate       DateTime?
-  startedById   String
+  startedById   String?
   completedById String?
   createdAt     DateTime  @default(now())
 
-  kit         Kit  @relation(fields: [kitId], references: [id], onDelete: Cascade)
-  startedBy   User @relation("MaintStartedBy", fields: [startedById], references: [id])
-  completedBy User? @relation("MaintCompletedBy", fields: [completedById], references: [id])
+  kit         Kit   @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  startedBy   User? @relation("MaintStartedBy", fields: [startedById], references: [id], onDelete: SetNull)
+  completedBy User? @relation("MaintCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
 
   @@index([kitId])
 }
@@ -499,14 +499,14 @@ model StandaloneAsset {
 model AssetIssueHistory {
   id           String    @id @default(uuid())
   assetId      String
-  personId     String
-  issuedById   String
+  personId     String?
+  issuedById   String?
   issuedDate   DateTime  @default(now())
   returnedDate DateTime?
 
   asset    StandaloneAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  person   User            @relation("AssetIssuedTo", fields: [personId], references: [id])
-  issuedBy User            @relation("AssetIssuedBy", fields: [issuedById], references: [id])
+  person   User?           @relation("AssetIssuedTo", fields: [personId], references: [id], onDelete: SetNull)
+  issuedBy User?           @relation("AssetIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
 
   @@index([assetId])
 }
