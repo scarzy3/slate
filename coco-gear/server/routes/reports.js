@@ -72,9 +72,9 @@ router.get('/checkouts', authMiddleware, requireAdminPerm('reports'), async (req
       kitId: h.kitId,
       kitType: h.kit.type.name,
       kitColor: h.kit.color,
-      person: h.person.name,
-      personTitle: h.person.title || '',
-      issuedBy: h.issuedBy.name,
+      person: h.person?.name || 'Deleted User',
+      personTitle: h.person?.title || '',
+      issuedBy: h.issuedBy?.name || 'Deleted User',
       issuedDate: h.issuedDate,
       returnedDate: h.returnedDate,
       durationHours: h.returnedDate
@@ -327,16 +327,16 @@ router.get('/custody/:kitId', authMiddleware, requireAdminPerm('reports'), async
       timeline.push({
         type: 'checkout',
         date: h.issuedDate,
-        person: h.person.name,
-        personTitle: h.person.title || '',
-        issuedBy: h.issuedBy.name,
+        person: h.person?.name || 'Deleted User',
+        personTitle: h.person?.title || '',
+        issuedBy: h.issuedBy?.name || 'Deleted User',
         returnedDate: h.returnedDate,
       });
       if (h.returnedDate) {
         timeline.push({
           type: 'return',
           date: h.returnedDate,
-          person: h.person.name,
+          person: h.person?.name || 'Deleted User',
         });
       }
     }
@@ -356,7 +356,7 @@ router.get('/custody/:kitId', authMiddleware, requireAdminPerm('reports'), async
         date: m.startDate,
         maintenanceType: m.type,
         reason: m.reason || '',
-        startedBy: m.startedBy.name,
+        startedBy: m.startedBy?.name || 'Deleted User',
       });
       if (m.endDate) {
         timeline.push({
