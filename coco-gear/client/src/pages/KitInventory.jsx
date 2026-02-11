@@ -12,7 +12,7 @@ import api from '../api.js';
 
 function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics,onRefreshKits,initialSelectedKit,onClearSelectedKit,apiInspect}){
   const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
-  const[selId,setSelId]=useState(initialSelectedKit||null);const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[lf,setLf]=useState("ALL");
+  const[selId,setSelId]=useState(initialSelectedKit||null);const[md,setMd]=useState(null);const[histExp,setHistExp]=useState(null);const[search,setSearch]=useState("");const[lf,setLf]=useState("ALL");
   const[df,setDf]=useState(()=>userDeptId&&!isSuper?userDeptId:"ALL");
   const[statusFilter,setStatusFilter]=useState(initialFilter);
   const[kf,setKf]=useState(null);const sel=kits.find(k=>k.id===selId);
@@ -149,7 +149,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
             {(isAdmin||isSuper)&&serComps.length>0&&<Bt v="warn" sm onClick={()=>setMd("serials:"+sel.id)}>Manage Serials</Bt>}
             {(isAdmin||isSuper)&&<Bt v="primary" sm onClick={()=>{setKf({typeId:sel.typeId,color:sel.color,locId:sel.locId,fields:{...sel.fields},deptId:sel.deptId||""});setMd(sel.id)}}>Edit</Bt>}
             {settings.enableQR!==false&&<Bt sm v="ind" onClick={()=>setMd("qr:"+sel.id)}>QR Code</Bt>}
-            <Bt sm onClick={()=>setMd("hist:"+sel.id)}>History</Bt>
+            <Bt sm onClick={()=>{setHistExp(null);setMd("hist:"+sel.id)}}>History</Bt>
             {(isAdmin||isSuper)&&<Bt v="danger" sm onClick={async()=>{try{await api.kits.delete(sel.id);if(onRefreshKits)await onRefreshKits();setSelId(null)}catch(e){alert(e.message)}}} style={{marginLeft:"auto"}}>Delete</Bt>}</div></div>)})()}</div>
     <ModalWrap open={String(md).startsWith("serials:")} onClose={()=>setMd(null)} title="Manage Serial Numbers" wide>
       {String(md).startsWith("serials:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
@@ -171,17 +171,75 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
     <ModalWrap open={String(md).startsWith("insp:")} onClose={()=>setMd(null)} title="Inspection" wide>
       {String(md).startsWith("insp:")&&(()=>{const kid=String(md).split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
         if(!k||!ty)return null;return <InspWF kit={k} type={ty} allC={allC} onDone={doneInsp} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
-    <ModalWrap open={String(md).startsWith("hist:")} onClose={()=>setMd(null)} title="Kit History" wide>
+    <ModalWrap open={String(md).startsWith("hist:")} onClose={()=>{setMd(null);setHistExp(null)}} title="Kit History" wide>
       {String(md).startsWith("hist:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);if(!k)return null;
-        const all=[...k.inspections.map(i=>({type:"inspection",...i})),...k.issueHistory.map(h=>({type:"checkout",...h})),...k.maintenanceHistory.map(m=>({type:"maintenance",...m}))]
+        const ty=types.find(t=>t.id===k.typeId);const cEx=ty?expandComps(ty.compIds,ty.compQtys||{}):[];
+        const all=[...k.inspections.map(i=>({_et:"inspection",...i})),...k.issueHistory.map(h=>({_et:"checkout",...h})),...k.maintenanceHistory.map(m=>({_et:"maintenance",...m}))]
           .sort((a,b)=>new Date(b.date||b.issuedDate||b.startDate)-new Date(a.date||a.issuedDate||a.startDate));
-        return(<div style={{maxHeight:400,overflowY:"auto"}}>{all.length?all.map((e,i)=><div key={i} style={{padding:"10px 14px",borderRadius:7,background:T.card,border:"1px solid "+T.bd,marginBottom:4}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <Bg color={e.type==="inspection"?T.tl:e.type==="checkout"?T.bl:T.am} bg={(e.type==="inspection"?T.tl:e.type==="checkout"?T.bl:T.am)+"18"}>{e.type}</Bg>
-            <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{e.date||e.issuedDate||e.startDate}</span></div>
-          {e.type==="inspection"&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:4}}>Inspector: {e.inspector}</div>}
-          {e.type==="checkout"&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:4}}>{personnel.find(p=>p.id===e.personId)?.name}{e.returnedDate?" → Returned "+e.returnedDate:""}</div>}
-          {e.type==="maintenance"&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,marginTop:4}}>{e.reason}{e.endDate?" → Completed "+e.endDate:""}</div>}</div>)
+        return(<div style={{maxHeight:500,overflowY:"auto"}}>{all.length?all.map((e,i)=>{const isExp=histExp===i;const tc=e._et==="inspection"?T.tl:e._et==="checkout"?T.bl:T.am;
+          return(<div key={i} style={{borderRadius:7,background:T.card,border:"1px solid "+(isExp?tc+"44":T.bd),marginBottom:4,transition:"border .15s"}}>
+            <div onClick={()=>setHistExp(isExp?null:i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",cursor:"pointer"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <Bg color={tc} bg={tc+"18"}>{e._et==="checkout"?(e.returnedDate?"checkout → return":"checkout"):e._et}</Bg>
+                {e._et==="inspection"&&<span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{e.inspector||"--"}</span>}
+                {e._et==="checkout"&&<span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{e.person?.name||personnel.find(p=>p.id===e.personId)?.name||"--"}</span>}
+                {e._et==="maintenance"&&<span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{e.reason||"--"}</span>}
+                {e._et==="inspection"&&e.results&&(()=>{const vals=Object.values(e.results);const bad=vals.filter(s=>s!=="GOOD").length;
+                  return bad>0?<Bg color={T.rd} bg="rgba(239,68,68,.08)">{bad} issue{bad>1?"s":""}</Bg>:<Bg color={T.gn} bg="rgba(34,197,94,.08)">All good</Bg>})()}
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{fmtDate(e.date||e.issuedDate||e.startDate)}</span>
+                <span style={{fontSize:10,color:T.dm,transition:"transform .15s",transform:isExp?"rotate(90deg)":"rotate(0deg)"}}>▸</span></div></div>
+            {isExp&&<div style={{padding:"0 14px 12px",borderTop:"1px solid "+T.bd}}>
+              {e._et==="inspection"&&<div style={{paddingTop:10}}>
+                {e.notes&&<div style={{fontSize:10,color:T.tx,fontFamily:T.m,marginBottom:10,padding:"6px 10px",borderRadius:5,background:"rgba(255,255,255,.02)",fontStyle:"italic"}}>"{e.notes}"</div>}
+                {e.results&&Object.keys(e.results).length>0&&<div>
+                  <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.dm,fontFamily:T.m,marginBottom:6}}>Component Results</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:2}}>
+                    {cEx.map(ce=>{const c=allC.find(x=>x.id===ce.compId);const st=e.results[ce.key]||"GOOD";const s=cSty[st];
+                      const lbl=c?(ce.qty>1?c.label+" ("+(ce.idx+1)+"/"+ce.qty+")":c.label):ce.key;
+                      return <div key={ce.key} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",borderRadius:4,background:s?s.bg:"transparent"}}>
+                        <span style={{fontSize:9,fontWeight:700,color:s?s.fg:T.dm,width:16}}>{s?s.ic:"--"}</span>
+                        <span style={{fontSize:9,color:st!=="GOOD"?T.tx:T.mu,fontFamily:T.m,flex:1}}>{lbl}</span>
+                        {e.serials&&e.serials[ce.key]&&<span style={{fontSize:8,color:T.am,fontFamily:T.m}}>SN: {e.serials[ce.key]}</span>}</div>})}</div></div>}
+                {e.photos&&e.photos.length>0&&<div style={{marginTop:8,fontSize:9,color:T.ind,fontFamily:T.m}}>{e.photos.length} photo{e.photos.length>1?"s":""} attached</div>}</div>}
+              {e._et==="checkout"&&<div style={{paddingTop:10,display:"flex",flexDirection:"column",gap:8}}>
+                <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <div style={{padding:"8px 10px",borderRadius:6,background:"rgba(96,165,250,.04)",border:"1px solid rgba(96,165,250,.08)"}}>
+                    <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.bl,fontFamily:T.m,marginBottom:3}}>Checked Out</div>
+                    <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{fmtDate(e.issuedDate)}</div>
+                    <div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginTop:2}}>To: {e.person?.name||personnel.find(p=>p.id===e.personId)?.name||"--"}{e.person?.title?" ("+e.person.title+")":""}</div>
+                    {e.issuedByUser&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>By: {e.issuedByUser.name}</div>}
+                    {e.checkoutLoc&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>From: {locs.find(l=>l.id===e.checkoutLoc)?.name||"--"}</div>}</div>
+                  <div style={{padding:"8px 10px",borderRadius:6,background:e.returnedDate?"rgba(34,197,94,.04)":"rgba(244,114,182,.04)",border:"1px solid "+(e.returnedDate?"rgba(34,197,94,.08)":"rgba(244,114,182,.08)")}}>
+                    <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:e.returnedDate?T.gn:T.pk,fontFamily:T.m,marginBottom:3}}>{e.returnedDate?"Returned":"Outstanding"}</div>
+                    {e.returnedDate?<><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{fmtDate(e.returnedDate)}</div>
+                      {e.returnLoc&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:2}}>To: {locs.find(l=>l.id===e.returnLoc)?.name||"--"}</div>}</>
+                      :<div style={{fontSize:11,fontWeight:600,color:T.pk,fontFamily:T.m}}>Still out</div>}</div></div>
+                {e.returnNotes&&<div style={{fontSize:10,color:T.tx,fontFamily:T.m,padding:"6px 10px",borderRadius:5,background:"rgba(255,255,255,.02)"}}>Return note: {e.returnNotes}</div>}
+                {e.checkoutSerials&&Object.keys(e.checkoutSerials).length>0&&<div>
+                  <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.dm,fontFamily:T.m,marginBottom:4}}>Checkout Serials</div>
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{Object.entries(e.checkoutSerials).map(([key,sn])=>{
+                    const ce=cEx.find(x=>x.key===key);const c=ce?allC.find(x=>x.id===ce.compId):null;
+                    return <Bg key={key} color={T.am} bg="rgba(251,191,36,.06)">{c?c.label:key}: {sn}</Bg>})}</div></div>}
+                {e.returnSerials&&Object.keys(e.returnSerials).length>0&&<div>
+                  <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.dm,fontFamily:T.m,marginBottom:4}}>Return Serials</div>
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{Object.entries(e.returnSerials).map(([key,sn])=>{
+                    const ce=cEx.find(x=>x.key===key);const c=ce?allC.find(x=>x.id===ce.compId):null;
+                    return <Bg key={key} color={T.gn} bg="rgba(34,197,94,.06)">{c?c.label:key}: {sn}</Bg>})}</div></div>}</div>}
+              {e._et==="maintenance"&&<div style={{paddingTop:10,display:"flex",flexDirection:"column",gap:8}}>
+                <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <div style={{padding:"8px 10px",borderRadius:6,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.08)"}}>
+                    <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.am,fontFamily:T.m,marginBottom:3}}>Started</div>
+                    <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{fmtDate(e.startDate)}</div>
+                    {e.startedByUser&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:2}}>By: {e.startedByUser.name}</div>}</div>
+                  <div style={{padding:"8px 10px",borderRadius:6,background:e.endDate?"rgba(34,197,94,.04)":"rgba(251,191,36,.04)",border:"1px solid "+(e.endDate?"rgba(34,197,94,.08)":"rgba(251,191,36,.08)")}}>
+                    <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:e.endDate?T.gn:T.am,fontFamily:T.m,marginBottom:3}}>{e.endDate?"Completed":"In Progress"}</div>
+                    {e.endDate?<><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{fmtDate(e.endDate)}</div>
+                      {e.completedByUser&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:2}}>By: {e.completedByUser.name}</div>}</>
+                      :<div style={{fontSize:11,fontWeight:600,color:T.am,fontFamily:T.m}}>Ongoing</div>}</div></div>
+                {e.type&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Type: {e.type}</div>}
+                {e.notes&&<div style={{fontSize:10,color:T.tx,fontFamily:T.m,padding:"6px 10px",borderRadius:5,background:"rgba(255,255,255,.02)"}}>Note: {e.notes}</div>}</div>}</div>}</div>)})
           :<div style={{padding:20,textAlign:"center",color:T.dm}}>No history</div>}</div>)})()}</ModalWrap>
     {/* QR Code detail modal */}
     <ModalWrap open={String(md).startsWith("qr:")&&md!=="qr-bulk"} onClose={()=>setMd(null)} title="Kit QR Code">
