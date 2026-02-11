@@ -48,6 +48,7 @@ export const kits = {
   checkout: (data) => request('/kits/checkout', { method: 'POST', body: data }),
   return: (data) => request('/kits/return', { method: 'POST', body: data }),
   inspect: (data) => request('/kits/inspect', { method: 'POST', body: data }),
+  updateSerials: (id, serials) => request(`/kits/${id}/serials`, { method: 'PUT', body: { serials } }),
   updateLocation: (id, locId) => request(`/kits/${id}/location`, { method: 'PUT', body: { locId } }),
 };
 

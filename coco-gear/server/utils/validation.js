@@ -178,6 +178,11 @@ export const reservationSchema = z.object({
   purpose: z.string().max(500).optional().default(''),
 });
 
+// ─── Kit Serial Update ───
+export const kitSerialUpdateSchema = z.object({
+  serials: z.record(z.string(), z.string()),
+});
+
 // ─── Checkout / Return ───
 export const checkoutSchema = z.object({
   kitId: z.string().uuid(),
