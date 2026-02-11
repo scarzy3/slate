@@ -6,7 +6,6 @@ import QRSvg from '../components/qr/QRSvg.jsx';
 import QRPrintSheet from '../components/qr/QRPrintSheet.jsx';
 import QRDetailView from '../components/qr/QRDetailView.jsx';
 import { qrKitData } from '../components/qr/qrHelpers.js';
-import SerialEntryForm from '../forms/SerialEntryForm.jsx';
 import SerialManageForm from '../forms/SerialManageForm.jsx';
 import InspWF from '../forms/InspWF.jsx';
 import api from '../api.js';

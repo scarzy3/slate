@@ -4,7 +4,7 @@ import { Sw, Bt, Bg } from './ui/index.js';
 import ModalWrap from './ui/ModalWrap.jsx';
 import QRScanner from './qr/QRScanner.jsx';
 import { parseQR } from './qr/qrHelpers.js';
-import SerialEntryForm from '../forms/SerialEntryForm.jsx';
+import InspWF from '../forms/InspWF.jsx';
 
 function ScanAction({scanMd,setScanMd,kits,types,locs,comps:allC,personnel,depts,settings,curUserId,isAdmin,isSuper,apiCheckout,apiReturn,onRefreshKits,onNavigateToKit,reservations}){
   if(!scanMd)return null;
@@ -78,7 +78,7 @@ function ScanAction({scanMd,setScanMd,kits,types,locs,comps:allC,personnel,depts
     const kitId=scanMd.slice(9);const kit=kits.find(k=>k.id===kitId);const ty=kit?types.find(t=>t.id===kit.typeId):null;
     if(!kit||!ty)return <ModalWrap open onClose={closeScan} title="Error"><div style={{color:T.mu}}>Kit or type not found</div></ModalWrap>;
     return(<ModalWrap open onClose={closeScan} title="Checkout Kit" wide>
-      <SerialEntryForm kit={kit} type={ty} allC={allC} existingSerials={kit.serials} mode="checkout" settings={settings}
+      <InspWF kit={kit} type={ty} allC={allC} mode="checkout" settings={settings}
         onDone={async data=>{try{await apiCheckout(kit.id,curUserId,data.serials,data.notes);closeScan()}catch(e){}}}
         onCancel={()=>setScanMd("kit:"+kit.id)}/></ModalWrap>);}
 
@@ -87,7 +87,7 @@ function ScanAction({scanMd,setScanMd,kits,types,locs,comps:allC,personnel,depts
     const kitId=scanMd.slice(7);const kit=kits.find(k=>k.id===kitId);const ty=kit?types.find(t=>t.id===kit.typeId):null;
     if(!kit||!ty)return <ModalWrap open onClose={closeScan} title="Error"><div style={{color:T.mu}}>Kit or type not found</div></ModalWrap>;
     return(<ModalWrap open onClose={closeScan} title="Return Kit" wide>
-      <SerialEntryForm kit={kit} type={ty} allC={allC} existingSerials={kit.serials} mode="return" settings={settings}
+      <InspWF kit={kit} type={ty} allC={allC} mode="return" settings={settings}
         onDone={async data=>{try{await apiReturn(kit.id,data.serials,data.notes);closeScan()}catch(e){}}}
         onCancel={()=>setScanMd("kit:"+kit.id)}/></ModalWrap>);}
 
