@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useAuth } from './auth.jsx';
 import api from './api.js';
 import jsQR from 'jsqr';
+import QRCodeLib from 'qrcode';
 
 /* ═══════════════════════════════════════════════════════════════════
    SLATE — Full-featured asset management system
@@ -67,102 +68,10 @@ const expandComps=(compIds,compQtys={})=>{const r=[];compIds.forEach(id=>{const 
 const mkCS=(ids,qtys={})=>Object.fromEntries(expandComps(ids,qtys).map(e=>[e.key,"GOOD"]));
 const fmtDate=d=>d?new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"2-digit"}):"--";
 
-/* ═══════════ QR CODE GENERATOR (inline, no deps) ═══════════ */
-const QR=(()=>{
-  /* Galois Field GF(2^8) with primitive polynomial 0x11d */
-  const EX=new Array(256),LG=new Array(256);let xv=1;
-  for(let i=0;i<256;i++){EX[i]=xv;LG[xv]=i;xv=(xv<<1)^(xv&128?0x11d:0)}
-  const gm=(a,b)=>a&&b?EX[(LG[a]+LG[b])%255]:0;
-  /* Reed-Solomon generator polynomial */
-  const rsG=n=>{let g=[1];for(let i=0;i<n;i++){const p=Array(g.length+1).fill(0);
-    for(let j=0;j<g.length;j++){p[j+1]^=g[j];p[j]^=gm(g[j],EX[i])}g=p}return g};
-  /* Reed-Solomon encode: returns EC codewords */
-  const rsE=(d,n)=>{const gAsc=rsG(n),g=[...gAsc].reverse(),r=Array(d.length+n).fill(0);for(let i=0;i<d.length;i++)r[i]=d[i];
-    for(let i=0;i<d.length;i++){const c=r[i];if(c)for(let j=0;j<g.length;j++)r[i+j]^=gm(g[j],c)}return r.slice(d.length)};
-  /* Version params (EC Level M): [totalCW, ecPerBlock, g1Blocks, g1Data, g2Blocks, g2Data] */
-  const VI=[null,[26,10,1,16,0,0],[44,16,1,28,0,0],[70,26,1,44,0,0],[100,18,2,32,0,0],
-    [134,24,2,43,0,0],[172,16,4,27,0,0],[196,18,4,31,0,0],[242,22,2,38,2,39],[292,22,3,36,2,37],[346,26,4,43,1,44]];
-  const DCAP=[0,14,26,42,62,84,106,122,152,180,213];
-  const ALN=[null,[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50]];
-  /* 8 mask functions */
-  const MF=[(r,c)=>(r+c)%2===0,r=>r%2===0,(_,c)=>c%3===0,(r,c)=>(r+c)%3===0,
-    (r,c)=>(~~(r/2)+~~(c/3))%2===0,(r,c)=>(r*c)%2+(r*c)%3===0,
-    (r,c)=>((r*c)%2+(r*c)%3)%2===0,(r,c)=>((r+c)%2+(r*c)%3)%2===0];
-  /* BCH format info for EC M */
-  const fmtBits=mk=>{let d=mk,b=d<<10;for(let i=4;i>=0;i--)if(b&(1<<(i+10)))b^=(0x537<<i);return((d<<10)|b)^0x5412};
-  /* BCH version info for versions 7+ */
-  const verBits=v=>{let b=v<<12;for(let i=5;i>=0;i--)if(b&(1<<(i+12)))b^=(0x1F25<<i);return(v<<12)|b};
-  /* Penalty score for mask selection */
-  const penalty=m=>{const n=m.length;let p=0;
-    for(let i=0;i<n;i++){let c=1;for(let j=1;j<n;j++){if(m[i][j]===m[i][j-1])c++;else{if(c>=5)p+=c-2;c=1}}if(c>=5)p+=c-2}
-    for(let j=0;j<n;j++){let c=1;for(let i=1;i<n;i++){if(m[i][j]===m[i-1][j])c++;else{if(c>=5)p+=c-2;c=1}}if(c>=5)p+=c-2}
-    for(let i=0;i<n-1;i++)for(let j=0;j<n-1;j++){const v=m[i][j];if(v===m[i][j+1]&&v===m[i+1][j]&&v===m[i+1][j+1])p+=3}
-    let dk=0;for(let i=0;i<n;i++)for(let j=0;j<n;j++)dk+=m[i][j];p+=~~(Math.abs(dk*100/(n*n)-50)/5)*10;return p};
-  function generate(text){
-    const bytes=[...new TextEncoder().encode(text)];
-    let ver=0;for(let i=1;i<=10;i++)if(bytes.length<=DCAP[i]){ver=i;break}
-    if(!ver)return null;
-    const nf=VI[ver],sz=ver*4+17,totalData=nf[2]*nf[3]+nf[4]*nf[5];
-    /* Encode data (byte mode) */
-    const bits=[];const ab=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>i)&1)};
-    ab(4,4);ab(bytes.length,ver<=9?8:16);bytes.forEach(b=>ab(b,8));
-    for(let i=0;i<4&&bits.length<totalData*8;i++)bits.push(0);
-    while(bits.length%8)bits.push(0);
-    let pd=0xEC;while(bits.length<totalData*8){ab(pd,8);pd=pd===0xEC?0x11:0xEC}
-    const cw=[];for(let i=0;i<totalData;i++){let b=0;for(let j=0;j<8;j++)b=(b<<1)|bits[i*8+j];cw.push(b)}
-    /* Split into blocks & compute EC */
-    const bk=[];let off=0;
-    for(let g=0;g<2;g++){const nb=g?nf[4]:nf[2],dl=g?nf[5]:nf[3];
-      for(let i=0;i<nb;i++){const d=cw.slice(off,off+dl);bk.push({d,e:rsE(d,nf[1])});off+=dl}}
-    /* Interleave data + EC */
-    const fin=[];const mxD=Math.max(...bk.map(b=>b.d.length));
-    for(let i=0;i<mxD;i++)for(const b of bk)if(i<b.d.length)fin.push(b.d[i]);
-    for(let i=0;i<nf[1];i++)for(const b of bk)fin.push(b.e[i]);
-    /* Build matrix */
-    const mt=Array.from({length:sz},()=>Array(sz).fill(0)),rv=Array.from({length:sz},()=>Array(sz).fill(0));
-    /* Finder patterns */
-    const fp=(tr,tc)=>{for(let dr=-1;dr<=7;dr++)for(let dc=-1;dc<=7;dc++){
-      const nr=tr+dr,nc=tc+dc;if(nr<0||nr>=sz||nc<0||nc>=sz)continue;
-      const outer=dr===-1||dr===7||dc===-1||dc===7;
-      mt[nr][nc]=(!outer&&(dr===0||dr===6||dc===0||dc===6||(dr>=2&&dr<=4&&dc>=2&&dc<=4)))?1:0;rv[nr][nc]=1}};
-    fp(0,0);fp(0,sz-7);fp(sz-7,0);
-    /* Timing patterns */
-    for(let i=8;i<sz-8;i++){mt[6][i]=mt[i][6]=(i&1)?0:1;rv[6][i]=rv[i][6]=1}
-    /* Alignment patterns */
-    const al=ALN[ver];for(const ar of al)for(const ac of al){if(rv[ar][ac])continue;
-      for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){
-        mt[ar+dr][ac+dc]=(Math.abs(dr)===2||Math.abs(dc)===2||(!dr&&!dc))?1:0;rv[ar+dr][ac+dc]=1}}
-    /* Dark module + reserve format areas */
-    mt[sz-8][8]=1;rv[sz-8][8]=1;
-    for(let i=0;i<9;i++){rv[8][i]=1;rv[i][8]=1}
-    for(let i=0;i<8;i++){rv[8][sz-1-i]=1;rv[sz-1-i][8]=1}
-    /* Version information for v7+ */
-    if(ver>=7){const vi=verBits(ver);
-      for(let i=0;i<6;i++)for(let j=0;j<3;j++){const bit=(vi>>(i*3+j))&1;
-        mt[i][sz-11+j]=bit;rv[i][sz-11+j]=1;mt[sz-11+j][i]=bit;rv[sz-11+j][i]=1}}
-    /* Place data bits (zigzag) */
-    const db=[];for(const byte of fin)for(let i=7;i>=0;i--)db.push((byte>>i)&1);
-    let bi=0,up=true;
-    for(let col=sz-1;col>=0;col-=2){if(col===6)col=5;
-      const rows=up?Array.from({length:sz},(_,i)=>sz-1-i):Array.from({length:sz},(_,i)=>i);
-      for(const row of rows)for(let dc=0;dc<=1;dc++){const c=col-dc;if(c<0||rv[row][c])continue;mt[row][c]=bi<db.length?db[bi++]:0}
-      up=!up}
-    /* Select best mask */
-    let bm=0,bp=Infinity;
-    for(let mi=0;mi<8;mi++){const mm=mt.map(rw=>[...rw]);
-      for(let rr=0;rr<sz;rr++)for(let cc=0;cc<sz;cc++)if(!rv[rr][cc]&&MF[mi](rr,cc))mm[rr][cc]^=1;
-      const p=penalty(mm);if(p<bp){bp=p;bm=mi}}
-    /* Apply best mask */
-    for(let rr=0;rr<sz;rr++)for(let cc=0;cc<sz;cc++)if(!rv[rr][cc]&&MF[bm](rr,cc))mt[rr][cc]^=1;
-    /* Place format information */
-    const fmt=fmtBits(bm);
-    [[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]]
-      .forEach(([fr,fc],i)=>{mt[fr][fc]=(fmt>>i)&1});
-    for(let i=0;i<7;i++)mt[sz-1-i][8]=(fmt>>i)&1;
-    for(let i=0;i<8;i++)mt[8][sz-8+i]=(fmt>>(7+i))&1;
-    return mt}
-  return{generate}
-})();
+/* ═══════════ QR CODE GENERATOR (using qrcode library) ═══════════ */
+const QR={generate(text){try{const code=QRCodeLib.create(text,{errorCorrectionLevel:'M'});
+  const n=code.modules.size,d=code.modules.data,mt=[];
+  for(let r=0;r<n;r++){const row=[];for(let c=0;c<n;c++)row.push(d[r*n+c]?1:0);mt.push(row)}return mt}catch(e){return null}}};
 /* QR data helpers */
 const qrBase=()=>window.location.origin;
 const qrKitData=id=>qrBase()+"/s/kit/"+id;
