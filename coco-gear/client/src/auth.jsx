@@ -60,6 +60,22 @@ export function AuthProvider({ children }) {
     }
   }, [logout]);
 
+  // Auto-refresh user data on window focus and every 5 minutes
+  // so role/permission changes are reflected without re-login
+  useEffect(() => {
+    if (!token) return;
+
+    const handleFocus = () => refreshUser();
+    window.addEventListener('focus', handleFocus);
+
+    const interval = setInterval(refreshUser, 5 * 60 * 1000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [token, refreshUser]);
+
   const value = {
     user,
     token,
