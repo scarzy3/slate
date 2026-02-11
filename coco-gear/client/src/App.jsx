@@ -2266,7 +2266,7 @@ function BoatAdmin({boats,onRefreshBoats,settings}){
       title="Delete USV?" message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}/></div>);}
 
 /* ═══════════ PERSONNEL ═══════════ */
-function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel,settings:appSettings}){
+function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel,settings:appSettings,curUserId}){
   const[md,setMd]=useState(null);const[fm,setFm]=useState({name:"",email:"",title:"",role:"user",deptId:"",pin:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const[importMd,setImportMd]=useState(false);const[importText,setImportText]=useState("");const[importParsed,setImportParsed]=useState([]);
@@ -2300,8 +2300,9 @@ function PersonnelAdmin({personnel,setPersonnel,kits,depts,onRefreshPersonnel,se
     catch(e){setImportError(e.message||"Import failed")}
     finally{setImportLoading(false)}};
 
-  /* Developer account is always the primary protected user (earliest-created wins); falls back to first director-level user */
-  const primaryDirector=[...personnel].filter(p=>p.role==="developer").sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt))[0]||personnel.find(p=>p.role==="director"||p.role==="super"||p.role==="engineer");
+  /* Primary protected user: the currently logged-in developer, else first developer by creation, else first director-level user */
+  const devs=personnel.filter(p=>p.role==="developer");
+  const primaryDirector=devs.find(p=>p.id===curUserId)||devs[0]||personnel.find(p=>p.role==="director"||p.role==="super"||p.role==="engineer");
   const isPrimarySuper=(id)=>primaryDirector?.id===id;
 
   const save=async()=>{if(!fm.name.trim())return;
@@ -3669,7 +3670,7 @@ export default function App(){
         {pg==="components"&&canAccess({access:"admin",perm:"components"})&&<CompAdmin comps={comps} setComps={setComps} types={types} onRefreshComps={refreshComps}/>}
         {pg==="locations"&&canAccess({access:"admin",perm:"locations"})&&<LocAdmin locs={locs} setLocs={setLocs} kits={kits} onRefreshLocs={refreshLocs}/>}
         {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} locs={locs} onRefreshDepts={refreshDepts}/>}
-        {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts} onRefreshPersonnel={refreshPersonnel} settings={settings}/>}
+        {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts} onRefreshPersonnel={refreshPersonnel} settings={settings} curUserId={user?.id}/>}
         {pg==="boats"&&canAccess({access:"lead",perm:"boats"})&&<BoatAdmin boats={boats} onRefreshBoats={refreshBoats} settings={settings}/>}
         {pg==="settings"&&isSuper&&<SettingsPage settings={settings} setSettings={setSettings} onSaveSettings={saveSettings}/>}
         {pg==="profile"&&<MyProfile user={user} personnel={personnel} setPersonnel={setPersonnel} kits={kits} assets={assets} depts={depts} onRefreshPersonnel={refreshPersonnel}/>}
