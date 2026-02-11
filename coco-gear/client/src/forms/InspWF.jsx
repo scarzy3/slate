@@ -18,7 +18,7 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd,mode="inspect
   const isRev=step>=tot;const cur=cs[step];
   const mark=s=>{setRes(p=>({...p,[cur._key]:s}));if(step<tot-1)setTimeout(()=>setStep(p=>p+1),150);else setTimeout(()=>setStep(tot),150)};
   const counts=useMemo(()=>{const c={GOOD:0,MISSING:0,DAMAGED:0};cs.forEach(comp=>{c[res[comp._key]||"GOOD"]++});return c},[res,cs]);
-  const allSerFilled=serComps.length===0||serComps.every(c=>serials[c._key]?.trim());
+  const allSerFilled=serComps.length===0||serComps.every(c=>res[c._key]==="MISSING"||serials[c._key]?.trim());
   const handlePhoto=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();
     reader.onload=ev=>{setPhotos(p=>[...p,{id:uid(),data:ev.target.result,name:file.name,date:td()}])};reader.readAsDataURL(file)};
   const instLabel=c=>c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;
@@ -41,15 +41,16 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd,mode="inspect
       {serComps.length>0&&<div>
         <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.am,fontFamily:T.m,marginBottom:8}}>Serials</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-          {serComps.map(c=>{const expected=kit.serials[c._key];const entered=serials[c._key];const match=entered&&expected&&entered===expected;const mismatch=entered&&expected&&entered!==expected;
+          {serComps.map(c=>{const isMissing=res[c._key]==="MISSING";const expected=kit.serials[c._key];const entered=serials[c._key];const match=entered&&expected&&entered===expected;const mismatch=entered&&expected&&entered!==expected;
             return(<div key={c._key} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:6,
-              background:match?"rgba(34,197,94,.04)":mismatch?"rgba(239,68,68,.04)":"rgba(251,191,36,.02)",
-              border:"1px solid "+(match?"rgba(34,197,94,.15)":mismatch?"rgba(239,68,68,.15)":"rgba(251,191,36,.08)")}}>
+              background:isMissing?"rgba(239,68,68,.03)":match?"rgba(34,197,94,.04)":mismatch?"rgba(239,68,68,.04)":"rgba(251,191,36,.02)",
+              border:"1px solid "+(isMissing?"rgba(239,68,68,.1)":match?"rgba(34,197,94,.15)":mismatch?"rgba(239,68,68,.15)":"rgba(251,191,36,.08)"),opacity:isMissing?.5:1}}>
             <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1,minWidth:0}}>{instLabel(c)}</span>
-            <In value={entered} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{width:90,fontSize:9,padding:"3px 6px"}}/>
-            {c.qrScan!==false&&<SerialScanBtn onSerial={val=>setSerials(p=>({...p,[c._key]:val}))}/>}
-            {match&&<span style={{fontSize:10,color:T.gn,fontWeight:700,flexShrink:0}}>✓</span>}
-            {mismatch&&<span style={{fontSize:10,color:T.rd,fontWeight:700,flexShrink:0}}>✗</span>}</div>)})}</div></div>}
+            {isMissing?<span style={{fontSize:9,color:T.rd,fontFamily:T.m,fontWeight:600}}>MISSING</span>:<>
+              <In value={entered} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{width:90,fontSize:9,padding:"3px 6px"}}/>
+              {c.qrScan!==false&&<SerialScanBtn onSerial={val=>setSerials(p=>({...p,[c._key]:val}))}/>}
+              {match&&<span style={{fontSize:10,color:T.gn,fontWeight:700,flexShrink:0}}>✓</span>}
+              {mismatch&&<span style={{fontSize:10,color:T.rd,fontWeight:700,flexShrink:0}}>✗</span>}</>}</div>)})}</div></div>}
       <div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:6}}>Photos ({photos.length})</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {photos.map(ph=><div key={ph.id} style={{width:60,height:60,borderRadius:6,background:`url(${ph.data}) center/cover`,border:"1px solid "+T.bd}}/>)}
