@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { T } from '../theme/theme.js';
 import { stMeta, fmtDate } from '../theme/helpers.js';
 import { Sw, Bg, Bt, Fl, In, Sl, SH, ModalWrap, DeptBg } from '../components/ui/index.js';
-import SerialEntryForm from '../forms/SerialEntryForm.jsx';
+import InspWF from '../forms/InspWF.jsx';
 import IssueToPicker from '../forms/IssueToPicker.jsx';
 import api from '../api.js';
 
@@ -71,10 +71,10 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     {!filt.length&&<div style={{padding:40,textAlign:"center",color:T.dm,fontFamily:T.m}}>No kits match</div>}
     <ModalWrap open={String(md).startsWith("checkout:")} onClose={()=>setMd(null)} title="Checkout Kit" wide>
       {String(md).startsWith("checkout:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
-        if(!k||!ty)return null;return <SerialEntryForm kit={k} type={ty} allC={allC} existingSerials={k.serials} mode="checkout" onDone={data=>doCheckout(kid,data)} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
+        if(!k||!ty)return null;return <InspWF kit={k} type={ty} allC={allC} mode="checkout" onDone={data=>doCheckout(kid,data)} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
     <ModalWrap open={String(md).startsWith("return:")} onClose={()=>setMd(null)} title="Return Kit" wide>
       {String(md).startsWith("return:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
-        if(!k||!ty)return null;return <SerialEntryForm kit={k} type={ty} allC={allC} existingSerials={k.serials} mode="return" onDone={data=>doReturn(kid,data)} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
+        if(!k||!ty)return null;return <InspWF kit={k} type={ty} allC={allC} mode="return" onDone={data=>doReturn(kid,data)} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
     <ModalWrap open={md==="issueTo"} onClose={()=>setMd(null)} title="Issue Kit To..." wide>
       {md==="issueTo"&&<IssueToPicker kits={kits} types={types} locs={locs} personnel={personnel} allC={allC} settings={settings} onIssue={(kid,pid,data)=>doIssueTo(kid,pid,data)} onCancel={()=>setMd(null)}/>}</ModalWrap>
     </div>);}

@@ -4,9 +4,13 @@ import { expandComps, cSty, td, uid } from '../theme/helpers.js';
 import { Sw, Bg, Bt, Fl, In, Ta } from '../components/ui/index.js';
 import SerialScanBtn from './SerialScanBtn.jsx';
 
-function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
+function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd,mode="inspect"}){
   const expanded=expandComps(type.compIds,type.compQtys||{});
   const cs=expanded.map(e=>{const c=allC.find(x=>x.id===e.compId);return c?{...c,_key:e.key,_idx:e.idx,_qty:e.qty}:null}).filter(Boolean);const tot=cs.length;
+  const ml=mode==="checkout"?"Checkout":mode==="return"?"Return":"Inspection";
+  const mc=mode==="checkout"?T.bl:mode==="return"?T.am:T.gn;
+  const mv=mode==="checkout"?"primary":mode==="return"?"warn":"success";
+  const mg=mode==="checkout"?`linear-gradient(90deg,${T.bl},${T.ind})`:mode==="return"?`linear-gradient(90deg,${T.am},${T.or})`:`linear-gradient(90deg,${T.bl},${T.ind})`;
   const[step,setStep]=useState(0);const[res,setRes]=useState(()=>{const init={};cs.forEach(c=>{init[c._key]=kit.comps[c._key]||"GOOD"});return init});
   const serComps=cs.filter(c=>c.ser);
   const[serials,setSerials]=useState(()=>{const init={};serComps.forEach(c=>{init[c._key]=""});return init});
@@ -22,8 +26,8 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
   if(isRev){const iss=cs.filter(c=>res[c._key]!=="GOOD");return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <div style={{display:"flex",gap:10,alignItems:"center"}}><Sw color={kit.color} size={30}/>
-        <div><div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>Review - Kit {kit.color}</div>
-          <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{td()}</div></div></div>
+        <div><div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>{ml} - Kit {kit.color}</div>
+          <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{type.name} | {td()}</div></div></div>
       <div style={{display:"flex",gap:8}}>{Object.entries(counts).map(([k,v])=>{const s=cSty[k];return(
         <div key={k} style={{flex:1,padding:"10px 14px",borderRadius:8,background:s.bg,border:"1px solid "+s.bd,textAlign:"center"}}>
           <div style={{fontSize:20,fontWeight:700,color:s.fg,fontFamily:T.u}}>{v}</div>
@@ -51,16 +55,16 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
           {photos.map(ph=><div key={ph.id} style={{width:60,height:60,borderRadius:6,background:`url(${ph.data}) center/cover`,border:"1px solid "+T.bd}}/>)}
           <label style={{width:60,height:60,borderRadius:6,background:T.card,border:"1px dashed "+T.bd,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:20,color:T.dm}}>
             +<input type="file" accept="image/*" onChange={handlePhoto} style={{display:"none"}}/></label></div></div>
-      <Fl label="Inspector"><In value={insp} onChange={e=>setInsp(e.target.value)} placeholder="Your name"/></Fl>
+      {mode==="inspect"&&<Fl label="Inspector"><In value={insp} onChange={e=>setInsp(e.target.value)} placeholder="Your name"/></Fl>}
       <Fl label="Notes"><Ta value={notes} onChange={e=>setNotes(e.target.value)} rows={2}/></Fl>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={onCancel}>Cancel</Bt>
-        <Bt v="success" onClick={()=>onDone({results:res,serials,notes,inspector:insp,date:td(),photos})} disabled={!allSerFilled}>
-          {allSerFilled?"Complete":"Fill S/N first"}</Bt></div></div>)}
+        <Bt v={mv} onClick={()=>onDone({results:res,serials,notes,inspector:insp,date:td(),photos})} disabled={!allSerFilled}>
+          {allSerFilled?"Confirm "+ml:"Fill S/N first"}</Bt></div></div>)}
   return(<div style={{display:"flex",flexDirection:"column",gap:16,minHeight:340}}>
     <div style={{flex:1,display:"flex",flexDirection:"column",gap:16}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <div style={{flex:1,height:3,borderRadius:2,background:T.card,overflow:"hidden"}}>
-          <div style={{width:(step/tot*100)+"%",height:"100%",borderRadius:2,background:`linear-gradient(90deg,${T.bl},${T.ind})`,transition:"width .3s"}}/></div>
+          <div style={{width:(step/tot*100)+"%",height:"100%",borderRadius:2,background:mg,transition:"width .3s"}}/></div>
         <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{step+1}/{tot}</span></div>
       <div style={{textAlign:"center",padding:"10px 0"}}>
         <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.5,color:T.mu,fontFamily:T.m,marginBottom:4}}>{cur.cat}</div>
