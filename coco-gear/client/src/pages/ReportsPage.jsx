@@ -1,0 +1,192 @@
+import { useState, useMemo } from 'react';
+import { T } from '../theme/theme.js';
+import { fmtDate, daysAgo, SYS_ROLE_LABELS, expandComps, cSty } from '../theme/helpers.js';
+import { Sw, Bg, Bt, Fl, In, Sl, SH, Tabs } from '../components/ui/index.js';
+
+function ReportsPage({kits,personnel,depts,comps,types,locs,logs,analytics}){
+  const[report,setReport]=useState(null);const[dateFrom,setDateFrom]=useState("");const[dateTo,setDateTo]=useState("");
+
+  const generateCSV=(headers,rows,filename)=>{
+    const csv=[headers.join(","),...rows.map(r=>r.map(c=>'"'+String(c||"").replace(/"/g,'""')+'"').join(","))].join("\n");
+    const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=filename+".csv";a.click();URL.revokeObjectURL(url)};
+
+  const generatePrintHTML=(title,content)=>{
+    const win=window.open("","_blank");
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+      body{font-family:system-ui,sans-serif;padding:40px;max-width:900px;margin:0 auto;color:#111}
+      h1{font-size:24px;margin-bottom:8px}h2{font-size:16px;margin-top:24px;margin-bottom:12px;border-bottom:1px solid #ddd;padding-bottom:4px}
+      .meta{color:#666;font-size:12px;margin-bottom:24px}
+      table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px}
+      th,td{padding:8px;text-align:left;border-bottom:1px solid #eee}
+      th{background:#f5f5f5;font-weight:600}
+      .stat{display:inline-block;padding:4px 12px;background:#f0f0f0;border-radius:4px;margin-right:8px;margin-bottom:8px}
+      .good{color:#16a34a}.warn{color:#ca8a04}.bad{color:#dc2626}
+      @media print{body{padding:20px}}
+    </style></head><body>${content}<script>window.print()</script></body></html>`);
+    win.document.close()};
+
+  const reports=[
+    {id:"fleet",name:"Fleet Status Report",desc:"Current state of all kits",icon:"📋"},
+    {id:"checkout",name:"Checkout/Return Log",desc:"Activity history with date filtering",icon:"↔"},
+    {id:"inspection",name:"Inspection History",desc:"All inspection records",icon:"✓"},
+    {id:"personnel",name:"Personnel Accountability",desc:"User statistics and issues",icon:"👤"},
+    {id:"components",name:"Component Health",desc:"Failure rates and issues",icon:"🔧"},
+    {id:"department",name:"Department Summary",desc:"Performance by department",icon:"🏢"},
+    {id:"maintenance",name:"Maintenance Log",desc:"Repair and service history",icon:"⚙"},
+    {id:"custody",name:"Chain of Custody",desc:"Full history for specific kit",icon:"🔗"},
+  ];
+
+  const exportFleetStatus=(format)=>{
+    const headers=["Kit","Type","Color","Storage","Status","Issued To","Last Inspected","Dept","Issues"];
+    const rows=kits.map(k=>{
+      const ty=types.find(t=>t.id===k.typeId);const lo=locs.find(l=>l.id===k.locId);
+      const person=k.issuedTo?personnel.find(p=>p.id===k.issuedTo):null;
+      const dept=k.deptId?depts.find(d=>d.id===k.deptId):null;
+      const issues=Object.values(k.comps).filter(v=>v!=="GOOD").length;
+      const status=k.maintenanceStatus?"Maintenance":k.issuedTo?"Checked Out":"Available";
+      return[k.color,ty?.name||"",k.color,lo?.name||"",status,person?`${person.name}`:"",k.lastChecked||"Never",dept?.name||"",issues]});
+    if(format==="csv")generateCSV(headers,rows,"fleet_status_"+td());
+    else{
+      const content=`<h1>Fleet Status Report</h1><div class="meta">Generated: ${new Date().toLocaleString()} | Total Kits: ${kits.length}</div>
+        <div><span class="stat">Available: ${kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length}</span>
+        <span class="stat">Checked Out: ${kits.filter(k=>k.issuedTo).length}</span>
+        <span class="stat">Maintenance: ${kits.filter(k=>k.maintenanceStatus).length}</span></div>
+        <h2>All Kits</h2><table><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr>
+        ${rows.map(r=>`<tr>${r.map((c,i)=>`<td${i===8&&c>0?' class="warn"':''}>${c}</td>`).join("")}</tr>`).join("")}</table>`;
+      generatePrintHTML("Fleet Status Report",content)}};
+
+  const exportCheckoutLog=(format)=>{
+    let allHistory=[];
+    kits.forEach(k=>{k.issueHistory.forEach(h=>{
+      const person=personnel.find(p=>p.id===h.personId);const issuer=personnel.find(p=>p.id===h.issuedBy);
+      allHistory.push({kit:k.color,person:person?`${person.name}`:"?",issuedDate:h.issuedDate,returnedDate:h.returnedDate,
+        issuedBy:issuer?issuer.name:"System",duration:h.returnedDate?daysAgo(h.issuedDate)-daysAgo(h.returnedDate):daysAgo(h.issuedDate)})})});
+    if(dateFrom)allHistory=allHistory.filter(h=>h.issuedDate>=dateFrom);
+    if(dateTo)allHistory=allHistory.filter(h=>h.issuedDate<=dateTo);
+    allHistory.sort((a,b)=>new Date(b.issuedDate)-new Date(a.issuedDate));
+    const headers=["Kit","Person","Issued Date","Returned Date","Issued By","Days Out"];
+    const rows=allHistory.map(h=>[h.kit,h.person,h.issuedDate,h.returnedDate||"Outstanding",h.issuedBy,h.duration]);
+    if(format==="csv")generateCSV(headers,rows,"checkout_log_"+td());
+    else{
+      const content=`<h1>Checkout/Return Log</h1><div class="meta">Generated: ${new Date().toLocaleString()}${dateFrom?" | From: "+dateFrom:""}${dateTo?" | To: "+dateTo:""}</div>
+        <table><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr>
+        ${rows.map(r=>`<tr>${r.map((c,i)=>`<td${i===3&&c==="Outstanding"?' class="warn"':''}>${c}</td>`).join("")}</tr>`).join("")}</table>`;
+      generatePrintHTML("Checkout Log",content)}};
+
+  const exportInspections=(format)=>{
+    let allInsp=[];
+    kits.forEach(k=>{k.inspections.forEach(ins=>{
+      const good=Object.values(ins.results).filter(v=>v==="GOOD").length;
+      const damaged=Object.values(ins.results).filter(v=>v==="DAMAGED").length;
+      const missing=Object.values(ins.results).filter(v=>v==="MISSING").length;
+      allInsp.push({kit:k.color,date:ins.date,inspector:ins.inspector||"Unknown",good,damaged,missing,notes:ins.notes||""})})});
+    if(dateFrom)allInsp=allInsp.filter(i=>i.date>=dateFrom);
+    if(dateTo)allInsp=allInsp.filter(i=>i.date<=dateTo);
+    allInsp.sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const headers=["Kit","Date","Inspector","Good","Damaged","Missing","Notes"];
+    const rows=allInsp.map(i=>[i.kit,i.date,i.inspector,i.good,i.damaged,i.missing,i.notes]);
+    if(format==="csv")generateCSV(headers,rows,"inspection_history_"+td());
+    else{
+      const content=`<h1>Inspection History</h1><div class="meta">Generated: ${new Date().toLocaleString()} | Total Inspections: ${allInsp.length}</div>
+        <table><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr>
+        ${rows.map(r=>`<tr>${r.map((c,i)=>`<td${i===4&&c>0?' class="warn"':i===5&&c>0?' class="bad"':''}>${c}</td>`).join("")}</tr>`).join("")}</table>`;
+      generatePrintHTML("Inspection History",content)}};
+
+  const exportPersonnel=(format)=>{
+    const headers=["Name","Title","Department","Dept","Total Checkouts","Active","Overdue","Damaged","Missing"];
+    const rows=analytics.userStats.map(u=>{const dept=u.person.deptId?depts.find(d=>d.id===u.person.deptId):null;
+      return[u.person.name,u.person.title||"",dept?.name||"",dept?.name||"",u.totalCheckouts,u.activeCheckouts,u.overdueCount,u.damageCount,u.missingCount]});
+    if(format==="csv")generateCSV(headers,rows,"personnel_report_"+td());
+    else{
+      const problems=analytics.problemUsers;
+      const content=`<h1>Personnel Accountability Report</h1><div class="meta">Generated: ${new Date().toLocaleString()} | Total Personnel: ${personnel.length}</div>
+        ${problems.length>0?`<h2 class="bad">Attention Required (${problems.length})</h2><ul>${problems.map(u=>`<li><strong>${u.person.title} ${u.person.name}</strong>: ${u.overdueCount} overdue, ${u.damageCount} damaged, ${u.missingCount} missing</li>`).join("")}</ul>`:""}
+        <h2>All Personnel</h2><table><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr>
+        ${rows.map(r=>`<tr>${r.map((c,i)=>`<td${(i===6||i===7||i===8)&&c>0?' class="warn"':''}>${c}</td>`).join("")}</tr>`).join("")}</table>`;
+      generatePrintHTML("Personnel Report",content)}};
+
+  const exportComponents=(format)=>{
+    const headers=["Component","Category","Serialized","Times Inspected","Damaged","Missing","Failure Rate"];
+    const rows=analytics.compStats.map(c=>[c.comp.label,c.comp.cat,c.comp.ser?"Yes":"No",c.total,c.damaged,c.missing,(c.failRate*100).toFixed(1)+"%"]);
+    if(format==="csv")generateCSV(headers,rows,"component_health_"+td());
+    else{
+      const content=`<h1>Component Health Report</h1><div class="meta">Generated: ${new Date().toLocaleString()} | Total Components: ${comps.length}</div>
+        <h2>Problem Components</h2>${analytics.problemComps.length>0?`<ul>${analytics.problemComps.slice(0,10).map(c=>`<li><strong>${c.comp.label}</strong>: ${c.damaged} damaged, ${c.missing} missing (${(c.failRate*100).toFixed(1)}% failure rate)</li>`).join("")}</ul>`:"<p class='good'>No component failures recorded</p>"}
+        <h2>All Components</h2><table><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr>
+        ${rows.map(r=>`<tr>${r.map((c,i)=>`<td${i===6&&parseFloat(c)>5?' class="warn"':''}>${c}</td>`).join("")}</tr>`).join("")}</table>`;
+      generatePrintHTML("Component Health",content)}};
+
+  const exportDepartments=(format)=>{
+    const headers=["Department","Kit Count","Issued","Compliance %","Damaged","Missing"];
+    const rows=analytics.deptStats.map(d=>[d.dept.name,d.kitCount,d.issuedCount,Math.round(d.compliance*100)+"%",d.totalDamage,d.totalMissing]);
+    if(format==="csv")generateCSV(headers,rows,"department_summary_"+td());
+    else{
+      const content=`<h1>Department Summary Report</h1><div class="meta">Generated: ${new Date().toLocaleString()}</div>
+        <table><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr>
+        ${rows.map(r=>`<tr>${r.map((c,i)=>`<td${i===3&&parseInt(c)<80?' class="warn"':''}>${c}</td>`).join("")}</tr>`).join("")}</table>`;
+      generatePrintHTML("Department Summary",content)}};
+
+  const[custodyKit,setCustodyKit]=useState("");
+  const exportCustody=(format)=>{
+    const k=kits.find(x=>x.id===custodyKit);if(!k)return;
+    const ty=types.find(t=>t.id===k.typeId);const lo=locs.find(l=>l.id===k.locId);
+    const history=[...k.issueHistory].reverse().map(h=>{const p=personnel.find(x=>x.id===h.personId);const ib=personnel.find(x=>x.id===h.issuedBy);
+      return{type:"checkout",date:h.issuedDate,person:p?`${p.name}`:"?",issuedBy:ib?.name||"System",returnedDate:h.returnedDate}});
+    const inspHist=k.inspections.map(i=>({type:"inspection",date:i.date,inspector:i.inspector,good:Object.values(i.results).filter(v=>v==="GOOD").length,
+      issues:Object.values(i.results).filter(v=>v!=="GOOD").length}));
+    const all=[...history.map(h=>({...h,sortDate:h.date})),...inspHist.map(i=>({...i,sortDate:i.date}))].sort((a,b)=>new Date(b.sortDate)-new Date(a.sortDate));
+    if(format==="csv"){
+      const headers=["Date","Event","Details"];
+      const rows=all.map(e=>e.type==="checkout"?[e.date,"Checkout",`To: ${e.person}, By: ${e.issuedBy}${e.returnedDate?`, Returned: ${e.returnedDate}`:""}`]
+        :[e.date,"Inspection",`Inspector: ${e.inspector}, Good: ${e.good}, Issues: ${e.issues}`]);
+      generateCSV(headers,rows,`custody_${k.color}_${td()}`);}
+    else{
+      const content=`<h1>Chain of Custody: Kit ${k.color}</h1><div class="meta">Generated: ${new Date().toLocaleString()}</div>
+        <div><span class="stat">Type: ${ty?.name}</span><span class="stat">Storage: ${lo?.name}</span><span class="stat">Status: ${k.issuedTo?"Checked Out":k.maintenanceStatus?"Maintenance":"Available"}</span></div>
+        <h2>History (${all.length} events)</h2><table><tr><th>Date</th><th>Event</th><th>Details</th></tr>
+        ${all.map(e=>`<tr><td>${e.sortDate}</td><td>${e.type==="checkout"?"Checkout":"Inspection"}</td>
+          <td>${e.type==="checkout"?`To: ${e.person}, By: ${e.issuedBy}${e.returnedDate?`, Returned: ${e.returnedDate}`:""}`:`Inspector: ${e.inspector}, Good: ${e.good}, Issues: ${e.issues}`}</td></tr>`).join("")}</table>`;
+      generatePrintHTML(`Custody - Kit ${k.color}`,content)}};
+
+  return(<div>
+    <SH title="Reports" sub="Generate and export reports"/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(240px,100%),1fr))",gap:10,marginBottom:20}}>
+      {reports.map(r=><button key={r.id} onClick={()=>setReport(r.id)} style={{all:"unset",cursor:"pointer",padding:16,borderRadius:10,
+        background:report===r.id?"rgba(96,165,250,.08)":T.card,border:report===r.id?"1px solid rgba(96,165,250,.25)":"1px solid "+T.bd,transition:"all .15s"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+          <span style={{fontSize:18}}>{r.icon}</span>
+          <span style={{fontSize:13,fontWeight:600,color:T.tx,fontFamily:T.u}}>{r.name}</span></div>
+        <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{r.desc}</div></button>)}</div>
+
+    {report&&<div style={{padding:20,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+      {(report==="checkout"||report==="inspection")&&<div style={{display:"flex",gap:12,marginBottom:16,alignItems:"flex-end"}}>
+        <Fl label="From Date"><In type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{width:150}}/></Fl>
+        <Fl label="To Date"><In type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{width:150}}/></Fl>
+        <Bt v="ghost" sm onClick={()=>{setDateFrom("");setDateTo("")}}>Clear</Bt></div>}
+
+      {report==="custody"&&<div style={{marginBottom:16}}>
+        <Fl label="Select Kit"><Sl options={[{v:"",l:"-- Select Kit --"},...kits.map(k=>({v:k.id,l:`Kit ${k.color}`}))]}
+          value={custodyKit} onChange={e=>setCustodyKit(e.target.value)} style={{width:200,maxWidth:"100%"}}/></Fl></div>}
+
+      <div style={{display:"flex",gap:8}}>
+        <Bt v="primary" onClick={()=>{
+          if(report==="fleet")exportFleetStatus("pdf");
+          if(report==="checkout")exportCheckoutLog("pdf");
+          if(report==="inspection")exportInspections("pdf");
+          if(report==="personnel")exportPersonnel("pdf");
+          if(report==="components")exportComponents("pdf");
+          if(report==="department")exportDepartments("pdf");
+          if(report==="custody"&&custodyKit)exportCustody("pdf");
+        }} disabled={report==="custody"&&!custodyKit}>Export PDF</Bt>
+        <Bt onClick={()=>{
+          if(report==="fleet")exportFleetStatus("csv");
+          if(report==="checkout")exportCheckoutLog("csv");
+          if(report==="inspection")exportInspections("csv");
+          if(report==="personnel")exportPersonnel("csv");
+          if(report==="components")exportComponents("csv");
+          if(report==="department")exportDepartments("csv");
+          if(report==="custody"&&custodyKit)exportCustody("csv");
+        }} disabled={report==="custody"&&!custodyKit}>Export CSV</Bt></div></div>}</div>);}
+
+export default ReportsPage;
