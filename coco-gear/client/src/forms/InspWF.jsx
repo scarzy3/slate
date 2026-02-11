@@ -56,21 +56,22 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={onCancel}>Cancel</Bt>
         <Bt v="success" onClick={()=>onDone({results:res,serials,notes,inspector:insp,date:td(),photos})} disabled={!allSerFilled}>
           {allSerFilled?"Complete":"Fill S/N first"}</Bt></div></div>)}
-  return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <div style={{display:"flex",alignItems:"center",gap:10}}>
-      <div style={{flex:1,height:3,borderRadius:2,background:T.card,overflow:"hidden"}}>
-        <div style={{width:(step/tot*100)+"%",height:"100%",borderRadius:2,background:`linear-gradient(90deg,${T.bl},${T.ind})`,transition:"width .3s"}}/></div>
-      <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{step+1}/{tot}</span></div>
-    <div style={{textAlign:"center",padding:"10px 0"}}>
-      <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.5,color:T.mu,fontFamily:T.m,marginBottom:4}}>{cur.cat}</div>
-      <div style={{fontSize:20,fontWeight:700,fontFamily:T.u,color:T.tx}}>{instLabel(cur)}</div>
-      {cur.ser&&<div style={{marginTop:6}}><Bg color={T.am} bg="rgba(251,191,36,.08)">S/N Required</Bg></div>}</div>
-    {cur.ser&&<div style={{padding:"10px 16px",borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.12)"}}>
-      {kit.serials[cur._key]&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginBottom:6}}>Expected: <b style={{color:T.am}}>{kit.serials[cur._key]}</b></div>}
-      <div style={{display:"flex",gap:6,alignItems:"center"}}><In value={serials[cur._key]||""} onChange={e=>setSerials(p=>({...p,[cur._key]:e.target.value}))} placeholder={"S/N for "+instLabel(cur)} style={{flex:1}}/>
-        {cur.qrScan!==false&&<SerialScanBtn onSerial={val=>setSerials(p=>({...p,[cur._key]:val}))}/>}
-        <Bt sm v={serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]===kit.serials[cur._key]?"success":serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]!==kit.serials[cur._key]?"danger":"ghost"}
-          style={{padding:"6px 10px",fontSize:10,flexShrink:0}}>{serials[cur._key]?serials[cur._key]===kit.serials[cur._key]?"✓ Match":"✗ Mismatch":"Verify"}</Bt></div></div>}
+  return(<div style={{display:"flex",flexDirection:"column",gap:16,minHeight:340}}>
+    <div style={{flex:1,display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{flex:1,height:3,borderRadius:2,background:T.card,overflow:"hidden"}}>
+          <div style={{width:(step/tot*100)+"%",height:"100%",borderRadius:2,background:`linear-gradient(90deg,${T.bl},${T.ind})`,transition:"width .3s"}}/></div>
+        <span style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{step+1}/{tot}</span></div>
+      <div style={{textAlign:"center",padding:"10px 0"}}>
+        <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.5,color:T.mu,fontFamily:T.m,marginBottom:4}}>{cur.cat}</div>
+        <div style={{fontSize:20,fontWeight:700,fontFamily:T.u,color:T.tx}}>{instLabel(cur)}</div>
+        {cur.ser&&<div style={{marginTop:6}}><Bg color={T.am} bg="rgba(251,191,36,.08)">S/N Required</Bg></div>}</div>
+      {cur.ser&&<div style={{padding:"10px 16px",borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.12)"}}>
+        {kit.serials[cur._key]&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginBottom:6}}>Expected: <b style={{color:T.am}}>{kit.serials[cur._key]}</b></div>}
+        <div style={{display:"flex",gap:6,alignItems:"center"}}><In value={serials[cur._key]||""} onChange={e=>setSerials(p=>({...p,[cur._key]:e.target.value}))} placeholder={"S/N for "+instLabel(cur)} style={{flex:1}}/>
+          {cur.qrScan!==false&&<SerialScanBtn onSerial={val=>setSerials(p=>({...p,[cur._key]:val}))}/>}
+          <Bt sm v={serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]===kit.serials[cur._key]?"success":serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]!==kit.serials[cur._key]?"danger":"ghost"}
+            style={{padding:"6px 10px",fontSize:10,flexShrink:0}}>{serials[cur._key]?serials[cur._key]===kit.serials[cur._key]?"✓ Match":"✗ Mismatch":"Verify"}</Bt></div></div>}</div>
     <div style={{display:"flex",gap:10,justifyContent:"center"}}>{Object.entries(cSty).map(([key,s])=>{const a=res[cur._key]===key;return(
       <button key={key} onClick={()=>mark(key)} style={{all:"unset",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5,
         padding:"18px 24px",borderRadius:10,minWidth:90,background:a?s.bg:"rgba(255,255,255,.02)",border:a?"2px solid "+s.fg:"1px solid "+T.bd,transition:"all .15s"}}>
