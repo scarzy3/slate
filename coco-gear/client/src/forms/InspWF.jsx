@@ -8,13 +8,13 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
   const expanded=expandComps(type.compIds,type.compQtys||{});
   const cs=expanded.map(e=>{const c=allC.find(x=>x.id===e.compId);return c?{...c,_key:e.key,_idx:e.idx,_qty:e.qty}:null}).filter(Boolean);const tot=cs.length;
   const[step,setStep]=useState(0);const[res,setRes]=useState(()=>{const init={};cs.forEach(c=>{init[c._key]=kit.comps[c._key]||"GOOD"});return init});
-  const needSer=settings.requireSerialsOnInspect;const serComps=cs.filter(c=>c.ser);
-  const[serials,setSerials]=useState(()=>{const init={};serComps.forEach(c=>{init[c._key]=(kit.serials&&kit.serials[c._key])||""});return init});
+  const serComps=cs.filter(c=>c.ser);
+  const[serials,setSerials]=useState(()=>{const init={};serComps.forEach(c=>{init[c._key]=""});return init});
   const[notes,setNotes]=useState("");const[insp,setInsp]=useState("");const[photos,setPhotos]=useState([]);
   const isRev=step>=tot;const cur=cs[step];
   const mark=s=>{setRes(p=>({...p,[cur._key]:s}));if(step<tot-1)setTimeout(()=>setStep(p=>p+1),150);else setTimeout(()=>setStep(tot),150)};
   const counts=useMemo(()=>{const c={GOOD:0,MISSING:0,DAMAGED:0};cs.forEach(comp=>{c[res[comp._key]||"GOOD"]++});return c},[res,cs]);
-  const allSerFilled=!needSer||serComps.every(c=>serials[c._key]?.trim());
+  const allSerFilled=serComps.length===0||serComps.every(c=>serials[c._key]?.trim());
   const handlePhoto=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();
     reader.onload=ev=>{setPhotos(p=>[...p,{id:uid(),data:ev.target.result,name:file.name,date:td()}])};reader.readAsDataURL(file)};
   const instLabel=c=>c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;
@@ -34,7 +34,7 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
             <span style={{color:s.fg,fontSize:11,fontWeight:700,width:20}}>{s.ic}</span>
             <span style={{flex:1,fontSize:11,color:T.tx,fontFamily:T.m}}>{instLabel(c)}</span>
             <Bg color={s.fg} bg="transparent">{res[c._key]}</Bg></div>)})}</div>}
-      {needSer&&serComps.length>0&&<div>
+      {serComps.length>0&&<div>
         <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.am,fontFamily:T.m,marginBottom:8}}>Serials</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
           {serComps.map(c=>{const expected=kit.serials[c._key];const entered=serials[c._key];const match=entered&&expected&&entered===expected;const mismatch=entered&&expected&&entered!==expected;
@@ -64,8 +64,8 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
     <div style={{textAlign:"center",padding:"10px 0"}}>
       <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.5,color:T.mu,fontFamily:T.m,marginBottom:4}}>{cur.cat}</div>
       <div style={{fontSize:20,fontWeight:700,fontFamily:T.u,color:T.tx}}>{instLabel(cur)}</div>
-      {cur.ser&&needSer&&<div style={{marginTop:6}}><Bg color={T.am} bg="rgba(251,191,36,.08)">S/N Required</Bg></div>}</div>
-    {cur.ser&&needSer&&<div style={{padding:"10px 16px",borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.12)"}}>
+      {cur.ser&&<div style={{marginTop:6}}><Bg color={T.am} bg="rgba(251,191,36,.08)">S/N Required</Bg></div>}</div>
+    {cur.ser&&<div style={{padding:"10px 16px",borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.12)"}}>
       {kit.serials[cur._key]&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginBottom:6}}>Expected: <b style={{color:T.am}}>{kit.serials[cur._key]}</b></div>}
       <div style={{display:"flex",gap:6,alignItems:"center"}}><In value={serials[cur._key]||""} onChange={e=>setSerials(p=>({...p,[cur._key]:e.target.value}))} placeholder={"S/N for "+instLabel(cur)} style={{flex:1}}/>
         {cur.qrScan!==false&&<SerialScanBtn onSerial={val=>setSerials(p=>({...p,[cur._key]:val}))}/>}
