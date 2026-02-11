@@ -587,7 +587,7 @@ function SerialEntryForm({kit,type,allC,existingSerials,mode,onDone,onCancel,set
               {ex&&mode!=="checkout"&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginBottom:3}}>Last: {ex}</div>}
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 <In value={serials[c._key]} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{fontSize:11,padding:"5px 9px",flex:1}}/>
-                <SerialScanBtn onSerial={val=>setSerials(p=>({...p,[c._key]:val}))}/></div></div>
+                {c.qrScan!==false&&<SerialScanBtn onSerial={val=>setSerials(p=>({...p,[c._key]:val}))}/>}</div></div>
             <span style={{color:serials[c._key]?.trim()?T.gn:T.rd,fontSize:12,fontWeight:700}}>{serials[c._key]?.trim()?"✓":"--"}</span></div>)})}</div></div>}
     <Fl label="Notes"><Ta value={notes} onChange={e=>setNotes(e.target.value)} rows={2} placeholder="Any notes..."/></Fl>
     <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={onCancel}>Cancel</Bt>
@@ -634,7 +634,7 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
               border:"1px solid "+(match?"rgba(34,197,94,.15)":mismatch?"rgba(239,68,68,.15)":"rgba(251,191,36,.08)")}}>
             <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1,minWidth:0}}>{instLabel(c)}</span>
             <In value={entered} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{width:90,fontSize:9,padding:"3px 6px"}}/>
-            <SerialScanBtn onSerial={val=>setSerials(p=>({...p,[c._key]:val}))}/>
+            {c.qrScan!==false&&<SerialScanBtn onSerial={val=>setSerials(p=>({...p,[c._key]:val}))}/>}
             {match&&<span style={{fontSize:10,color:T.gn,fontWeight:700,flexShrink:0}}>✓</span>}
             {mismatch&&<span style={{fontSize:10,color:T.rd,fontWeight:700,flexShrink:0}}>✗</span>}</div>)})}</div></div>}
       <div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:6}}>Photos ({photos.length})</div>
@@ -659,7 +659,7 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
     {cur.ser&&needSer&&<div style={{padding:"10px 16px",borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.12)"}}>
       {kit.serials[cur._key]&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginBottom:6}}>Expected: <b style={{color:T.am}}>{kit.serials[cur._key]}</b></div>}
       <div style={{display:"flex",gap:6,alignItems:"center"}}><In value={serials[cur._key]||""} onChange={e=>setSerials(p=>({...p,[cur._key]:e.target.value}))} placeholder={"S/N for "+instLabel(cur)} style={{flex:1}}/>
-        <SerialScanBtn onSerial={val=>setSerials(p=>({...p,[cur._key]:val}))}/>
+        {cur.qrScan!==false&&<SerialScanBtn onSerial={val=>setSerials(p=>({...p,[cur._key]:val}))}/>}
         <Bt sm v={serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]===kit.serials[cur._key]?"success":serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]!==kit.serials[cur._key]?"danger":"ghost"}
           style={{padding:"6px 10px",fontSize:10,flexShrink:0}}>{serials[cur._key]?serials[cur._key]===kit.serials[cur._key]?"✓ Match":"✗ Mismatch":"Verify"}</Bt></div></div>}
     <div style={{display:"flex",gap:10,justifyContent:"center"}}>{Object.entries(cSty).map(([key,s])=>{const a=res[cur._key]===key;return(
@@ -2010,12 +2010,12 @@ function AuditLogPage({logs,kits,personnel}){
 
 /* ═══════════ COMPONENTS ADMIN ═══════════ */
 function CompAdmin({comps,setComps,types,onRefreshComps}){
-  const[md,setMd]=useState(null);const[fm,setFm]=useState({key:"",label:"",cat:"Comms",ser:false,calibrationRequired:false,calibrationIntervalDays:""});
+  const[md,setMd]=useState(null);const[fm,setFm]=useState({key:"",label:"",cat:"Comms",ser:false,qrScan:true,calibrationRequired:false,calibrationIntervalDays:""});
   const[deleteConfirm,setDeleteConfirm]=useState(null);
   const grouped=useMemo(()=>{const g={};comps.forEach(c=>{(g[c.cat]=g[c.cat]||[]).push(c)});return g},[comps]);
   const save=async()=>{if(!fm.label.trim())return;
     const k=fm.key.trim()||fm.label.trim().replace(/[^a-zA-Z0-9]/g,"").replace(/^./,ch=>ch.toLowerCase());
-    try{const payload={key:md==="add"?k:fm.key,label:fm.label.trim(),category:fm.cat,serialized:fm.ser,calibrationRequired:fm.calibrationRequired,calibrationIntervalDays:fm.calibrationRequired?Number(fm.calibrationIntervalDays):null};
+    try{const payload={key:md==="add"?k:fm.key,label:fm.label.trim(),category:fm.cat,serialized:fm.ser,qrScannable:fm.ser?fm.qrScan:true,calibrationRequired:fm.calibrationRequired,calibrationIntervalDays:fm.calibrationRequired?Number(fm.calibrationIntervalDays):null};
     if(md==="add"){await api.components.create(payload)}
     else{await api.components.update(md,payload)}
     await onRefreshComps()}catch(e){alert(e.message)}
@@ -2026,7 +2026,7 @@ function CompAdmin({comps,setComps,types,onRefreshComps}){
   const doDelete=async()=>{if(deleteConfirm){try{await api.components.delete(deleteConfirm.id);await onRefreshComps()}catch(e){alert(e.message)}}};
   return(<div>
     <SH title="Components" sub={comps.length+" items | "+comps.filter(c=>c.ser).length+" serialized"}
-      action={<Bt v="primary" onClick={()=>{setFm({key:"",label:"",cat:"Comms",ser:false,calibrationRequired:false,calibrationIntervalDays:""});setMd("add")}}>+ Add</Bt>}/>
+      action={<Bt v="primary" onClick={()=>{setFm({key:"",label:"",cat:"Comms",ser:false,qrScan:true,calibrationRequired:false,calibrationIntervalDays:""});setMd("add")}}>+ Add</Bt>}/>
     {Object.entries(grouped).map(([cat,items])=><div key={cat} style={{marginBottom:20}}>
       <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.5,color:T.mu,fontFamily:T.m,marginBottom:8}}>{cat} ({items.length})</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(280px,100%),1fr))",gap:6}}>
@@ -2037,9 +2037,10 @@ function CompAdmin({comps,setComps,types,onRefreshComps}){
             <div style={{display:"flex",alignItems:"center",gap:5}}>
               <span style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u}}>{c.label}</span>
               {c.ser&&<Bg color={T.am} bg="rgba(251,191,36,.08)">S/N</Bg>}
+              {c.ser&&!c.qrScan&&<Bg color={T.dm} bg="rgba(255,255,255,.04)">No QR</Bg>}
               {c.calibrationRequired&&<Bg color={T.tl} bg="rgba(45,212,191,.08)">CAL</Bg>}</div>
             <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{c.key}{inUse>0&&` • ${inUse} type(s)`}</div></div>
-          <Bt v="ghost" sm onClick={()=>{setFm({key:c.key,label:c.label,cat:c.cat,ser:!!c.ser,calibrationRequired:!!c.calibrationRequired,calibrationIntervalDays:c.calibrationIntervalDays||""});setMd(c.id)}}>Edit</Bt>
+          <Bt v="ghost" sm onClick={()=>{setFm({key:c.key,label:c.label,cat:c.cat,ser:!!c.ser,qrScan:c.qrScan!==false,calibrationRequired:!!c.calibrationRequired,calibrationIntervalDays:c.calibrationIntervalDays||""});setMd(c.id)}}>Edit</Bt>
           <Bt v="ghost" sm onClick={()=>confirmDelete(c)} style={{color:T.rd}} disabled={inUse>0}>Del</Bt></div>)})}</div></div>)}
     <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"Add Component":"Edit Component"}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -2047,11 +2048,15 @@ function CompAdmin({comps,setComps,types,onRefreshComps}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fl label="Short ID" hint="Auto-generated from label if blank"><In value={fm.key} onChange={e=>setFm(p=>({...p,key:e.target.value}))} placeholder="auto"/></Fl>
           <Fl label="Category"><Sl options={CATS} value={fm.cat} onChange={e=>setFm(p=>({...p,cat:e.target.value}))}/></Fl></div>
-        <div style={{display:"flex",alignItems:"center",gap:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}><Tg checked={fm.ser} onChange={v=>setFm(p=>({...p,ser:v}))}/>
             <span style={{fontSize:11,color:fm.ser?T.am:T.mu,fontFamily:T.m}}>Serialized</span></div>
+          {fm.ser&&<div style={{display:"flex",alignItems:"center",gap:8}}><Tg checked={fm.qrScan} onChange={v=>setFm(p=>({...p,qrScan:v}))}/>
+            <span style={{fontSize:11,color:fm.qrScan?T.bl:T.mu,fontFamily:T.m}}>QR Scannable</span></div>}
           <div style={{display:"flex",alignItems:"center",gap:8}}><Tg checked={fm.calibrationRequired} onChange={v=>setFm(p=>({...p,calibrationRequired:v}))}/>
             <span style={{fontSize:11,color:fm.calibrationRequired?T.tl:T.mu,fontFamily:T.m}}>Requires Calibration</span></div></div>
+        {fm.ser&&!fm.qrScan&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,padding:"4px 8px",borderRadius:4,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.08)"}}>
+          QR scan disabled — serial number will be entered manually only (e.g. small components like NVGs)</div>}
         {fm.calibrationRequired&&<Fl label="Calibration Interval (days)"><In type="number" value={fm.calibrationIntervalDays} onChange={e=>setFm(p=>({...p,calibrationIntervalDays:e.target.value}))} placeholder="365"/></Fl>}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt><Bt v="primary" onClick={save}>{md==="add"?"Add":"Save"}</Bt></div></div></ModalWrap>
     <ConfirmDialog open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} onConfirm={doDelete}
@@ -2879,7 +2884,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
       {String(md).startsWith("qr:")&&md!=="qr-bulk"&&(()=>{const kid=md.slice(3);const k=kits.find(x=>x.id===kid);
         if(!k)return null;const ty=types.find(t=>t.id===k.typeId);const lo=locs.find(l=>l.id===k.locId);
         const serComps=ty?expandComps(ty.compIds,ty.compQtys||{}).map(e=>{const c=allC.find(x=>x.id===e.compId);
-          return c&&c.ser&&k.serials[e.key]?{key:e.key,label:e.qty>1?c.label+" ("+(e.idx+1)+" of "+e.qty+")":c.label,serial:k.serials[e.key]}:null}).filter(Boolean):[];
+          return c&&c.ser&&c.qrScan!==false&&k.serials[e.key]?{key:e.key,label:e.qty>1?c.label+" ("+(e.idx+1)+" of "+e.qty+")":c.label,serial:k.serials[e.key]}:null}).filter(Boolean):[];
         return <QRDetailView qrData={qrKitData(k.id)} label={"Kit "+k.color} sub={(ty?.name||"")+" | "+(lo?.name||"")}
           serials={serComps} kitId={k.id} onClose={()=>setMd(null)}/>})()}</ModalWrap>
     {/* Bulk QR Print modal */}
@@ -3343,7 +3348,7 @@ export default function App(){
     fetch('/api/auth/signup-info').then(r=>r.ok?r.json():null).then(d=>{if(d?.enabled&&d?.domain)setSignupDomain(d.domain);else setSignupDomain("")}).catch(()=>{})}}, [authCtx.token]);
 
   /* Transform API component data to frontend format */
-  const xformComp=c=>({id:c.id,key:c.key,label:c.label,cat:c.category,ser:c.serialized,calibrationRequired:c.calibrationRequired,calibrationIntervalDays:c.calibrationIntervalDays});
+  const xformComp=c=>({id:c.id,key:c.key,label:c.label,cat:c.category,ser:c.serialized,qrScan:c.qrScannable!==false,calibrationRequired:c.calibrationRequired,calibrationIntervalDays:c.calibrationIntervalDays});
   const xformType=(t,compList)=>{
     const tComps=t.components||[];
     return{id:t.id,name:t.name,desc:t.desc||"",

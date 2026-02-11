@@ -77,6 +77,7 @@ model Component {
   label                 String
   category              String   // Comms, Power, Cables, Cases, Optics, Other
   serialized            Boolean  @default(false)
+  qrScannable           Boolean  @default(true)
   calibrationRequired   Boolean  @default(false)
   calibrationIntervalDays Int?
   createdAt             DateTime @default(now())

@@ -49,7 +49,7 @@ router.post('/', authMiddleware, requireAdminPerm('components'), validate(compon
 router.put('/:id', authMiddleware, requireAdminPerm('components'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { key, label, category, serialized, calibrationRequired, calibrationIntervalDays } = req.body;
+    const { key, label, category, serialized, qrScannable, calibrationRequired, calibrationIntervalDays } = req.body;
 
     const existing = await prisma.component.findUnique({ where: { id } });
     if (!existing) {
@@ -69,6 +69,7 @@ router.put('/:id', authMiddleware, requireAdminPerm('components'), async (req, r
     if (label !== undefined) data.label = label;
     if (category !== undefined) data.category = category;
     if (serialized !== undefined) data.serialized = serialized;
+    if (qrScannable !== undefined) data.qrScannable = qrScannable;
     if (calibrationRequired !== undefined) data.calibrationRequired = calibrationRequired;
     if (calibrationIntervalDays !== undefined) data.calibrationIntervalDays = calibrationIntervalDays;
 

@@ -12,6 +12,7 @@ export const componentSchema = z.object({
   label: z.string().min(1).max(200),
   category: z.enum(['Comms', 'Power', 'Cables', 'Cases', 'Optics', 'Other']),
   serialized: z.boolean().optional().default(false),
+  qrScannable: z.boolean().optional().default(true),
   calibrationRequired: z.boolean().optional().default(false),
   calibrationIntervalDays: z.number().int().positive().nullable().optional(),
 });
