@@ -77,7 +77,7 @@ const QR=(()=>{
   const rsG=n=>{let g=[1];for(let i=0;i<n;i++){const p=Array(g.length+1).fill(0);
     for(let j=0;j<g.length;j++){p[j+1]^=g[j];p[j]^=gm(g[j],EX[i])}g=p}return g};
   /* Reed-Solomon encode: returns EC codewords */
-  const rsE=(d,n)=>{const g=rsG(n),r=Array(d.length+n).fill(0);for(let i=0;i<d.length;i++)r[i]=d[i];
+  const rsE=(d,n)=>{const gAsc=rsG(n),g=[...gAsc].reverse(),r=Array(d.length+n).fill(0);for(let i=0;i<d.length;i++)r[i]=d[i];
     for(let i=0;i<d.length;i++){const c=r[i];if(c)for(let j=0;j<g.length;j++)r[i+j]^=gm(g[j],c)}return r.slice(d.length)};
   /* Version params (EC Level M): [totalCW, ecPerBlock, g1Blocks, g1Data, g2Blocks, g2Data] */
   const VI=[null,[26,10,1,16,0,0],[44,16,1,28,0,0],[70,26,1,44,0,0],[100,18,2,32,0,0],
@@ -90,6 +90,8 @@ const QR=(()=>{
     (r,c)=>((r*c)%2+(r*c)%3)%2===0,(r,c)=>((r+c)%2+(r*c)%3)%2===0];
   /* BCH format info for EC M */
   const fmtBits=mk=>{let d=mk,b=d<<10;for(let i=4;i>=0;i--)if(b&(1<<(i+10)))b^=(0x537<<i);return((d<<10)|b)^0x5412};
+  /* BCH version info for versions 7+ */
+  const verBits=v=>{let b=v<<12;for(let i=5;i>=0;i--)if(b&(1<<(i+12)))b^=(0x1F25<<i);return(v<<12)|b};
   /* Penalty score for mask selection */
   const penalty=m=>{const n=m.length;let p=0;
     for(let i=0;i<n;i++){let c=1;for(let j=1;j<n;j++){if(m[i][j]===m[i][j-1])c++;else{if(c>=5)p+=c-2;c=1}}if(c>=5)p+=c-2}
@@ -134,6 +136,10 @@ const QR=(()=>{
     mt[sz-8][8]=1;rv[sz-8][8]=1;
     for(let i=0;i<9;i++){rv[8][i]=1;rv[i][8]=1}
     for(let i=0;i<8;i++){rv[8][sz-1-i]=1;rv[sz-1-i][8]=1}
+    /* Version information for v7+ */
+    if(ver>=7){const vi=verBits(ver);
+      for(let i=0;i<6;i++)for(let j=0;j<3;j++){const bit=(vi>>(i*3+j))&1;
+        mt[i][sz-11+j]=bit;rv[i][sz-11+j]=1;mt[sz-11+j][i]=bit;rv[sz-11+j][i]=1}}
     /* Place data bits (zigzag) */
     const db=[];for(const byte of fin)for(let i=7;i>=0;i--)db.push((byte>>i)&1);
     let bi=0,up=true;
@@ -629,6 +635,23 @@ function useAnalytics(kits,personnel,depts,comps,types,logs,reservations){
       last7,inMaintenance}},
   [kits,personnel,depts,comps,types,logs,reservations]);}
 
+/* ═══════════ SERIAL QR SCANNER ═══════════ */
+const parseSerialFromQR=val=>{if(!val)return null;const s=val.trim();
+  try{const u=new URL(s);if(u.pathname.startsWith("/s/verify/")){const parts=u.pathname.slice(10).split("/").map(decodeURIComponent);return parts[2]||null}}catch(e){}
+  if(s.startsWith("ser:")){const parts=s.slice(4).split(":");return parts[2]||null}
+  return s};
+
+function SerialScanBtn({onSerial}){
+  const[scanning,setScanning]=useState(false);
+  return(<>{scanning&&<ModalWrap open title="Scan Serial QR" onClose={()=>setScanning(false)}>
+    <QRScanner onScan={val=>{const serial=parseSerialFromQR(val);if(serial){onSerial(serial);setScanning(false)}}}
+      onClose={()=>setScanning(false)}/></ModalWrap>}
+    <button onClick={()=>setScanning(true)} title="Scan QR" style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+      width:30,height:30,borderRadius:6,background:"rgba(96,165,250,.08)",border:"1px solid rgba(96,165,250,.2)",flexShrink:0}}>
+      <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={T.bl} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/>
+        <rect x="7" y="7" width="10" height="10" rx="1"/></svg></button></>)}
+
 /* ═══════════ SERIAL ENTRY FORM ═══════════ */
 function SerialEntryForm({kit,type,allC,existingSerials,mode,onDone,onCancel,settings}){
   const expanded=expandComps(type.compIds,type.compQtys||{});
@@ -653,7 +676,9 @@ function SerialEntryForm({kit,type,allC,existingSerials,mode,onDone,onCancel,set
             <div style={{flex:1}}>
               <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:2}}>{lbl}</div>
               {ex&&mode!=="checkout"&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginBottom:3}}>Last: {ex}</div>}
-              <In value={serials[c._key]} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{fontSize:11,padding:"5px 9px"}}/></div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <In value={serials[c._key]} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{fontSize:11,padding:"5px 9px",flex:1}}/>
+                <SerialScanBtn onSerial={val=>setSerials(p=>({...p,[c._key]:val}))}/></div></div>
             <span style={{color:serials[c._key]?.trim()?T.gn:T.rd,fontSize:12,fontWeight:700}}>{serials[c._key]?.trim()?"✓":"--"}</span></div>)})}</div></div>}
     <Fl label="Notes"><Ta value={notes} onChange={e=>setNotes(e.target.value)} rows={2} placeholder="Any notes..."/></Fl>
     <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={onCancel}>Cancel</Bt>
@@ -699,7 +724,8 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
               background:match?"rgba(34,197,94,.04)":mismatch?"rgba(239,68,68,.04)":"rgba(251,191,36,.02)",
               border:"1px solid "+(match?"rgba(34,197,94,.15)":mismatch?"rgba(239,68,68,.15)":"rgba(251,191,36,.08)")}}>
             <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1,minWidth:0}}>{instLabel(c)}</span>
-            <In value={entered} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{width:100,fontSize:9,padding:"3px 6px"}}/>
+            <In value={entered} onChange={e=>setSerials(p=>({...p,[c._key]:e.target.value}))} placeholder="S/N" style={{width:90,fontSize:9,padding:"3px 6px"}}/>
+            <SerialScanBtn onSerial={val=>setSerials(p=>({...p,[c._key]:val}))}/>
             {match&&<span style={{fontSize:10,color:T.gn,fontWeight:700,flexShrink:0}}>✓</span>}
             {mismatch&&<span style={{fontSize:10,color:T.rd,fontWeight:700,flexShrink:0}}>✗</span>}</div>)})}</div></div>}
       <div><div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:6}}>Photos ({photos.length})</div>
@@ -724,6 +750,7 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd}){
     {cur.ser&&needSer&&<div style={{padding:"10px 16px",borderRadius:8,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.12)"}}>
       {kit.serials[cur._key]&&<div style={{fontSize:9,color:T.mu,fontFamily:T.m,marginBottom:6}}>Expected: <b style={{color:T.am}}>{kit.serials[cur._key]}</b></div>}
       <div style={{display:"flex",gap:6,alignItems:"center"}}><In value={serials[cur._key]||""} onChange={e=>setSerials(p=>({...p,[cur._key]:e.target.value}))} placeholder={"S/N for "+instLabel(cur)} style={{flex:1}}/>
+        <SerialScanBtn onSerial={val=>setSerials(p=>({...p,[cur._key]:val}))}/>
         <Bt sm v={serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]===kit.serials[cur._key]?"success":serials[cur._key]&&kit.serials[cur._key]&&serials[cur._key]!==kit.serials[cur._key]?"danger":"ghost"}
           style={{padding:"6px 10px",fontSize:10,flexShrink:0}}>{serials[cur._key]?serials[cur._key]===kit.serials[cur._key]?"✓ Match":"✗ Mismatch":"Verify"}</Bt></div></div>}
     <div style={{display:"flex",gap:10,justifyContent:"center"}}>{Object.entries(cSty).map(([key,s])=>{const a=res[cur._key]===key;return(
