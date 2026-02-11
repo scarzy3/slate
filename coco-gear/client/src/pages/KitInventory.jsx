@@ -30,7 +30,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
     if(onRefreshKits)await onRefreshKits()}catch(e){alert(e.message)}
     setMd(null);setKf(null)};
   const doneInsp=async data=>{const kid=String(md).split(":")[1];
-    try{await apiInspect(kid,curUserId,data.notes,data.results)}catch(e){/* apiInspect logs error */}
+    try{await apiInspect(kid,"",data.notes,data.results)}catch(e){/* apiInspect logs error */}
     setMd(null)};
 
   /* Get overdue kit IDs from analytics if available */
