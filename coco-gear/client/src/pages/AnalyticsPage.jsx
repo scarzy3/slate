@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { T } from '../theme/theme.js';
-import { fmtDate, daysAgo, SYS_ROLE_LABELS, sysRoleColor } from '../theme/helpers.js';
-import { Sw, Bg, Bt, SH, Tabs, ProgressBar } from '../components/ui/index.js';
+import { fmtDate, daysAgo, SYS_ROLE_LABELS, sysRoleColor, CATS } from '../theme/helpers.js';
+import { Sw, Bg, Bt, SH, Tabs, ProgressBar, StatCard } from '../components/ui/index.js';
 import BarChart from '../components/charts/BarChart.jsx';
 import DonutChart from '../components/charts/DonutChart.jsx';
 import SparkLine from '../components/charts/SparkLine.jsx';
