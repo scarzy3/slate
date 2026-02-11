@@ -390,7 +390,7 @@ export default function App(){
         {pg==="kits"&&<KitInv kits={kits} setKits={setKits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} settings={settings} favorites={favorites} setFavorites={setFavorites} addLog={addLog} curUserId={curUser}
           initialFilter={kitFilter} onFilterChange={setKitFilter} analytics={analytics} onRefreshKits={refreshKits}
-          initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)} initialAction={navAction} onClearAction={()=>setNavAction(null)} apiInspect={apiInspect}/>}
+          initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)} initialAction={navAction} onClearAction={()=>setNavAction(null)} apiInspect={apiInspect} isMobile={isMobile}/>}
         {pg==="issuance"&&<KitIssuance kits={kits} setKits={setKits} types={types} locs={locs} personnel={personnel} allC={comps} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests} addLog={addLog}
           reservations={reservations} onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}}

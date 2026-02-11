@@ -10,7 +10,7 @@ import SerialManageForm from '../forms/SerialManageForm.jsx';
 import InspWF from '../forms/InspWF.jsx';
 import api from '../api.js';
 
-function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics,onRefreshKits,initialSelectedKit,onClearSelectedKit,initialAction,onClearAction,apiInspect}){
+function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics,onRefreshKits,initialSelectedKit,onClearSelectedKit,initialAction,onClearAction,apiInspect,isMobile}){
   const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
   const[selId,setSelId]=useState(initialSelectedKit||null);const[md,setMd]=useState(null);const[histExp,setHistExp]=useState(null);const[search,setSearch]=useState("");const[lf,setLf]=useState("ALL");
   const[df,setDf]=useState(()=>userDeptId&&!isSuper?userDeptId:"ALL");
@@ -89,7 +89,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
           background:df==="ALL"?"rgba(255,255,255,.08)":"transparent",color:df==="ALL"?T.tx:T.mu,border:"1px solid "+(df==="ALL"?T.bdH:T.bd)}}>All Depts</button>
         {depts.map(d=>{const ct=kits.filter(k=>k.deptId===d.id).length;return <button key={d.id} onClick={()=>setDf(df===d.id?"ALL":d.id)} style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:5,fontSize:9,fontFamily:T.m,
           background:df===d.id?d.color+"22":"transparent",color:df===d.id?d.color:T.mu,border:"1px solid "+(df===d.id?d.color+"55":T.bd)}}>{d.name} ({ct})</button>})}</div>}</div>
-    <div className="slate-grid-side" style={{display:"grid",gridTemplateColumns:sel?"1fr 360px":"1fr",gap:0}}>
+    <div className="slate-grid-side" style={{display:"grid",gridTemplateColumns:sel&&!isMobile?"1fr 360px":"1fr",gap:0}}>
       <div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(240px,100%),1fr))",gap:8}}>
         {filt.map(kit=>{const st=stMeta(kit.lastChecked);const ty=types.find(t=>t.id===kit.typeId);const lo=locs.find(l=>l.id===kit.locId);
           const cEx=ty?expandComps(ty.compIds,ty.compQtys||{}):[];const iss=cEx.filter(e=>kit.comps[e.key]&&kit.comps[e.key]!=="GOOD");const isSel=selId===kit.id;
@@ -109,7 +109,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
               {dept&&<DeptBg dept={dept}/>}{kit._trip&&<Bg color={T.pu} bg="rgba(168,85,247,.08)">▸ {kit._trip.name}</Bg>}</div>
             {cEx.length>0&&<div style={{display:"flex",gap:1}}>{cEx.map(e=>{const s=cSty[kit.comps[e.key]||"GOOD"];return <div key={e.key} style={{flex:1,height:2.5,borderRadius:1,background:s.fg,opacity:.55}}/>})}</div>}</button>)})}</div>
         {!filt.length&&<div style={{padding:40,textAlign:"center",color:T.dm,fontFamily:T.m}}>No kits</div>}</div>
-      {sel&&(()=>{const ty=types.find(t=>t.id===sel.typeId);const lo=locs.find(l=>l.id===sel.locId);const st=stMeta(sel.lastChecked);
+      {sel&&!isMobile&&(()=>{const ty=types.find(t=>t.id===sel.typeId);const lo=locs.find(l=>l.id===sel.locId);const st=stMeta(sel.lastChecked);
         const cEx=ty?expandComps(ty.compIds,ty.compQtys||{}):[];
         const cs=cEx.map(e=>{const c=allC.find(x=>x.id===e.compId);return c?{...c,_key:e.key,_idx:e.idx,_qty:e.qty}:null}).filter(Boolean);
         const person=sel.issuedTo?personnel.find(p=>p.id===sel.issuedTo):null;
@@ -155,6 +155,57 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
             {settings.enableQR!==false&&<Bt sm v="ind" onClick={()=>setMd("qr:"+sel.id)}>QR Code</Bt>}
             <Bt sm onClick={()=>{setHistExp(null);setMd("hist:"+sel.id)}}>History</Bt>
             {(isAdmin||isSuper)&&<Bt v="danger" sm onClick={async()=>{try{await api.kits.delete(sel.id);if(onRefreshKits)await onRefreshKits();setSelId(null)}catch(e){alert(e.message)}}} style={{marginLeft:"auto"}}>Delete</Bt>}</div></div>)})()}</div>
+    {/* Mobile kit detail overlay */}
+    {sel&&isMobile&&(()=>{const ty=types.find(t=>t.id===sel.typeId);const lo=locs.find(l=>l.id===sel.locId);const st=stMeta(sel.lastChecked);
+        const cEx=ty?expandComps(ty.compIds,ty.compQtys||{}):[];
+        const cs=cEx.map(e=>{const c=allC.find(x=>x.id===e.compId);return c?{...c,_key:e.key,_idx:e.idx,_qty:e.qty}:null}).filter(Boolean);
+        const person=sel.issuedTo?personnel.find(p=>p.id===sel.issuedTo):null;
+        const serComps=cs.filter(c=>c.ser);const dept=sel.deptId?depts.find(d=>d.id===sel.deptId):null;const isFav=favorites.includes(sel.id);
+        return(<div style={{position:"fixed",inset:0,zIndex:999,display:"flex",flexDirection:"column"}} onClick={()=>setSelId(null)}>
+          <div style={{position:"absolute",inset:0,background:T._isDark?"rgba(0,0,0,.72)":"rgba(0,0,0,.35)",backdropFilter:"blur(6px)"}}/>
+          <div onClick={e=>e.stopPropagation()} style={{position:"relative",marginTop:"auto",width:"100%",maxHeight:"92vh",
+            background:T.panel,border:"1px solid "+T.bdH,borderRadius:"14px 14px 0 0",display:"flex",flexDirection:"column",animation:"mdIn .18s ease-out",overflow:"hidden"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderBottom:"1px solid "+T.bd,flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}><Sw color={sel.color} size={34}/>
+                <div><div style={{fontSize:18,fontWeight:700,fontFamily:T.u,color:T.tx}}>Kit {sel.color}</div>
+                  <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{ty?.name} | {lo?.name}</div></div></div>
+              <div style={{display:"flex",gap:4}}>
+                <button onClick={()=>toggleFav(sel.id)} style={{all:"unset",cursor:"pointer",fontSize:16,color:isFav?T.am:T.dm}}>{isFav?"★":"☆"}</button>
+                <button onClick={()=>setSelId(null)} style={{all:"unset",cursor:"pointer",color:T.mu,fontSize:16,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:5,background:T.card}}>×</button></div></div>
+            <div style={{padding:"16px",overflowY:"auto",flex:1,WebkitOverflowScrolling:"touch"}}>
+              {dept&&<div style={{marginBottom:10}}><DeptBg dept={dept}/></div>}
+              {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!sel.maintenanceStatus&&<div style={{marginBottom:14}}><Fl label="Storage">
+                <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={sel.locId} onChange={e=>{setKits(p=>p.map(k=>k.id===sel.id?{...k,locId:e.target.value}:k));
+                  addLog("location_change","kit",sel.id,curUserId,now(),{kitColor:sel.color,to:locs.find(l=>l.id===e.target.value)?.name})}}/></Fl></div>}
+              {sel.maintenanceStatus&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
+                <span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance: {sel.maintenanceStatus}</span></div>}
+              {person&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(244,114,182,.04)",border:"1px solid rgba(244,114,182,.15)"}}>
+                <span style={{fontSize:10,color:T.pk,fontFamily:T.m}}>Issued to {person.title} {person.name}</span></div>}
+              {ty&&ty.fields.length>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+                {ty.fields.map(f=><div key={f.key} style={{padding:"8px 12px",borderRadius:7,background:"rgba(129,140,248,.05)",border:"1px solid rgba(129,140,248,.1)"}}>
+                  <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.ind,fontFamily:T.m,marginBottom:2}}>{f.label}</div>
+                  <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.m}}>{f.type==="toggle"?(sel.fields[f.key]?"Yes":"No"):(sel.fields[f.key]||"--")}</div></div>)}</div>}
+              {serComps.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.2,color:T.am,fontFamily:T.m,marginBottom:6}}>Serials</div>
+                {serComps.map(c=>{const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return <div key={c._key} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",borderRadius:4,background:"rgba(251,191,36,.02)",marginBottom:2}}>
+                  <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1}}>{lbl}</span><span style={{fontSize:10,color:sel.serials[c._key]?T.am:T.dm,fontFamily:T.m,fontWeight:600}}>{sel.serials[c._key]||"--"}</span></div>})}</div>}
+              {cs.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:6}}>Components</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:2}}>{cs.map(c=>{const s=cSty[sel.comps[c._key]||"GOOD"];const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return(
+                  <div key={c._key} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 7px",borderRadius:4,background:"rgba(255,255,255,.012)"}}>
+                    <span style={{color:s.fg,fontSize:9,fontWeight:700,width:16}}>{s.ic}</span><span style={{fontSize:8,color:(sel.comps[c._key]||"GOOD")==="GOOD"?T.mu:T.tx,fontFamily:T.m}}>{lbl}</span></div>)})}</div></div>}
+              {settings.enableQR!==false&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:8,background:"rgba(129,140,248,.03)",border:"1px solid rgba(129,140,248,.1)",marginBottom:8,cursor:"pointer"}}
+                onClick={()=>setMd("qr:"+sel.id)}>
+                <QRSvg data={qrKitData(sel.id)} size={56} padding={1}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,fontWeight:600,color:T.ind,fontFamily:T.m}}>QR Code</div>
+                  <div style={{fontSize:8,color:T.dm,fontFamily:T.m}}>Click to view full size, print, or see serialized items</div></div></div>}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {canInspect&&!sel.maintenanceStatus&&<Bt v="success" sm onClick={()=>setMd("insp:"+sel.id)}>Inspect</Bt>}
+                {(isAdmin||isSuper)&&serComps.length>0&&<Bt v="warn" sm onClick={()=>setMd("serials:"+sel.id)}>Manage Serials</Bt>}
+                {(isAdmin||isSuper)&&<Bt v="primary" sm onClick={()=>{setKf({typeId:sel.typeId,color:sel.color,locId:sel.locId,fields:{...sel.fields},deptId:sel.deptId||""});setMd(sel.id)}}>Edit</Bt>}
+                {settings.enableQR!==false&&<Bt sm v="ind" onClick={()=>setMd("qr:"+sel.id)}>QR Code</Bt>}
+                <Bt sm onClick={()=>{setHistExp(null);setMd("hist:"+sel.id)}}>History</Bt>
+                {(isAdmin||isSuper)&&<Bt v="danger" sm onClick={async()=>{try{await api.kits.delete(sel.id);if(onRefreshKits)await onRefreshKits();setSelId(null)}catch(e){alert(e.message)}}} style={{marginLeft:"auto"}}>Delete</Bt>}</div>
+            </div></div></div>)})()}
     <ModalWrap open={String(md).startsWith("serials:")} onClose={()=>setMd(null)} title="Manage Serial Numbers" wide>
       {String(md).startsWith("serials:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
         if(!k||!ty)return null;return <SerialManageForm kit={k} type={ty} allC={allC} onCancel={()=>setMd(null)}
