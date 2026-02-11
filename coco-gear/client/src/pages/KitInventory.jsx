@@ -158,9 +158,19 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
     <ModalWrap open={md==="addK"||kf&&md&&md!=="addK"&&!String(md).startsWith("insp")&&!String(md).startsWith("hist")&&!String(md).startsWith("qr")&&!String(md).startsWith("serials")} onClose={()=>{setMd(null);setKf(null)}} title={md==="addK"?"Add Kit":"Edit Kit"}>
       {kf&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
         <Fl label="Type"><Sl options={types.map(t=>({v:t.id,l:t.name}))} value={kf.typeId} onChange={e=>setKf(p=>({...p,typeId:e.target.value,fields:{}}))}/></Fl>
-        <Fl label="Color"><div style={{display:"flex",alignItems:"center",gap:10}}>
-          <Sw color={kf.color} size={28}/>
-          <Sl options={Object.keys(CM).map(c=>({v:c,l:c}))} value={kf.color} onChange={e=>setKf(p=>({...p,color:e.target.value}))} style={{flex:1}}/></div></Fl>
+        <Fl label="Color"><div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <Sw color={kf.color} size={28}/>
+            <span style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.m}}>{kf.color}</span></div>
+          {[{label:null,keys:Object.keys(CM).filter(c=>!/^\d/.test(c)&&!["CHECKER","RWB","STRIPES"].includes(c))},
+            {label:"Numbered",keys:Object.keys(CM).filter(c=>/^\d/.test(c))},
+            {label:"Patterns",keys:["CHECKER","RWB","STRIPES"]}].map((grp,gi)=><div key={gi}>
+            {grp.label&&<div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.dm,fontFamily:T.m,margin:"6px 0 4px"}}>{grp.label}</div>}
+            <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
+              {grp.keys.map(c=>{const v=CM[c];const isSel=kf.color===c;const isPat=v&&(v.includes("gradient")||v.includes("conic"));
+                return <button key={c} title={c} onClick={()=>setKf(p=>({...p,color:c}))} style={{all:"unset",cursor:"pointer",width:24,height:24,borderRadius:4,
+                  background:isPat?v:(v||"#444"),border:isSel?"2px solid "+T.tx:c==="WHITE"?"1.5px solid #555":"1.5px solid transparent",
+                  outline:isSel?"2px solid "+T.bl:"none",outlineOffset:1,transition:"outline .1s, border .1s",flexShrink:0}}/>})}</div></div>)}</div></Fl>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Fl label="Storage">{locs.length?<Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={kf.locId} onChange={e=>setKf(p=>({...p,locId:e.target.value}))}/>
             :<span style={{fontSize:10,color:T.rd,fontFamily:T.m}}>No storage locations — add one first</span>}</Fl>
