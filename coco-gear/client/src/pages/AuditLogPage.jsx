@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { T } from '../theme/theme.js';
 import { fmtDate } from '../theme/helpers.js';
-import { Bg, Bt, In, SH } from '../components/ui/index.js';
+import { Bg, Bt, In, SH, Sl } from '../components/ui/index.js';
 
 function AuditLogPage({logs,kits,personnel}){
   const[filter,setFilter]=useState("");const[actionFilter,setActionFilter]=useState("all");
