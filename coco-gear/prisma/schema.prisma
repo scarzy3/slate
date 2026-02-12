@@ -39,6 +39,7 @@ model User {
   tripNotes       TripNote[]         @relation("TripNoteAuthor")
   tasksAssigned   TripTask[]         @relation("TaskAssignee")
   tasksCompleted  TripTask[]         @relation("TaskCompleter")
+  packingChecks   TripPackingCheck[] @relation("PackingChecks")
 
   @@index([role])
   @@index([deptId])
@@ -228,13 +229,15 @@ model Trip {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  lead         User?            @relation("TripLead", fields: [leadId], references: [id], onDelete: SetNull)
-  kits         Kit[]
-  boats        TripBoat[]
-  reservations Reservation[]
-  personnel    TripPersonnel[]
-  notes        TripNote[]
-  tasks        TripTask[]
+  lead          User?            @relation("TripLead", fields: [leadId], references: [id], onDelete: SetNull)
+  kits          Kit[]
+  boats         TripBoat[]
+  reservations  Reservation[]
+  personnel     TripPersonnel[]
+  notes         TripNote[]
+  tasks         TripTask[]
+  packingItems  TripPackingItem[]
+  packingChecks TripPackingCheck[]
 
   @@index([status])
   @@index([startDate, endDate])
@@ -594,6 +597,54 @@ model TaskTemplate {
   tasks       Json     // array of { title, description?, phase, priority, sortOrder }
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ─── Packing Templates (personal packing list templates per trip role) ───
+model PackingTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  role      String?
+  category  String   @default("general")
+  items     Json
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Trip Packing Items (trip-specific packing list items) ───
+model TripPackingItem {
+  id        String   @id @default(uuid())
+  tripId    String
+  tier      String
+  scope     String
+  category  String   @default("general")
+  name      String
+  quantity  Int      @default(1)
+  notes     String?
+  required  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([tripId, tier])
+}
+
+// ─── Trip Packing Checks (per-person checklist state) ───
+model TripPackingCheck {
+  id        String    @id @default(uuid())
+  tripId    String
+  userId    String
+  itemKey   String
+  checked   Boolean   @default(false)
+  checkedAt DateTime?
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation("PackingChecks", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId, itemKey])
+  @@index([tripId, userId])
 }
 
 // ─── System Settings ───
