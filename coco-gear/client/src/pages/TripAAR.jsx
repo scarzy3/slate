@@ -142,11 +142,12 @@ function generateMarkdown(data) {
     });
   }
 
-  // Notes
-  if (d.notes.byCategory.length > 0) {
+  // Notes (exclude after-action)
+  const opsCategories = d.notes.byCategory.filter(cat => cat.category !== 'after-action');
+  if (opsCategories.length > 0) {
     ln('## 7. Operations Log');
     ln();
-    d.notes.byCategory.forEach(cat => {
+    opsCategories.forEach(cat => {
       cat.notes.forEach(n => {
         ln(`**[${fmtDT(n.createdAt)}] ${n.authorName} (${cat.category}):**`);
         ln(n.content);
@@ -178,20 +179,25 @@ function generateMarkdown(data) {
     ln();
     if (d.activity.checkouts.length > 0) {
       ln('### Checkouts');
-      tbl(['Kit', 'Person', 'Date'], d.activity.checkouts.map(co => [co.kitColor, co.personName, fmtDShort(co.date)]));
+      tbl(['Kit', 'Type', 'Person', 'Date'], d.activity.checkouts.map(co => [co.kitColor, co.kitType || '--', co.personName, fmtDShort(co.date)]));
     }
     if (d.activity.returns.length > 0) {
       ln('### Returns');
-      tbl(['Kit', 'Person', 'Date', 'Notes'], d.activity.returns.map(rt => [rt.kitColor, rt.personName, fmtDShort(rt.date), rt.notes || '--']));
+      tbl(['Kit', 'Type', 'Person', 'Date', 'Notes'], d.activity.returns.map(rt => [rt.kitColor, rt.kitType || '--', rt.personName, fmtDShort(rt.date), rt.notes || '--']));
     }
     if (d.activity.inspections.length > 0) {
       ln('### Inspections');
-      tbl(['Kit', 'Inspector', 'Date', 'Issues Found'], d.activity.inspections.map(ins => [ins.kitColor, ins.inspector, fmtDShort(ins.date), String(ins.issuesFound)]));
+      tbl(['Kit', 'Type', 'Inspector', 'Date', 'Issues Found'], d.activity.inspections.map(ins => [ins.kitColor, ins.kitType || '--', ins.inspector, fmtDShort(ins.date), String(ins.issuesFound)]));
+      d.activity.inspections.filter(ins => ins.issues && ins.issues.length > 0).forEach(ins => {
+        ln(`**${ins.kitColor} (${ins.kitType}) — ${fmtDShort(ins.date)}:**`);
+        ins.issues.forEach(iss => ln(`- ${iss.componentLabel}: ${iss.status}`));
+        ln();
+      });
     }
   }
 
   // Lessons Learned
-  ln('## 10. Lessons Learned');
+  ln('## 10. Lessons Learned & After-Action Notes');
   ln();
   if (d.notes.afterAction.length > 0) {
     d.notes.afterAction.forEach(n => {
@@ -213,6 +219,8 @@ export default function TripAAR({ tripId, tripName, onClose, onAddNote }) {
   const [error, setError] = useState('');
   const [lessonText, setLessonText] = useState('');
   const [addingLesson, setAddingLesson] = useState(false);
+  const [cmdComment, setCmdComment] = useState('');
+  const [addingCmd, setAddingCmd] = useState(false);
   const reportRef = useRef(null);
 
   useEffect(() => {
@@ -246,11 +254,22 @@ export default function TripAAR({ tripId, tripName, onClose, onAddNote }) {
     try {
       await onAddNote({ content: lessonText.trim(), category: 'after-action' });
       setLessonText('');
-      // Reload AAR data
       const d = await api.trips.aar(tripId);
       setData(d);
     } catch (e) { /* ignore */ }
     setAddingLesson(false);
+  };
+
+  const handleAddCmdComment = async () => {
+    if (!cmdComment.trim() || !onAddNote) return;
+    setAddingCmd(true);
+    try {
+      await onAddNote({ content: '[Commander\'s Comments] ' + cmdComment.trim(), category: 'after-action' });
+      setCmdComment('');
+      const d = await api.trips.aar(tripId);
+      setData(d);
+    } catch (e) { /* ignore */ }
+    setAddingCmd(false);
   };
 
   if (loading) return (
@@ -452,18 +471,21 @@ export default function TripAAR({ tripId, tripName, onClose, onAddNote }) {
             </div>}
           </>}
 
-          {/* OPERATIONS LOG */}
+          {/* OPERATIONS LOG (excludes after-action notes) */}
           {d.notes.byCategory.length > 0 && (() => {
             let secNum = 4;
             if (d.usvs.length > 0) secNum++;
             if (d.comms.length > 0) secNum++;
             if (d.tasks.total > 0) secNum++;
+            const opsNotes = d.notes.byCategory
+              .filter(cat => cat.category !== 'after-action')
+              .flatMap(cat => cat.notes.map(n => ({ ...n, category: cat.category })))
+              .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            if (opsNotes.length === 0) return null;
             return <>
               <SectionHeader num={secNum} title="Operations Log" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {d.notes.byCategory.flatMap(cat => cat.notes.map(n => ({ ...n, category: cat.category })))
-                  .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-                  .map((n, i) => (
+                {opsNotes.map((n, i) => (
                     <div key={i} style={{ padding: '10px 14px', borderRadius: 6, background: R.sectionBg, border: '1px solid ' + R.bd, borderLeft: '3px solid ' + R.accent }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -487,7 +509,8 @@ export default function TripAAR({ tripId, tripName, onClose, onAddNote }) {
             if (d.usvs.length > 0) secNum++;
             if (d.comms.length > 0) secNum++;
             if (d.tasks.total > 0) secNum++;
-            if (d.notes.byCategory.length > 0) secNum++;
+            const hasOpsNotes = d.notes.byCategory.some(cat => cat.category !== 'after-action' && cat.notes.length > 0);
+            if (hasOpsNotes) secNum++;
             return <>
               <SectionHeader num={secNum} title="Equipment Issues" />
               {!hasIssues && <div style={{ fontSize: 13, color: R.good, fontWeight: 600, padding: '16px 0' }}>
@@ -526,7 +549,8 @@ export default function TripAAR({ tripId, tripName, onClose, onAddNote }) {
             if (d.usvs.length > 0) secNum++;
             if (d.comms.length > 0) secNum++;
             if (d.tasks.total > 0) secNum++;
-            if (d.notes.byCategory.length > 0) secNum++;
+            const hasOpsNotes2 = d.notes.byCategory.some(cat => cat.category !== 'after-action' && cat.notes.length > 0);
+            if (hasOpsNotes2) secNum++;
             return <>
               <SectionHeader num={secNum} title="Activity Summary" />
               {!hasActivity && <div style={{ fontSize: 13, color: R.mu, padding: '8px 0' }}>No checkout, return, or inspection activity recorded during the trip window.</div>}
@@ -534,23 +558,39 @@ export default function TripAAR({ tripId, tripName, onClose, onAddNote }) {
                 <div style={{ fontSize: 11, fontWeight: 700, color: R.sub, fontFamily: R.mono, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                   Checkouts ({d.activity.checkouts.length})
                 </div>
-                <Table headers={['Kit', 'Person', 'Date']}
-                  rows={d.activity.checkouts.map(co => [<strong>{co.kitColor}</strong>, co.personName, fmtDShort(co.date)])} />
+                <Table headers={['Kit', 'Type', 'Person', 'Date']}
+                  rows={d.activity.checkouts.map(co => [<strong>{co.kitColor}</strong>, co.kitType || '--', co.personName, fmtDShort(co.date)])} />
               </>}
               {d.activity.returns.length > 0 && <>
                 <div style={{ fontSize: 11, fontWeight: 700, color: R.sub, fontFamily: R.mono, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginTop: 12 }}>
                   Returns ({d.activity.returns.length})
                 </div>
-                <Table headers={['Kit', 'Person', 'Date', 'Notes']}
-                  rows={d.activity.returns.map(rt => [<strong>{rt.kitColor}</strong>, rt.personName, fmtDShort(rt.date), rt.notes || '--'])} />
+                <Table headers={['Kit', 'Type', 'Person', 'Date', 'Notes']}
+                  rows={d.activity.returns.map(rt => [<strong>{rt.kitColor}</strong>, rt.kitType || '--', rt.personName, fmtDShort(rt.date), rt.notes || '--'])} />
               </>}
               {d.activity.inspections.length > 0 && <>
                 <div style={{ fontSize: 11, fontWeight: 700, color: R.sub, fontFamily: R.mono, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginTop: 12 }}>
                   Inspections ({d.activity.inspections.length})
                 </div>
-                <Table headers={['Kit', 'Inspector', 'Date', 'Issues Found']}
-                  rows={d.activity.inspections.map(ins => [<strong>{ins.kitColor}</strong>, ins.inspector, fmtDShort(ins.date),
+                <Table headers={['Kit', 'Type', 'Inspector', 'Date', 'Issues Found']}
+                  rows={d.activity.inspections.map(ins => [<strong>{ins.kitColor}</strong>, ins.kitType || '--', ins.inspector, fmtDShort(ins.date),
                     ins.issuesFound > 0 ? <span style={{ color: R.bad, fontWeight: 600 }}>{ins.issuesFound}</span> : <span style={{ color: R.good }}>0</span>])} />
+                {/* Show inspection issue details if any */}
+                {d.activity.inspections.some(ins => ins.issues && ins.issues.length > 0) && <div style={{ marginTop: 8 }}>
+                  {d.activity.inspections.filter(ins => ins.issues && ins.issues.length > 0).map((ins, i) => (
+                    <div key={i} style={{ padding: '8px 12px', borderRadius: 6, background: R.bad + '06', border: '1px solid ' + R.bad + '18', marginBottom: 6 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: R.bad, fontFamily: R.mono, marginBottom: 4 }}>
+                        {ins.kitColor} ({ins.kitType}) — {fmtDShort(ins.date)}
+                      </div>
+                      {ins.issues.map((iss, j) => (
+                        <div key={j} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11, color: R.tx, padding: '2px 0' }}>
+                          <span>{iss.componentLabel}</span>
+                          <StatusBadge status={iss.status} />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>}
               </>}
             </>;
           })()}
@@ -561,9 +601,10 @@ export default function TripAAR({ tripId, tripName, onClose, onAddNote }) {
             if (d.usvs.length > 0) secNum++;
             if (d.comms.length > 0) secNum++;
             if (d.tasks.total > 0) secNum++;
-            if (d.notes.byCategory.length > 0) secNum++;
+            const hasOpsNotes3 = d.notes.byCategory.some(cat => cat.category !== 'after-action' && cat.notes.length > 0);
+            if (hasOpsNotes3) secNum++;
             return <>
-              <SectionHeader num={secNum} title="Lessons Learned" />
+              <SectionHeader num={secNum} title="Lessons Learned & After-Action Notes" />
               {d.notes.afterAction.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {d.notes.afterAction.map((n, i) => (
@@ -589,13 +630,31 @@ export default function TripAAR({ tripId, tripName, onClose, onAddNote }) {
                 <textarea value={lessonText} onChange={e => setLessonText(e.target.value)}
                   placeholder="Document key observations, improvements, or recommendations for future operations..."
                   rows={3} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid ' + R.bd,
-                    background: '#fff', color: R.tx, fontFamily: R.font, fontSize: 13, lineHeight: 1.6, resize: 'vertical', outline: 'none' }} />
+                    background: '#fff', color: R.tx, fontFamily: R.font, fontSize: 13, lineHeight: 1.6, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                   <button onClick={handleAddLesson} disabled={!lessonText.trim() || addingLesson}
                     style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: R.accent, color: '#fff',
                       fontFamily: R.font, fontSize: 12, fontWeight: 600, cursor: lessonText.trim() ? 'pointer' : 'not-allowed',
                       opacity: lessonText.trim() && !addingLesson ? 1 : 0.5 }}>
                     {addingLesson ? 'Saving...' : 'Save Lesson'}
+                  </button>
+                </div>
+              </div>}
+              {/* Commander's Comments — hidden in print */}
+              {onAddNote && <div className="aar-no-print" style={{ marginTop: 12, padding: '16px', borderRadius: 8, background: R.sectionBg, border: '1px solid ' + R.bd }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6d28d9', fontFamily: R.mono, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+                  Commander&apos;s Comments
+                </div>
+                <textarea value={cmdComment} onChange={e => setCmdComment(e.target.value)}
+                  placeholder="Senior leadership observations, strategic implications, and directives for future operations..."
+                  rows={3} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid ' + R.bd,
+                    background: '#fff', color: R.tx, fontFamily: R.font, fontSize: 13, lineHeight: 1.6, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                  <button onClick={handleAddCmdComment} disabled={!cmdComment.trim() || addingCmd}
+                    style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: '#6d28d9', color: '#fff',
+                      fontFamily: R.font, fontSize: 12, fontWeight: 600, cursor: cmdComment.trim() ? 'pointer' : 'not-allowed',
+                      opacity: cmdComment.trim() && !addingCmd ? 1 : 0.5 }}>
+                    {addingCmd ? 'Saving...' : 'Save Comment'}
                   </button>
                 </div>
               </div>}

@@ -735,7 +735,7 @@ router.get('/:id/aar', async (req, res) => {
           issuedDate: { gte: windowStart, lte: windowEnd },
         },
         include: {
-          kit: { select: { id: true, color: true } },
+          kit: { select: { id: true, color: true, type: { select: { name: true } } } },
           person: { select: { id: true, name: true } },
         },
         orderBy: { issuedDate: 'asc' },
@@ -743,12 +743,14 @@ router.get('/:id/aar', async (req, res) => {
       for (const issue of issueRecords) {
         checkouts.push({
           kitColor: issue.kit.color,
+          kitType: issue.kit.type?.name || 'Unknown',
           personName: issue.person?.name || 'Unknown',
           date: issue.issuedDate,
         });
         if (issue.returnedDate) {
           returns.push({
             kitColor: issue.kit.color,
+            kitType: issue.kit.type?.name || 'Unknown',
             personName: issue.person?.name || 'Unknown',
             date: issue.returnedDate,
             notes: issue.returnNotes || '',
@@ -763,16 +765,23 @@ router.get('/:id/aar', async (req, res) => {
           date: { gte: windowStart, lte: windowEnd },
         },
         include: {
-          kit: { select: { id: true, color: true } },
-          results: true,
+          kit: { select: { id: true, color: true, type: { select: { name: true } } } },
+          results: {
+            include: { component: { select: { id: true, label: true, category: true } } },
+          },
         },
         orderBy: { date: 'asc' },
       });
       inspections = inspRecords.map(insp => ({
         kitColor: insp.kit.color,
+        kitType: insp.kit.type?.name || 'Unknown',
         inspector: insp.inspector || 'Unknown',
         date: insp.date,
         issuesFound: insp.results.filter(r => r.status !== 'GOOD').length,
+        issues: insp.results.filter(r => r.status !== 'GOOD').map(r => ({
+          componentLabel: r.component?.label || 'Unknown',
+          status: r.status,
+        })),
       }));
     }
 
