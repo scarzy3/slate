@@ -317,8 +317,8 @@ router.post('/checkout', validate(checkoutSchema), async (req, res) => {
         // Directors bypass if setting enabled
         const bypassed = directorBypass && isDirector;
         if (!bypassed) {
-          const dept = await prisma.department.findUnique({ where: { id: kit.deptId } });
-          const isDeptHead = dept && dept.headId === req.user.id;
+          const isDeptManager = await prisma.departmentManager.findFirst({ where: { deptId: kit.deptId, userId: req.user.id } });
+          const isDeptHead = !!isDeptManager;
           const isInSameDept = req.user.deptId === kit.deptId;
           const userLevel = roleLevel[req.user.role] || 0;
           const minLevel = roleLevel[minRole] || 1;

@@ -70,8 +70,8 @@ async function main() {
   const users = await Promise.all([
     prisma.user.create({ data: { name: 'Jordan Martinez', title: 'Operations Director', role: 'super', pin, mustChangePassword: false, deptId: null } }),
     prisma.user.create({ data: { name: 'Riley Chen', title: 'Field Technician', role: 'user', pin, mustChangePassword: false, deptId: depts[0].id } }),
-    prisma.user.create({ data: { name: 'Drew Williams', title: 'Project Manager', role: 'user', pin, mustChangePassword: false, deptId: depts[0].id } }),
-    prisma.user.create({ data: { name: 'Kim Thompson', title: 'Engineer', role: 'user', pin, mustChangePassword: false, deptId: depts[1].id } }),
+    prisma.user.create({ data: { name: 'Drew Williams', title: 'Project Manager', role: 'lead', pin, mustChangePassword: false, deptId: depts[0].id } }),
+    prisma.user.create({ data: { name: 'Kim Thompson', title: 'Engineer', role: 'lead', pin, mustChangePassword: false, deptId: depts[1].id } }),
     prisma.user.create({ data: { name: 'Morgan Davis', title: 'Analyst', role: 'user', pin, mustChangePassword: false, deptId: depts[2].id } }),
     prisma.user.create({ data: { name: 'Taylor Nguyen', title: 'Team Lead', role: 'admin', pin, mustChangePassword: false, deptId: null } }),
     prisma.user.create({ data: { name: 'Lee Garcia', title: 'Technician', role: 'user', pin, mustChangePassword: false, deptId: depts[1].id } }),
@@ -79,11 +79,14 @@ async function main() {
   ]);
   console.log(`  Created ${users.length} users`);
 
-  // Wire dept heads
+  // Wire dept managers and leads
   await Promise.all([
-    prisma.department.update({ where: { id: depts[0].id }, data: { headId: users[5].id } }),
-    prisma.department.update({ where: { id: depts[1].id }, data: { headId: users[0].id } }),
-    prisma.department.update({ where: { id: depts[2].id }, data: { headId: users[5].id } }),
+    prisma.departmentManager.create({ data: { deptId: depts[0].id, userId: users[5].id } }),
+    prisma.departmentManager.create({ data: { deptId: depts[1].id, userId: users[0].id } }),
+    prisma.departmentManager.create({ data: { deptId: depts[2].id, userId: users[5].id } }),
+    prisma.departmentManager.create({ data: { deptId: depts[2].id, userId: users[0].id } }),
+    prisma.departmentLead.create({ data: { deptId: depts[0].id, userId: users[2].id } }),
+    prisma.departmentLead.create({ data: { deptId: depts[1].id, userId: users[3].id } }),
   ]);
 
   // ─── Components ───

@@ -24,7 +24,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     const directorRoles=["developer","director","super","engineer"];
     if(settings.directorBypassApproval&&directorRoles.includes(userRole))return false;
     const dept=depts.find(d=>d.id===kit.deptId);
-    if(dept&&dept.headId===curUserId)return false;
+    if(dept&&((dept.managerIds||[]).includes(curUserId)||(dept.leadIds||[]).includes(curUserId)))return false;
     if(userDeptId===kit.deptId)return false;
     const minRole=settings.deptApprovalMinRole||"lead";
     if((rl[userRole]||0)>=(rl[minRole]||1))return false;

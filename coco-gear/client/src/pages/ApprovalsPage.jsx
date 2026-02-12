@@ -7,7 +7,7 @@ function ApprovalsPage({requests,setRequests,kits,setKits,personnel,depts,allC,t
   const _rl={user:0,lead:1,manager:2,admin:2,director:3,super:3,developer:3,engineer:3};
   const minRole=settings?.deptApprovalMinRole||"lead";
   const hasMinRole=(_rl[userRole]||0)>=(_rl[minRole]||1);
-  const headOf=depts.filter(d=>d.headId===curUserId).map(d=>d.id);
+  const headOf=depts.filter(d=>(d.managerIds||[]).includes(curUserId)||(d.leadIds||[]).includes(curUserId)).map(d=>d.id);
   const visible=requests.filter(r=>hasMinRole||headOf.includes(r.deptId));
   const pending=visible.filter(r=>r.status==="pending");const resolved=visible.filter(r=>r.status!=="pending");
   const approve=async reqId=>{const req=requests.find(r=>r.id===reqId);if(!req)return;
