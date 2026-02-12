@@ -10,6 +10,8 @@ const router = Router();
 
 const DEFAULT_SETTINGS = {
   requireDeptApproval: true,
+  directorBypassApproval: true,
+  deptApprovalMinRole: 'lead',
   allowUserLocationUpdate: true,
   requireSerialsOnCheckout: true,
   requireSerialsOnReturn: true,

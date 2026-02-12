@@ -6,7 +6,7 @@ import InspWF from '../forms/InspWF.jsx';
 import IssueToPicker from '../forms/IssueToPicker.jsx';
 import api from '../api.js';
 
-function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,curUserId,settings,requests,setRequests,addLog,onNavigateToKit,reservations,apiCheckout,apiReturn,onRefreshKits}){
+function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,userRole,curUserId,settings,requests,setRequests,addLog,onNavigateToKit,reservations,apiCheckout,apiReturn,onRefreshKits}){
   const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
   const hasDept=!!userDeptId;const defaultView=hasDept&&!isSuper?"dept":"all";
   const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[view,setView]=useState(defaultView);
@@ -19,8 +19,16 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     return list},[kits,view,search,personnel,locs,curUserId,userDeptId]);
   const deptName=userDeptId?depts.find(d=>d.id===userDeptId)?.name:"";
   const issuedCt=kits.filter(k=>k.issuedTo).length;const myCt=kits.filter(k=>k.issuedTo===curUserId).length;const deptCt=userDeptId?kits.filter(k=>k.deptId===userDeptId).length:0;
-  const needsApproval=kit=>{if(!settings.requireDeptApproval||!kit.deptId||isSuper||isAdmin)return false;
-    const dept=depts.find(d=>d.id===kit.deptId);return!(dept&&dept.headId===curUserId)};
+  const rl={user:0,lead:1,manager:2,admin:2,director:3,super:3,developer:3,engineer:3};
+  const needsApproval=kit=>{if(!settings.requireDeptApproval||!kit.deptId)return false;
+    const directorRoles=["developer","director","super","engineer"];
+    if(settings.directorBypassApproval&&directorRoles.includes(userRole))return false;
+    const dept=depts.find(d=>d.id===kit.deptId);
+    if(dept&&dept.headId===curUserId)return false;
+    if(userDeptId===kit.deptId)return false;
+    const minRole=settings.deptApprovalMinRole||"lead";
+    if((rl[userRole]||0)>=(rl[minRole]||1))return false;
+    return true};
   const doCheckout=async(kitId,data)=>{const kit=kits.find(k=>k.id===kitId);
     try{await apiCheckout(kitId,curUserId,data.serials,data.notes)}catch(e){/* apiCheckout shows alert */}
     setMd(null)};

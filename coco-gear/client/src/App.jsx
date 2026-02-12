@@ -181,7 +181,8 @@ export default function App(){
   const isLead=effectiveRole==="lead"||isManager;const isSuper=isDirector;const isAdmin=isManager;
   const analytics=useAnalytics(kits,personnel,depts,comps,types,logs,reservations);
   const headOf=depts.filter(d=>d.headId===(curUser||authCtx.user?.id)).map(d=>d.id);
-  const isApprover=isLead||headOf.length>0;
+  const _rl={user:0,lead:1,manager:2,admin:2,director:3,super:3,developer:3,engineer:3};
+  const isApprover=headOf.length>0||(_rl[effectiveRole]||0)>=(_rl[settings.deptApprovalMinRole||"lead"]||1);
 
   const addLog=(action,target,targetId,by,date,details={})=>{setLogs(p=>[...p,{id:uid(),action,target,targetId,by,date,details}]);refreshLogs()};
 
@@ -392,13 +393,13 @@ export default function App(){
           initialFilter={kitFilter} onFilterChange={setKitFilter} analytics={analytics} onRefreshKits={refreshKits}
           initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)} initialAction={navAction} onClearAction={()=>setNavAction(null)} apiInspect={apiInspect} isMobile={isMobile}/>}
         {pg==="issuance"&&<KitIssuance kits={kits} setKits={setKits} types={types} locs={locs} personnel={personnel} allC={comps} depts={depts}
-          isAdmin={isAdmin} isSuper={isSuper} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests} addLog={addLog}
+          isAdmin={isAdmin} isSuper={isSuper} userRole={effectiveRole} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests} addLog={addLog}
           reservations={reservations} onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}}
           apiCheckout={apiCheckout} apiReturn={apiReturn} onRefreshKits={refreshKits}/>}
         {pg==="analytics"&&canAccess({access:"admin",perm:"analytics"})&&<AnalyticsPage analytics={analytics} kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs}/>}
         {pg==="reports"&&canAccess({access:"admin",perm:"reports"})&&<ReportsPage kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs} logs={logs} analytics={analytics}/>}
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}
-          personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} addLog={addLog} onRefreshKits={refreshKits}/>}
+          personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} userRole={effectiveRole} settings={settings} addLog={addLog} onRefreshKits={refreshKits}/>}
         {pg==="trips"&&<TripsPage trips={trips} kits={kits} types={types} depts={depts} personnel={personnel} reservations={reservations} boats={boats}
           isAdmin={canManageTrips} isSuper={isSuper} curUserId={curUser} settings={settings} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits} onRefreshPersonnel={refreshPersonnel} onRefreshBoats={refreshBoats} onRefreshReservations={refreshReservations}/>}
         {pg==="reservations"&&settings.enableReservations&&<ReservationsPage reservations={reservations} setReservations={setReservations}

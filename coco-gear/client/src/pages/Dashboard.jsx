@@ -32,7 +32,7 @@ function Dash({kits,types,locs,comps,personnel,depts,trips,requests,analytics,lo
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
           <span style={{color:T.rd}}>⚠</span> Needs Attention</div>
-        <AlertsPanel analytics={analytics} kits={kits} settings={settings} onNavigate={onNavigate} onFilterKits={onFilterKits}/></div>
+        <AlertsPanel analytics={analytics} kits={kits} settings={settings} onNavigate={onNavigate} onFilterKits={onFilterKits} requests={requests} personnel={personnel}/></div>
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Department Health</div>
         {analytics.deptStats.map(d=><div key={d.dept.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,background:"rgba(255,255,255,.015)",marginBottom:4}}>
@@ -85,7 +85,7 @@ function Dash({kits,types,locs,comps,personnel,depts,trips,requests,analytics,lo
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
           <span style={{color:T.rd}}>⚠</span> Needs Attention</div>
-        <AlertsPanel analytics={analytics} kits={kits} settings={settings} onNavigate={onNavigate} onFilterKits={onFilterKits}/></div>
+        <AlertsPanel analytics={analytics} kits={kits} settings={settings} onNavigate={onNavigate} onFilterKits={onFilterKits} requests={requests} personnel={personnel}/></div>
       {/* Quick Actions */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         <div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u,marginBottom:12}}>Quick Actions</div>

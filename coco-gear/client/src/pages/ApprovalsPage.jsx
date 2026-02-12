@@ -3,10 +3,12 @@ import { td } from '../theme/helpers.js';
 import { Sw, Bg, Bt, SH, DeptBg } from '../components/ui/index.js';
 import api from '../api.js';
 
-function ApprovalsPage({requests,setRequests,kits,setKits,personnel,depts,allC,types,curUserId,addLog,onRefreshKits}){
-  const user=personnel.find(p=>p.id===curUserId);const isDir=["developer","director","super","engineer","manager","admin","lead"].includes(user?.role);
+function ApprovalsPage({requests,setRequests,kits,setKits,personnel,depts,allC,types,curUserId,userRole,settings,addLog,onRefreshKits}){
+  const _rl={user:0,lead:1,manager:2,admin:2,director:3,super:3,developer:3,engineer:3};
+  const minRole=settings?.deptApprovalMinRole||"lead";
+  const hasMinRole=(_rl[userRole]||0)>=(_rl[minRole]||1);
   const headOf=depts.filter(d=>d.headId===curUserId).map(d=>d.id);
-  const visible=requests.filter(r=>isDir||headOf.includes(r.deptId));
+  const visible=requests.filter(r=>hasMinRole||headOf.includes(r.deptId));
   const pending=visible.filter(r=>r.status==="pending");const resolved=visible.filter(r=>r.status!=="pending");
   const approve=async reqId=>{const req=requests.find(r=>r.id===reqId);if(!req)return;
     try{await api.kits.checkout({kitId:req.kitId,personId:req.personId,serials:req.serials,notes:req.notes});

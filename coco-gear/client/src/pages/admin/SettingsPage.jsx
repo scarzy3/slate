@@ -15,9 +15,11 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     const next={...p,rolePerms:rp};
     clearTimeout(saveTimer.current);saveTimer.current=setTimeout(()=>{if(onSaveSettings)onSaveSettings(next)},800);return next})};
   const generalItems=[
-    {k:"requireDeptApproval",l:"Require dept head approval",d:"For department-locked kits"},
+    {k:"requireDeptApproval",l:"Require dept approval for cross-dept kits",d:"Kits outside a user's department require approval"},
+    {k:"directorBypassApproval",l:"Directors bypass approval",d:"Directors can take any kit without requesting"},
     {k:"allowUserLocationUpdate",l:"Allow user storage updates",d:"Users can change which storage area a kit is in"},
   ];
+  const approvalRoleOpts=[{v:"lead",l:"Lead"},{v:"manager",l:"Manager"},{v:"director",l:"Director"}];
   const serialItems=[
     {k:"requireSerialsOnCheckout",l:"Require serials on checkout",d:"S/N entry during checkout"},
     {k:"requireSerialsOnReturn",l:"Require serials on return",d:"S/N entry during return"},
@@ -74,6 +76,10 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     <div style={{maxWidth:700,display:"flex",flexDirection:"column",gap:6}}>
       {tab==="general"&&<>
         {generalItems.map(it=><ToggleRow key={it.k} item={it} checked={settings[it.k]} onChange={v=>updateSetting(it.k,v)}/>)}
+        {settings.requireDeptApproval&&<div style={{display:"flex",alignItems:"center",gap:14,padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
+          <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>Minimum approval role</div>
+            <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>Minimum role that can approve cross-department kit requests</div></div>
+          <Sl options={approvalRoleOpts} value={settings.deptApprovalMinRole||"lead"} onChange={e=>updateSetting("deptApprovalMinRole",e.target.value)} style={{width:130}}/></div>}
         {numItems.map(it=><div key={it.k} style={{display:"flex",alignItems:"center",gap:14,padding:"12px 16px",borderRadius:8,background:T.card,border:"1px solid "+T.bd}}>
           <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.u}}>{it.l}</div>
             <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{it.d}</div></div>
