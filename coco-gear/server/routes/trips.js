@@ -586,4 +586,246 @@ router.get('/:id/manifest', async (req, res) => {
   }
 });
 
+// ─── Trip Readiness ───
+
+// GET /:id/readiness - compile readiness data for deployment gate
+router.get('/:id/readiness', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const trip = await prisma.trip.findUnique({
+      where: { id },
+      include: {
+        lead: { select: { id: true, name: true } },
+        personnel: {
+          include: { user: { select: { id: true, name: true } } },
+        },
+        kits: {
+          include: {
+            type: {
+              select: {
+                id: true, name: true,
+                components: {
+                  include: { component: true },
+                },
+              },
+            },
+            componentStatuses: {
+              include: { component: { select: { id: true, key: true, label: true, calibrationRequired: true, calibrationIntervalDays: true } } },
+            },
+            calibrationDates: true,
+          },
+        },
+        boats: {
+          include: { boat: true },
+        },
+        tasks: {
+          select: {
+            id: true, title: true, phase: true, priority: true, status: true,
+            assignedTo: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    // Load system settings for inspection threshold
+    const dbSettings = await prisma.systemSetting.findMany();
+    let inspectionDueThreshold = 30;
+    for (const s of dbSettings) {
+      if (s.key === 'inspectionDueThreshold') inspectionDueThreshold = s.value;
+    }
+
+    const DAY_MS = 86400000;
+    const daysAgo = (d) => d ? Math.floor((Date.now() - new Date(d).getTime()) / DAY_MS) : null;
+
+    const checks = [];
+
+    // 1. has_lead
+    checks.push({
+      id: 'has_lead',
+      label: 'Trip lead assigned',
+      passed: !!trip.leadId,
+      required: true,
+      details: trip.leadId ? null : 'No trip lead assigned',
+    });
+
+    // 2. has_kits
+    checks.push({
+      id: 'has_kits',
+      label: 'At least one kit assigned',
+      passed: trip.kits.length > 0,
+      required: true,
+      details: trip.kits.length > 0 ? null : 'No kits assigned to this trip',
+    });
+
+    // 3. has_personnel
+    checks.push({
+      id: 'has_personnel',
+      label: 'Personnel assigned',
+      passed: trip.personnel.length > 0,
+      required: true,
+      details: trip.personnel.length > 0 ? null : 'No personnel assigned',
+    });
+
+    // 4. kits_inspected - all kits inspected within threshold
+    const inspectionFailures = [];
+    for (const kit of trip.kits) {
+      const da = daysAgo(kit.lastChecked);
+      if (da === null || da > inspectionDueThreshold) {
+        inspectionFailures.push({
+          kitId: kit.id,
+          kitColor: kit.color,
+          kitType: kit.type?.name || 'Unknown',
+          lastInspected: kit.lastChecked || null,
+          daysAgo: da,
+        });
+      }
+    }
+    checks.push({
+      id: 'kits_inspected',
+      label: 'All kits inspected within threshold',
+      passed: inspectionFailures.length === 0,
+      required: true,
+      ...(inspectionFailures.length > 0 ? { failures: inspectionFailures } : {}),
+    });
+
+    // 5. kits_no_maintenance - no kits in maintenance
+    const maintenanceFailures = [];
+    for (const kit of trip.kits) {
+      if (kit.maintenanceStatus) {
+        maintenanceFailures.push({
+          kitId: kit.id,
+          kitColor: kit.color,
+          kitType: kit.type?.name || 'Unknown',
+          maintenanceStatus: kit.maintenanceStatus,
+        });
+      }
+    }
+    checks.push({
+      id: 'kits_no_maintenance',
+      label: 'No kits in maintenance',
+      passed: maintenanceFailures.length === 0,
+      required: true,
+      ...(maintenanceFailures.length > 0 ? { failures: maintenanceFailures } : {}),
+    });
+
+    // 6. kits_no_damage - no missing or damaged components
+    const damageFailures = [];
+    for (const kit of trip.kits) {
+      for (const cs of kit.componentStatuses) {
+        if (cs.status !== 'GOOD') {
+          damageFailures.push({
+            kitId: kit.id,
+            kitColor: kit.color,
+            componentLabel: cs.component?.label || cs.componentId,
+            slotIndex: cs.slotIndex,
+            status: cs.status,
+          });
+        }
+      }
+    }
+    checks.push({
+      id: 'kits_no_damage',
+      label: 'No missing or damaged components',
+      passed: damageFailures.length === 0,
+      required: false,
+      ...(damageFailures.length > 0 ? { failures: damageFailures } : {}),
+    });
+
+    // 7. calibrations_current - all calibrations current
+    const calibrationFailures = [];
+    for (const kit of trip.kits) {
+      // Get calibration-required components for this kit type
+      const typeComps = kit.type?.components || [];
+      for (const tc of typeComps) {
+        const comp = tc.component;
+        if (!comp.calibrationRequired || !comp.calibrationIntervalDays) continue;
+        const qty = tc.quantity || 1;
+        for (let slot = 0; slot < qty; slot++) {
+          const calEntry = kit.calibrationDates.find(
+            cd => cd.componentId === comp.id && cd.slotIndex === slot
+          );
+          const lastCal = calEntry?.calibDate || null;
+          let dueIn = null;
+          if (lastCal) {
+            const dueDate = new Date(new Date(lastCal).getTime() + comp.calibrationIntervalDays * DAY_MS);
+            dueIn = Math.floor((dueDate.getTime() - Date.now()) / DAY_MS);
+          }
+          if (!lastCal || (dueIn !== null && dueIn <= 0)) {
+            calibrationFailures.push({
+              kitId: kit.id,
+              kitColor: kit.color,
+              componentLabel: comp.label,
+              lastCalibration: lastCal,
+              dueIn: dueIn,
+            });
+          }
+        }
+      }
+    }
+    checks.push({
+      id: 'calibrations_current',
+      label: 'All calibrations current',
+      passed: calibrationFailures.length === 0,
+      required: false,
+      ...(calibrationFailures.length > 0 ? { failures: calibrationFailures } : {}),
+    });
+
+    // 8. usvs_available - all assigned USVs available
+    const boatFailures = [];
+    for (const tb of trip.boats) {
+      if (tb.boat.status !== 'available') {
+        boatFailures.push({
+          boatId: tb.boat.id,
+          boatName: tb.boat.name,
+          status: tb.boat.status,
+        });
+      }
+    }
+    checks.push({
+      id: 'usvs_available',
+      label: 'All assigned USVs available',
+      passed: boatFailures.length === 0,
+      required: true,
+      ...(boatFailures.length > 0 ? { failures: boatFailures } : {}),
+    });
+
+    // 9. critical_tasks_done - all critical tasks completed
+    const criticalTaskFailures = [];
+    for (const task of trip.tasks) {
+      if (task.priority === 'critical' && task.status !== 'done') {
+        criticalTaskFailures.push({
+          taskId: task.id,
+          taskTitle: task.title,
+          phase: task.phase,
+          assignedTo: task.assignedTo?.name || null,
+        });
+      }
+    }
+    checks.push({
+      id: 'critical_tasks_done',
+      label: 'All critical tasks completed',
+      passed: criticalTaskFailures.length === 0,
+      required: false,
+      ...(criticalTaskFailures.length > 0 ? { failures: criticalTaskFailures } : {}),
+    });
+
+    // Compute overall score
+    const passed = checks.filter(c => c.passed).length;
+    const total = checks.length;
+    const ready = checks.filter(c => c.required).every(c => c.passed);
+
+    return res.json({
+      ready,
+      score: { passed, total },
+      checks,
+    });
+  } catch (err) {
+    console.error('Get trip readiness error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

@@ -1,10 +1,34 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { T, CM } from '../theme/theme.js';
 import { fmtDate, SYS_ROLE_LABELS, sysRoleColor } from '../theme/helpers.js';
 import { Sw, Bg, Bt, Fl, In, Ta, Sl, SH, Tabs, ModalWrap, ConfirmDialog, DeptBg, ProgressBar } from '../components/ui/index.js';
 import api from '../api.js';
 import TripTasks from './TripTasks.jsx';
 import TripPacking from './TripPacking.jsx';
+import ReadinessReview from './ReadinessReview.jsx';
+
+function ReadinessCard({tripId,onOpen,readinessData,setReadinessData}){
+  const[loading,setLoading]=useState(false);
+  useEffect(()=>{if(!tripId)return;setLoading(true);
+    api.trips.readiness(tripId).then(d=>{setReadinessData(d);setLoading(false)}).catch(()=>setLoading(false))},[tripId]);
+  if(loading)return(<div style={{padding:"12px 16px",borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+    <div style={{fontSize:10,color:T.dm,fontFamily:T.m}}>Checking readiness...</div></div>);
+  if(!readinessData)return null;
+  const d=readinessData;const reqFails=d.checks.filter(c=>c.required&&!c.passed).length;
+  const borderColor=d.ready?T.gn:(reqFails>0?T.rd:T.am);
+  return(<div onClick={onOpen} style={{padding:"12px 16px",borderRadius:10,background:borderColor+"08",
+    border:"1px solid "+borderColor+"33",cursor:"pointer",transition:"all .15s"}}
+    onMouseEnter={e=>e.currentTarget.style.borderColor=borderColor+"66"} onMouseLeave={e=>e.currentTarget.style.borderColor=borderColor+"33"}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{width:20,height:20,borderRadius:10,background:borderColor+"18",display:"flex",alignItems:"center",justifyContent:"center",
+          fontSize:10,fontWeight:700,color:borderColor}}>{d.ready?"\u2713":reqFails>0?"\u2717":"\u26A0"}</div>
+        <span style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>
+          {d.ready?"Ready: ":"Readiness: "}{d.score.passed}/{d.score.total}
+          {!d.ready&&reqFails>0&&<span style={{color:T.rd}}> \u2014 {reqFails} issue{reqFails!==1?"s":""}</span>}
+          {!d.ready&&reqFails===0&&<span style={{color:T.am}}> \u2014 warnings</span>}
+          {d.ready&&<span style={{color:T.gn}}> checks passed</span>}</span></div>
+      <span style={{fontSize:9,color:T.dm,fontFamily:T.m}}>View details \u25B6</span></div></div>);}
 
 function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,isSuper,curUserId,settings,onRefreshTrips,onRefreshKits,onRefreshPersonnel,onRefreshBoats,onRefreshReservations}){
   const[md,setMd]=useState(null);
@@ -16,6 +40,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const[editRole,setEditRole]=useState(null);const[confirmDel,setConfirmDel]=useState(null);
   const[search,setSearch]=useState("");
   const[addBoatMd,setAddBoatMd]=useState(false);const[addBoatIds,setAddBoatIds]=useState([]);const[addBoatRole,setAddBoatRole]=useState("primary");
+  const[showReadiness,setShowReadiness]=useState(false);const[readinessData,setReadinessData]=useState(null);
   const[taskDone,setTaskDone]=useState(0);const[taskTotal,setTaskTotal]=useState(0);
   const[packDone,setPackDone]=useState(0);const[packTotal,setPackTotal]=useState(0);
   const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}):"";
@@ -145,7 +170,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
           {at.location&&<span style={{marginLeft:8}}>⌖ {at.location}</span>}
           {at.leadName&&<span style={{marginLeft:8}}>Lead: {at.leadName}</span>}</div></div>
       {isAdmin&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-        {at.status==="planning"&&<Bt v="success" sm onClick={()=>changeStatus("active")}>▸ Activate</Bt>}
+        {at.status==="planning"&&<Bt v="success" sm onClick={()=>setShowReadiness(true)}>▸ Activate</Bt>}
         {at.status==="active"&&<Bt v="primary" sm onClick={()=>changeStatus("completed")}>✓ Complete</Bt>}
         <Bt sm onClick={()=>{setFm({name:at.name,description:at.description,location:at.location,objectives:at.objectives,
           leadId:at.leadId||"",startDate:at.startDate?new Date(at.startDate).toISOString().slice(0,10):"",endDate:at.endDate?new Date(at.endDate).toISOString().slice(0,10):"",status:at.status});setMd(at.id)}}>Edit</Bt>
@@ -167,6 +192,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
 
     {/* ── OVERVIEW TAB ── */}
     {detailTab==="overview"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {at.status==="planning"&&<ReadinessCard tripId={at.id} onOpen={()=>setShowReadiness(true)} readinessData={readinessData} setReadinessData={setReadinessData}/>}
       {(at.description||at.objectives)&&<div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         {at.description&&<div style={{marginBottom:at.objectives?12:0}}>
           <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:4}}>Description</div>
@@ -479,6 +505,10 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <Bt onClick={()=>setAddBoatMd(false)}>Cancel</Bt>
           <Bt v="primary" onClick={doAssignBoats} disabled={!addBoatIds.length}>{addBoatIds.length} USVs — Assign</Bt></div></div></ModalWrap>
+
+    {/* Readiness review modal */}
+    <ReadinessReview tripId={at.id} tripName={at.name} tripStart={at.startDate} tripEnd={at.endDate}
+      open={showReadiness} onClose={()=>setShowReadiness(false)} onActivate={()=>changeStatus("active")}/>
 
     {/* Delete confirmation */}
     <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={deleteTrip}
