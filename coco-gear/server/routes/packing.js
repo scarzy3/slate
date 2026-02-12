@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
-import { requirePerm, requireDirector } from '../middleware/rbac.js';
+import { requirePerm } from '../middleware/rbac.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -29,7 +29,7 @@ packingTemplateRouter.get('/', async (req, res) => {
 });
 
 // POST / - create template
-packingTemplateRouter.post('/', requireDirector, async (req, res) => {
+packingTemplateRouter.post('/', requirePerm('trips'), async (req, res) => {
   try {
     const { name, role, category, items, isDefault } = req.body;
     if (!name || !name.trim()) {
@@ -58,7 +58,7 @@ packingTemplateRouter.post('/', requireDirector, async (req, res) => {
 });
 
 // PUT /:id - update template
-packingTemplateRouter.put('/:id', requireDirector, async (req, res) => {
+packingTemplateRouter.put('/:id', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, role, category, items, isDefault } = req.body;
@@ -83,7 +83,7 @@ packingTemplateRouter.put('/:id', requireDirector, async (req, res) => {
 });
 
 // DELETE /:id - delete template
-packingTemplateRouter.delete('/:id', requireDirector, async (req, res) => {
+packingTemplateRouter.delete('/:id', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await prisma.packingTemplate.findUnique({ where: { id } });

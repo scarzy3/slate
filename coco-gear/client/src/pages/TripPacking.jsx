@@ -64,6 +64,7 @@ function TripPacking({ tripId, tripPersonnel, isAdmin, isSuper, editable, curUse
   }, []);
 
   useEffect(() => { loadData(); }, [tripId, loadData]);
+  useEffect(() => { if (subTab === 'templates') loadTemplates(); }, [subTab, loadTemplates]);
 
   // Report progress
   useEffect(() => {
@@ -420,8 +421,6 @@ function TripPacking({ tripId, tripPersonnel, isAdmin, isSuper, editable, curUse
 
   // ─── TEMPLATES SUB-TAB ───
   const TemplatesTab = () => {
-    useEffect(() => { loadTemplates(); }, []);
-
     return (<div>
       {isAdmin && <div style={{ marginBottom: 14 }}><Bt v="primary" sm onClick={openCreateTpl}>+ New Template</Bt></div>}
 
