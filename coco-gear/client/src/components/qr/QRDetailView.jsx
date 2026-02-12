@@ -17,7 +17,7 @@ function QRDetailView({qrData,label,sub,serials,kitId,onClose}){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         {serials.map(s=><div key={s.key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
           padding:10,borderRadius:8,background:"rgba(251,191,36,.02)",border:"1px solid rgba(251,191,36,.1)"}}>
-          <QRSvg data={qrSerialData(kitId,s.key,s.serial)} size={80} padding={1}/>
+          <QRSvg data={qrSerialData(kitId,s.key,s.serial)} size={80} padding={3}/>
           <div style={{fontSize:9,fontWeight:600,color:T.tx,fontFamily:T.m,textAlign:"center"}}>{s.label}</div>
           <div style={{fontSize:8,color:T.am,fontFamily:T.m}}>{s.serial}</div></div>)}</div></div>}
     <div style={{display:"flex",gap:8}}>
