@@ -31,7 +31,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
-    "jsqr": "^1.4.0",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
     "prisma": "^6.19.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
