@@ -17,6 +17,7 @@ function QRScanner({onScan,onClose}){
         const useNative='BarcodeDetector' in window;
         const detector=useNative?new BarcodeDetector({formats:['qr_code']}):null;
         const canvas=canvasRef.current;const ctx=canvas?canvas.getContext('2d',{willReadFrequently:true}):null;
+        let invertFrame=false;
         const scan=async()=>{
           if(stopped||!vidRef.current)return;
           try{
@@ -29,7 +30,8 @@ function QRScanner({onScan,onClose}){
               canvas.width=sw;canvas.height=sh;
               ctx.drawImage(vidRef.current,0,0,sw,sh);
               const imgData=ctx.getImageData(0,0,sw,sh);
-              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:"attemptBoth"});
+              const mode=invertFrame?"onlyInvert":"dontInvert";invertFrame=!invertFrame;
+              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:mode});
               if(code){onScan(code.data);return}
             }
           }catch(e){}
