@@ -1,5 +1,32 @@
 import { z } from 'zod';
 
+// ─── Password Requirements ───
+export const PASSWORD_RULES = {
+  minLength: 8,
+  maxLength: 128,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumber: true,
+  requireSpecial: true,
+};
+
+export function validatePasswordStrength(password) {
+  const errors = [];
+  if (password.length < PASSWORD_RULES.minLength) errors.push(`Must be at least ${PASSWORD_RULES.minLength} characters`);
+  if (password.length > PASSWORD_RULES.maxLength) errors.push(`Must be at most ${PASSWORD_RULES.maxLength} characters`);
+  if (PASSWORD_RULES.requireUppercase && !/[A-Z]/.test(password)) errors.push('Must contain an uppercase letter');
+  if (PASSWORD_RULES.requireLowercase && !/[a-z]/.test(password)) errors.push('Must contain a lowercase letter');
+  if (PASSWORD_RULES.requireNumber && !/[0-9]/.test(password)) errors.push('Must contain a number');
+  if (PASSWORD_RULES.requireSpecial && !/[^A-Za-z0-9]/.test(password)) errors.push('Must contain a special character');
+  return errors;
+}
+
+export const passwordSchema = z.string().min(PASSWORD_RULES.minLength).max(PASSWORD_RULES.maxLength)
+  .refine(pw => /[A-Z]/.test(pw), { message: 'Must contain an uppercase letter' })
+  .refine(pw => /[a-z]/.test(pw), { message: 'Must contain a lowercase letter' })
+  .refine(pw => /[0-9]/.test(pw), { message: 'Must contain a number' })
+  .refine(pw => /[^A-Za-z0-9]/.test(pw), { message: 'Must contain a special character' });
+
 // ─── Auth ───
 export const loginSchema = z.object({
   userId: z.string().uuid(),
@@ -89,8 +116,21 @@ export const personnelUpdateSchema = z.object({
 export const signupSchema = z.object({
   name: z.string().min(1).max(200),
   email: z.string().email().max(200),
-  password: z.string().min(4).max(128),
+  password: passwordSchema,
   title: z.string().max(200).optional().default(''),
+});
+
+// ─── Change Password ───
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: passwordSchema,
+});
+
+// ─── Profile Update (self) ───
+export const profileUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  email: z.string().email().max(200).optional(),
+  title: z.string().max(200).optional(),
 });
 
 // ─── Bulk Import ───
