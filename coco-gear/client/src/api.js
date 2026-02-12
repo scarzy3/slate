@@ -151,6 +151,24 @@ export const trips = {
   manifest: (id) => request(`/trips/${id}/manifest`),
 };
 
+// ─── Tasks ───
+export const tasks = {
+  list: (tripId) => request(`/trips/${tripId}/tasks`),
+  create: (tripId, data) => request(`/trips/${tripId}/tasks`, { method: 'POST', body: data }),
+  update: (tripId, taskId, data) => request(`/trips/${tripId}/tasks/${taskId}`, { method: 'PUT', body: data }),
+  delete: (tripId, taskId) => request(`/trips/${tripId}/tasks/${taskId}`, { method: 'DELETE' }),
+  reorder: (tripId, taskIds) => request(`/trips/${tripId}/tasks/reorder`, { method: 'POST', body: { taskIds } }),
+  fromTemplate: (tripId, templateId) => request(`/trips/${tripId}/tasks/from-template`, { method: 'POST', body: { templateId } }),
+};
+
+// ─── Task Templates ───
+export const taskTemplates = {
+  list: () => request('/task-templates'),
+  create: (data) => request('/task-templates', { method: 'POST', body: data }),
+  update: (id, data) => request(`/task-templates/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => request(`/task-templates/${id}`, { method: 'DELETE' }),
+};
+
 // ─── Boats ───
 export const boats = {
   list: () => request('/boats'),
@@ -215,6 +233,6 @@ export const health = () => request('/health');
 
 export default {
   auth, kits, types, components, locations, departments,
-  personnel, consumables, assets, reservations, trips, boats, maintenance,
+  personnel, consumables, assets, reservations, trips, tasks, taskTemplates, boats, maintenance,
   audit, settings, reports, upload, health,
 };

@@ -114,6 +114,10 @@ export default function App(){
     notes:(t.notes||[]).map(n=>({id:n.id,content:n.content,category:n.category,authorName:n.author?.name,authorId:n.authorId,createdAt:n.createdAt})),
     boats:(t.boats||[]).map(tb=>({tripBoatId:tb.id,boatId:tb.boat?.id,name:tb.boat?.name,type:tb.boat?.type,hullId:tb.boat?.hullId,
       length:tb.boat?.length,status:tb.boat?.status,role:tb.role,notes:tb.notes||""})),
+    tasks:(t.tasks||[]).map(tk=>({id:tk.id,title:tk.title,phase:tk.phase,priority:tk.priority,status:tk.status,
+      sortOrder:tk.sortOrder,dueDate:tk.dueDate,completedAt:tk.completedAt,
+      assignedToId:tk.assignedToId||null,assignedTo:tk.assignedTo||null,completedBy:tk.completedBy||null})),
+    taskCount:t._count?.tasks||0,taskDone:(t.tasks||[]).filter(tk=>tk.status==="done").length,
     personnelCount:t._count?.personnel||0,reservationCount:t._count?.reservations||0,boatCount:t._count?.boats||0});
   const xformBoat=b=>({id:b.id,name:b.name,type:b.type||"",hullId:b.hullId||"",length:b.length,
     homePort:b.homePort||"",status:b.status,notes:b.notes||"",
