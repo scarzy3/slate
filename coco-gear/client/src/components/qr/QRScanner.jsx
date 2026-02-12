@@ -17,21 +17,20 @@ function QRScanner({onScan,onClose}){
         const useNative='BarcodeDetector' in window;
         const detector=useNative?new BarcodeDetector({formats:['qr_code']}):null;
         const canvas=canvasRef.current;const ctx=canvas?canvas.getContext('2d',{willReadFrequently:true}):null;
-        let invertFrame=false;
         const scan=async()=>{
           if(stopped||!vidRef.current)return;
           try{
             if(detector){
               const codes=await detector.detect(vidRef.current);
               if(codes.length>0){onScan(codes[0].rawValue);return}
-            }else if(ctx&&vidRef.current.videoWidth){
+            }
+            if(ctx&&vidRef.current.videoWidth){
               const vw=vidRef.current.videoWidth,vh=vidRef.current.videoHeight;
               const scale=Math.min(1,480/vw);const sw=Math.round(vw*scale),sh=Math.round(vh*scale);
               canvas.width=sw;canvas.height=sh;
               ctx.drawImage(vidRef.current,0,0,sw,sh);
               const imgData=ctx.getImageData(0,0,sw,sh);
-              const mode=invertFrame?"onlyInvert":"dontInvert";invertFrame=!invertFrame;
-              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:mode});
+              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:"dontInvert"});
               if(code){onScan(code.data);return}
             }
           }catch(e){}
