@@ -27,7 +27,7 @@ function QRScanner({onScan,onClose}){
               canvas.width=vidRef.current.videoWidth;canvas.height=vidRef.current.videoHeight;
               ctx.drawImage(vidRef.current,0,0);
               const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
-              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:"dontInvert"});
+              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:"attemptBoth"});
               if(code){onScan(code.data);return}
             }
           }catch(e){}
