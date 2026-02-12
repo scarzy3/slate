@@ -44,7 +44,8 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
   const filt=useMemo(()=>kits.filter(k=>{
     /* Status filter */
     if(statusFilter==="issued"&&!k.issuedTo)return false;
-    if(statusFilter==="available"&&(k.issuedTo||k.maintenanceStatus))return false;
+    if(statusFilter==="available"&&(k.issuedTo||k.maintenanceStatus||k.degraded))return false;
+    if(statusFilter==="degraded"&&!k.degraded)return false;
     if(statusFilter==="maintenance"&&!k.maintenanceStatus)return false;
     if(statusFilter==="overdue"&&!overdueIds.has(k.id))return false;
     /* Department filter */
@@ -60,7 +61,8 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
 
   /* Status filter counts */
   const issuedCt=kits.filter(k=>k.issuedTo).length;
-  const availCt=kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
+  const degradedCt=kits.filter(k=>k.degraded).length;
+  const availCt=kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus&&!k.degraded).length;
   const maintCt=kits.filter(k=>k.maintenanceStatus).length;
   const overdueCt=overdueIds.size;
 
@@ -71,7 +73,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
 
     {/* Status filter tabs */}
     <div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
-      {[{id:"all",l:"All",ct:kits.length,c:T.bl},{id:"available",l:"Available",ct:availCt,c:T.gn},{id:"issued",l:"Checked Out",ct:issuedCt,c:T.pk},
+      {[{id:"all",l:"All",ct:kits.length,c:T.bl},{id:"available",l:"Available",ct:availCt,c:T.gn},{id:"degraded",l:"Degraded",ct:degradedCt,c:T.or},{id:"issued",l:"Checked Out",ct:issuedCt,c:T.pk},
         {id:"maintenance",l:"Maintenance",ct:maintCt,c:T.am},{id:"overdue",l:"Overdue",ct:overdueCt,c:T.rd}].map(s=>
         <button key={s.id} onClick={()=>changeStatusFilter(s.id)} style={{all:"unset",cursor:"pointer",padding:"5px 12px",borderRadius:6,fontSize:10,fontFamily:T.m,
           background:statusFilter===s.id?s.c+"22":"transparent",color:statusFilter===s.id?s.c:T.mu,border:"1px solid "+(statusFilter===s.id?s.c+"44":T.bd),
@@ -105,7 +107,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
                 {iss.length>0&&<Bg color={T.am} bg="rgba(251,191,36,.08)">!{iss.length}</Bg>}</div></div>
             <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
               {ty&&<Bg color={T.ind} bg="rgba(129,140,248,.08)">{ty.name}</Bg>}
-              {kit.maintenanceStatus?<Bg color={T.am} bg="rgba(251,191,36,.08)">Maint</Bg>:person?<Bg color={T.pk} bg="rgba(244,114,182,.06)">{person.title}</Bg>:<Bg color={T.gn} bg="rgba(34,197,94,.05)">Avail</Bg>}
+              {kit.maintenanceStatus?<Bg color={T.am} bg="rgba(251,191,36,.08)">Maint</Bg>:kit.degraded?<Bg color={T.or} bg="rgba(249,115,22,.08)">Degraded</Bg>:person?<Bg color={T.pk} bg="rgba(244,114,182,.06)">{person.title}</Bg>:<Bg color={T.gn} bg="rgba(34,197,94,.05)">Avail</Bg>}
               {dept&&<DeptBg dept={dept}/>}{kit._trip&&<Bg color={T.pu} bg="rgba(168,85,247,.08)">▸ {kit._trip.name}</Bg>}</div>
             {cEx.length>0&&<div style={{display:"flex",gap:1}}>{cEx.map(e=>{const s=cSty[kit.comps[e.key]||"GOOD"];return <div key={e.key} style={{flex:1,height:2.5,borderRadius:1,background:s.fg,opacity:.55}}/>})}</div>}</button>)})}</div>
         {!filt.length&&<div style={{padding:40,textAlign:"center",color:T.dm,fontFamily:T.m}}>No kits</div>}</div>
@@ -126,6 +128,8 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
           {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!sel.maintenanceStatus&&<div style={{marginBottom:14}}><Fl label="Storage">
             <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={sel.locId} onChange={e=>{setKits(p=>p.map(k=>k.id===sel.id?{...k,locId:e.target.value}:k));
               addLog("location_change","kit",sel.id,curUserId,now(),{kitColor:sel.color,to:locs.find(l=>l.id===e.target.value)?.name})}}/></Fl></div>}
+          {sel.degraded&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.15)"}}>
+            <span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600}}>Degraded — critical component damaged or missing</span></div>}
           {sel.maintenanceStatus&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
             <span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance: {sel.maintenanceStatus}</span></div>}
           {person&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(244,114,182,.04)",border:"1px solid rgba(244,114,182,.15)"}}>
@@ -138,9 +142,9 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
             {serComps.map(c=>{const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return <div key={c._key} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",borderRadius:4,background:"rgba(251,191,36,.02)",marginBottom:2}}>
               <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1}}>{lbl}</span><span style={{fontSize:10,color:sel.serials[c._key]?T.am:T.dm,fontFamily:T.m,fontWeight:600}}>{sel.serials[c._key]||"--"}</span></div>})}</div>}
           {cs.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:6}}>Components</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:2}}>{cs.map(c=>{const s=cSty[sel.comps[c._key]||"GOOD"];const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return(
-              <div key={c._key} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 7px",borderRadius:4,background:"rgba(255,255,255,.012)"}}>
-                <span style={{color:s.fg,fontSize:9,fontWeight:700,width:16}}>{s.ic}</span><span style={{fontSize:8,color:(sel.comps[c._key]||"GOOD")==="GOOD"?T.mu:T.tx,fontFamily:T.m}}>{lbl}</span></div>)})}</div></div>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:2}}>{cs.map(c=>{const s=cSty[sel.comps[c._key]||"GOOD"];const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;const isCrit=(ty?.criticalCompIds||[]).includes(c.id);return(
+              <div key={c._key} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 7px",borderRadius:4,background:isCrit&&(sel.comps[c._key]||"GOOD")!=="GOOD"?"rgba(249,115,22,.06)":"rgba(255,255,255,.012)"}}>
+                <span style={{color:s.fg,fontSize:9,fontWeight:700,width:16}}>{s.ic}</span><span style={{fontSize:8,color:(sel.comps[c._key]||"GOOD")==="GOOD"?T.mu:T.tx,fontFamily:T.m}}>{lbl}</span>{isCrit&&<span style={{fontSize:7,color:T.or,fontFamily:T.m,fontWeight:700}}>CRIT</span>}</div>)})}</div></div>}
           {/* Inline QR Code */}
           {settings.enableQR!==false&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:8,background:"rgba(129,140,248,.03)",border:"1px solid rgba(129,140,248,.1)",marginBottom:8,cursor:"pointer"}}
             onClick={()=>setMd("qr:"+sel.id)}>
@@ -177,6 +181,8 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
               {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!sel.maintenanceStatus&&<div style={{marginBottom:14}}><Fl label="Storage">
                 <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={sel.locId} onChange={e=>{setKits(p=>p.map(k=>k.id===sel.id?{...k,locId:e.target.value}:k));
                   addLog("location_change","kit",sel.id,curUserId,now(),{kitColor:sel.color,to:locs.find(l=>l.id===e.target.value)?.name})}}/></Fl></div>}
+              {sel.degraded&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.15)"}}>
+                <span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600}}>Degraded — critical component damaged or missing</span></div>}
               {sel.maintenanceStatus&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
                 <span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance: {sel.maintenanceStatus}</span></div>}
               {person&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(244,114,182,.04)",border:"1px solid rgba(244,114,182,.15)"}}>
@@ -189,9 +195,9 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
                 {serComps.map(c=>{const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return <div key={c._key} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",borderRadius:4,background:"rgba(251,191,36,.02)",marginBottom:2}}>
                   <span style={{fontSize:9,color:T.mu,fontFamily:T.m,flex:1}}>{lbl}</span><span style={{fontSize:10,color:sel.serials[c._key]?T.am:T.dm,fontFamily:T.m,fontWeight:600}}>{sel.serials[c._key]||"--"}</span></div>})}</div>}
               {cs.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:6}}>Components</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:2}}>{cs.map(c=>{const s=cSty[sel.comps[c._key]||"GOOD"];const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;return(
-                  <div key={c._key} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 7px",borderRadius:4,background:"rgba(255,255,255,.012)"}}>
-                    <span style={{color:s.fg,fontSize:9,fontWeight:700,width:16}}>{s.ic}</span><span style={{fontSize:8,color:(sel.comps[c._key]||"GOOD")==="GOOD"?T.mu:T.tx,fontFamily:T.m}}>{lbl}</span></div>)})}</div></div>}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:2}}>{cs.map(c=>{const s=cSty[sel.comps[c._key]||"GOOD"];const lbl=c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;const isCrit=(ty?.criticalCompIds||[]).includes(c.id);return(
+                  <div key={c._key} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 7px",borderRadius:4,background:isCrit&&(sel.comps[c._key]||"GOOD")!=="GOOD"?"rgba(249,115,22,.06)":"rgba(255,255,255,.012)"}}>
+                    <span style={{color:s.fg,fontSize:9,fontWeight:700,width:16}}>{s.ic}</span><span style={{fontSize:8,color:(sel.comps[c._key]||"GOOD")==="GOOD"?T.mu:T.tx,fontFamily:T.m}}>{lbl}</span>{isCrit&&<span style={{fontSize:7,color:T.or,fontFamily:T.m,fontWeight:700}}>CRIT</span>}</div>)})}</div></div>}
               {settings.enableQR!==false&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:8,background:"rgba(129,140,248,.03)",border:"1px solid rgba(129,140,248,.1)",marginBottom:8,cursor:"pointer"}}
                 onClick={()=>setMd("qr:"+sel.id)}>
                 <QRSvg data={qrKitData(sel.id)} size={56} padding={1}/>

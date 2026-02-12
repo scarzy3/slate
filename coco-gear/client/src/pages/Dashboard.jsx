@@ -8,7 +8,8 @@ import ActivityFeed from '../components/ActivityFeed.jsx';
 function Dash({kits,types,locs,comps,personnel,depts,trips,requests,analytics,logs,settings,curUserId,userRole,favorites,setFavorites,onNavigate,onAction,onFilterKits}){
   const issuedCt=kits.filter(k=>k.issuedTo).length;const pendCt=requests.filter(r=>r.status==="pending").length;
   const myKits=kits.filter(k=>k.issuedTo===curUserId);
-  const availCt=kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
+  const availCt=kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus&&!k.degraded).length;
+  const degradedCt=kits.filter(k=>k.degraded).length;
   const maintCt=analytics.inMaintenance.length;const overdueCt=analytics.overdueReturns.length;
   const inspDueCt=analytics.overdueInspection.length;const calDueCt=analytics.calibrationDue.length;
   const tier=["developer","director","super","engineer"].includes(userRole)?"director":["manager","admin"].includes(userRole)?"manager":userRole==="lead"?"lead":"user";
@@ -23,6 +24,7 @@ function Dash({kits,types,locs,comps,personnel,depts,trips,requests,analytics,lo
       <StatCard label="Total Kits" value={kits.length} color={T.bl} onClick={()=>onFilterKits("all")}/>
       <StatCard label="Checked Out" value={issuedCt} color={issuedCt?T.pk:T.gn} onClick={()=>onFilterKits("issued")}/>
       <StatCard label="Available" value={availCt} color={T.gn} onClick={()=>onFilterKits("available")}/>
+      {degradedCt>0&&<StatCard label="Degraded" value={degradedCt} color={T.or} onClick={()=>onFilterKits("degraded")}/>}
       <StatCard label="Maintenance" value={maintCt} color={maintCt?T.am:T.gn} onClick={()=>onFilterKits("maintenance")}/>
       <StatCard label="Overdue" value={overdueCt} color={overdueCt?T.rd:T.gn} onClick={()=>onFilterKits("overdue")}/>
       <StatCard label="Pending" value={pendCt} color={pendCt?T.or:T.gn} onClick={pendCt?()=>onNavigate("approvals"):undefined}/>

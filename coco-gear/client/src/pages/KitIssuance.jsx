@@ -12,7 +12,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
   const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[view,setView]=useState(defaultView);
   const filt=useMemo(()=>{let list=kits;
     if(view==="dept"&&userDeptId)list=list.filter(k=>k.deptId===userDeptId);
-    if(view==="issued")list=list.filter(k=>k.issuedTo);if(view==="available")list=list.filter(k=>!k.issuedTo&&!k.maintenanceStatus);
+    if(view==="issued")list=list.filter(k=>k.issuedTo);if(view==="available")list=list.filter(k=>!k.issuedTo&&!k.maintenanceStatus&&!k.degraded);
     if(view==="mine")list=list.filter(k=>k.issuedTo===curUserId);
     if(search){const q=search.toLowerCase();list=list.filter(k=>{const p=k.issuedTo?personnel.find(x=>x.id===k.issuedTo):null;const lo=locs.find(l=>l.id===k.locId);
       return k.color.toLowerCase().includes(q)||(p&&p.name.toLowerCase().includes(q))||(lo&&lo.name.toLowerCase().includes(q))});}
@@ -44,7 +44,7 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
         <Bt v="primary" onClick={()=>setMd("issueTo")}>Issue To...</Bt></div>}/>
     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
       <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:200,maxWidth:"100%"}}/>
-      {[...(hasDept?["dept"]:[]),"all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="dept"?deptCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus).length;
+      {[...(hasDept?["dept"]:[]),"all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="dept"?deptCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus&&!k.degraded).length;
         const label=v==="dept"?deptName||"My Dept":v;
         return <button key={v} onClick={()=>setView(v)} style={{all:"unset",cursor:"pointer",padding:"5px 12px",borderRadius:5,fontSize:10,fontFamily:T.m,fontWeight:600,
           background:view===v?"rgba(255,255,255,.08)":"transparent",color:view===v?T.tx:T.mu,border:"1px solid "+(view===v?T.bdH:T.bd)}}>{label} ({ct})</button>})}</div>
@@ -63,6 +63,9 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
               api.kits.updateLocation(kit.id,newLocId).then(()=>{if(onRefreshKits)onRefreshKits()}).catch(err=>console.error("Location update error:",err))}} style={{flex:1,fontSize:9,padding:"4px 8px"}}/></div>}
           {inMaint?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.am}}/><span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance ({kit.maintenanceStatus})</span></div>
+          :kit.degraded&&!person?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.12)"}}>
+            <div style={{width:5,height:5,borderRadius:"50%",background:T.or}}/><span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600,flex:1}}>Degraded</span>
+            <span style={{fontSize:8,color:T.dm,fontFamily:T.m}}>Critical component issue</span></div>
           :person?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:isMine?"rgba(244,114,182,.06)":"rgba(244,114,182,.03)",border:"1px solid rgba(244,114,182,.12)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.pk}}/><span style={{fontSize:10,fontWeight:600,color:T.pk,fontFamily:T.m,flex:1}}>{isMine?"YOU":person.name}</span>
             <Bt v="warn" sm onClick={()=>setMd("return:"+kit.id)}>Return</Bt></div>

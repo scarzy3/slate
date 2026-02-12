@@ -149,10 +149,11 @@ model KitTypeDepartment {
 
 // ─── Kit Type <-> Component (many-to-many with qty) ───
 model KitTypeComponent {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   kitTypeId   String
   componentId String
-  quantity    Int    @default(1)
+  quantity    Int     @default(1)
+  critical    Boolean @default(false) // If true, kit is degraded when this component is DAMAGED or MISSING
 
   kitType   KitType   @relation(fields: [kitTypeId], references: [id], onDelete: Cascade)
   component Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
