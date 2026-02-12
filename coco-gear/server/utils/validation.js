@@ -237,6 +237,8 @@ const rolePermSchema = z.object({
 // ─── Settings ───
 export const settingsSchema = z.object({
   requireDeptApproval: z.boolean().optional(),
+  directorBypassApproval: z.boolean().optional(),
+  deptApprovalMinRole: z.enum(['lead','manager','director']).optional(),
   allowUserLocationUpdate: z.boolean().optional(),
   requireSerialsOnCheckout: z.boolean().optional(),
   requireSerialsOnReturn: z.boolean().optional(),

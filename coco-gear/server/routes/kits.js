@@ -301,21 +301,36 @@ router.post('/checkout', validate(checkoutSchema), async (req, res) => {
     if (kit.issuedToId) return res.status(409).json({ error: 'Kit already issued' });
     if (kit.maintenanceStatus) return res.status(409).json({ error: 'Kit in maintenance' });
 
-    const isAdmin = ['developer','director','super','engineer','manager','admin'].includes(req.user.role);
     const recipientId = personId || req.user.id;
+    const directorRoles = ['developer','director','super','engineer'];
+    const roleLevel = { user: 0, lead: 1, manager: 2, admin: 2, director: 3, super: 3, developer: 3, engineer: 3 };
 
-    // Check if approval needed (operators requesting cross-dept kits still need approval)
-    if (!isAdmin && kit.deptId) {
+    // Check if approval needed for cross-dept kits
+    if (kit.deptId) {
       const settings = await prisma.systemSetting.findMany();
       const requireApproval = settings.find(s => s.key === 'requireDeptApproval')?.value ?? true;
+      const directorBypass = settings.find(s => s.key === 'directorBypassApproval')?.value ?? true;
+      const minRole = settings.find(s => s.key === 'deptApprovalMinRole')?.value ?? 'lead';
+
       if (requireApproval) {
-        const dept = await prisma.department.findUnique({ where: { id: kit.deptId } });
-        if (dept && dept.headId !== req.user.id) {
-          const request = await prisma.checkoutRequest.create({
-            data: { kitId, personId: req.user.id, deptId: kit.deptId, status: 'pending', serials: serials || {}, notes },
-          });
-          await auditLog('checkout_request', 'kit', kitId, req.user.id, { kitColor: kit.color });
-          return res.status(202).json({ pending: true, requestId: request.id });
+        const isDirector = directorRoles.includes(req.user.role);
+        // Directors bypass if setting enabled
+        const bypassed = directorBypass && isDirector;
+        if (!bypassed) {
+          const dept = await prisma.department.findUnique({ where: { id: kit.deptId } });
+          const isDeptHead = dept && dept.headId === req.user.id;
+          const isInSameDept = req.user.deptId === kit.deptId;
+          const userLevel = roleLevel[req.user.role] || 0;
+          const minLevel = roleLevel[minRole] || 1;
+          const hasMinRole = userLevel >= minLevel;
+          // Can bypass if: dept head, in same dept, or has min approval role
+          if (!isDeptHead && !isInSameDept && !hasMinRole) {
+            const request = await prisma.checkoutRequest.create({
+              data: { kitId, personId: req.user.id, deptId: kit.deptId, status: 'pending', serials: serials || {}, notes },
+            });
+            await auditLog('checkout_request', 'kit', kitId, req.user.id, { kitColor: kit.color });
+            return res.status(202).json({ pending: true, requestId: request.id });
+          }
         }
       }
     }

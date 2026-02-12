@@ -21,7 +21,7 @@ const DEF_ROLE_PERMS={
     types:true,components:true,locations:true,departments:true,personnel:true,boats:true},
 };
 const DEF_SETTINGS={
-  requireDeptApproval:true,allowUserLocationUpdate:true,
+  requireDeptApproval:true,directorBypassApproval:true,deptApprovalMinRole:"lead",allowUserLocationUpdate:true,
   requireSerialsOnCheckout:true,requireSerialsOnReturn:true,requireSerialsOnInspect:true,
   allowUserInspect:true,allowUserCheckout:true,
   inspectionDueThreshold:30,overdueReturnThreshold:14,
