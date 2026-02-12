@@ -21,10 +21,12 @@ function QRScanner({onScan,onClose}){
         const scan=async()=>{
           if(stopped||!vidRef.current)return;
           try{
+            let found=false;
             if(detector){
               const codes=await detector.detect(vidRef.current);
               if(codes.length>0){onScan(codes[0].rawValue);return}
-            }else if(ctx&&vidRef.current.videoWidth){
+            }
+            if(!found&&ctx&&vidRef.current.videoWidth){
               const vw=vidRef.current.videoWidth,vh=vidRef.current.videoHeight;
               const scale=Math.min(1,480/vw);const sw=Math.round(vw*scale),sh=Math.round(vh*scale);
               canvas.width=sw;canvas.height=sh;
