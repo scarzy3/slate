@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
-import { requirePerm, requireDirector } from '../middleware/rbac.js';
+import { requirePerm } from '../middleware/rbac.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -248,7 +248,7 @@ templateRouter.get('/', async (req, res) => {
 });
 
 // POST /api/task-templates - create a template
-templateRouter.post('/', requireDirector, async (req, res) => {
+templateRouter.post('/', requirePerm('trips'), async (req, res) => {
   try {
     const { name, description, tasks } = req.body;
 
@@ -272,7 +272,7 @@ templateRouter.post('/', requireDirector, async (req, res) => {
 });
 
 // PUT /api/task-templates/:id - update a template
-templateRouter.put('/:id', requireDirector, async (req, res) => {
+templateRouter.put('/:id', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, tasks } = req.body;
@@ -298,7 +298,7 @@ templateRouter.put('/:id', requireDirector, async (req, res) => {
 });
 
 // DELETE /api/task-templates/:id - delete a template
-templateRouter.delete('/:id', requireDirector, async (req, res) => {
+templateRouter.delete('/:id', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
 

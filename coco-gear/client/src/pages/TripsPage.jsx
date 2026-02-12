@@ -323,7 +323,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
         </div>}</div>}
 
     {/* ── TASKS TAB ── */}
-    {detailTab==="tasks"&&<TripTasks tripId={at.id} tripPersonnel={tripPers} isAdmin={isAdmin} editable={editable}
+    {detailTab==="tasks"&&<TripTasks tripId={at.id} tripPersonnel={tripPers} isAdmin={isAdmin} isSuper={isSuper} editable={editable}
       onTaskCountChange={(done,total)=>{setTaskDone(done);setTaskTotal(total)}}/>}
 
     {/* ── USVs TAB ── */}
