@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { T } from '../../theme/theme.js';
-import jsQR from 'jsqr';
+import { BrowserQRCodeReader } from '@zxing/browser';
 import In from '../ui/In.jsx';
 import Bt from '../ui/Bt.jsx';
 
@@ -12,6 +12,7 @@ function QRScanner({onScan,onClose}){
     if(track){const next=!torch;track.applyConstraints({advanced:[{torch:next}]}).catch(()=>{});setTorch(next)}};
   useEffect(()=>{
     if(!active)return;let animId=null;let stopped=false;
+    const reader=new BrowserQRCodeReader();
     const start=async()=>{
       try{
         const stream=await navigator.mediaDevices.getUserMedia({video:{
@@ -22,28 +23,22 @@ function QRScanner({onScan,onClose}){
         const track=stream.getVideoTracks()[0];
         if(track?.getCapabilities?.()?.torch)setHasTorch(true);
         if(vidRef.current){vidRef.current.srcObject=stream;await vidRef.current.play()}
-        const useNative='BarcodeDetector' in window;
-        const detector=useNative?new BarcodeDetector({formats:['qr_code']}):null;
         const canvas=canvasRef.current;const ctx=canvas?canvas.getContext('2d',{willReadFrequently:true}):null;
-        const scan=async()=>{
+        const scan=()=>{
           if(stopped||!vidRef.current)return;
           try{
-            if(detector){
-              const codes=await detector.detect(vidRef.current);
-              if(codes.length>0){onScan(codes[0].rawValue);return}
-            }
             if(ctx&&vidRef.current.videoWidth){
               const vw=vidRef.current.videoWidth,vh=vidRef.current.videoHeight;
               const cw=Math.round(vw*0.6),ch=Math.round(vh*0.6);
               const cx=Math.round((vw-cw)/2),cy=Math.round((vh-ch)/2);
               const scale=Math.min(1,640/cw);const sw=Math.round(cw*scale),sh=Math.round(ch*scale);
               canvas.width=sw;canvas.height=sh;
-              ctx.filter='contrast(1.5)';
-              ctx.drawImage(vidRef.current,cx,cy,cw,ch,0,0,sw,sh);
-              ctx.filter='none';
-              const imgData=ctx.getImageData(0,0,sw,sh);
-              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:"dontInvert"});
-              if(code){onScan(code.data);return}
+              for(const f of['contrast(1.8)','none','contrast(3)']){
+                ctx.filter=f;
+                ctx.drawImage(vidRef.current,cx,cy,cw,ch,0,0,sw,sh);
+                ctx.filter='none';
+                try{const r=reader.decodeFromCanvas(canvas);if(r){onScan(r.getText());return}}catch(e){}
+              }
             }
           }catch(e){}
           animId=setTimeout(scan,150)};
