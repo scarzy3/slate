@@ -40,6 +40,7 @@ model User {
   tasksAssigned   TripTask[]         @relation("TaskAssignee")
   tasksCompleted  TripTask[]         @relation("TaskCompleter")
   packingChecks   TripPackingCheck[] @relation("PackingChecks")
+  commsAssignments TripCommsEntry[]  @relation("CommsAssignment")
 
   @@index([role])
   @@index([deptId])
@@ -238,6 +239,7 @@ model Trip {
   tasks         TripTask[]
   packingItems  TripPackingItem[]
   packingChecks TripPackingCheck[]
+  commsEntries  TripCommsEntry[]
 
   @@index([status])
   @@index([startDate, endDate])
@@ -645,6 +647,24 @@ model TripPackingCheck {
 
   @@unique([tripId, userId, itemKey])
   @@index([tripId, userId])
+}
+
+// ─── Trip Communications Plan ───
+model TripCommsEntry {
+  id           String   @id @default(uuid())
+  tripId       String
+  type         String   @default("radio_channel")  // radio_channel | phone | email | satellite | other
+  label        String                               // e.g. "Primary Ops", "Emergency", "Base Camp", "Coast Guard"
+  value        String                               // e.g. "Ch 16", "+1-555-0100", "156.8 MHz"
+  assignedToId String?                              // who monitors this channel/contact
+  notes        String?
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  trip       Trip  @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  assignedTo User? @relation("CommsAssignment", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([tripId])
 }
 
 // ─── System Settings ───
