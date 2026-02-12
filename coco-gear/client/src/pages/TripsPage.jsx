@@ -4,6 +4,7 @@ import { fmtDate, SYS_ROLE_LABELS, sysRoleColor } from '../theme/helpers.js';
 import { Sw, Bg, Bt, Fl, In, Ta, Sl, SH, Tabs, ModalWrap, ConfirmDialog, DeptBg, ProgressBar } from '../components/ui/index.js';
 import api from '../api.js';
 import TripTasks from './TripTasks.jsx';
+import TripPacking from './TripPacking.jsx';
 
 function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,isSuper,curUserId,settings,onRefreshTrips,onRefreshKits,onRefreshPersonnel,onRefreshBoats,onRefreshReservations}){
   const[md,setMd]=useState(null);
@@ -16,6 +17,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const[search,setSearch]=useState("");
   const[addBoatMd,setAddBoatMd]=useState(false);const[addBoatIds,setAddBoatIds]=useState([]);const[addBoatRole,setAddBoatRole]=useState("primary");
   const[taskDone,setTaskDone]=useState(0);const[taskTotal,setTaskTotal]=useState(0);
+  const[packDone,setPackDone]=useState(0);const[packTotal,setPackTotal]=useState(0);
   const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}):"";
   const fmtDT=d=>d?new Date(d).toLocaleString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
@@ -161,7 +163,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
 
     {/* Tabs */}
     <Tabs tabs={[{id:"overview",l:"Overview"},{id:"personnel",l:"Personnel ("+tripPers.length+")"},{id:"equipment",l:"Equipment ("+tripKits.length+")"},
-      {id:"tasks",l:"Tasks"+(taskTotal>0?" ("+taskDone+"/"+taskTotal+")":"")},{id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
+      {id:"tasks",l:"Tasks"+(taskTotal>0?" ("+taskDone+"/"+taskTotal+")":"")},{id:"packing",l:"Packing"+(packTotal>0?" ("+packDone+"/"+packTotal+")":"")},{id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
 
     {/* ── OVERVIEW TAB ── */}
     {detailTab==="overview"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -222,6 +224,17 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
                   <Bg key={l} color={c} bg={c+"18"}>{l}: {ph.filter(t=>t.status==="done").length}/{ph.length}</Bg>)}
                 {blocked>0&&<Bg color={T.rd} bg={T.rd+"18"}>{blocked} blocked</Bg>}
                 {overdue>0&&<Bg color={T.rd} bg={T.rd+"18"}>{overdue} overdue</Bg>}</div></div>}</div>)})()}
+
+      {/* Packing summary */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.tx,fontFamily:T.u}}>Packing</div>
+          <Bt v="ghost" sm onClick={()=>setDetailTab("packing")}>View all →</Bt></div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <Bg color={T.ind} bg="rgba(129,140,248,.1)">{tripKits.length} kits</Bg>
+          <Bg color={T.tl} bg="rgba(45,212,191,.1)">{Object.keys(roleLabels).filter(r=>tripPers.some(p=>p.tripRole===r)).length} roles</Bg>
+          {packTotal>0&&<Bg color={packDone===packTotal?T.gn:T.or} bg={(packDone===packTotal?T.gn:T.or)+"10"}>My progress: {packDone}/{packTotal}</Bg>}
+        </div></div>
 
       {/* USVs preview */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
@@ -325,6 +338,10 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
     {/* ── TASKS TAB ── */}
     {detailTab==="tasks"&&<TripTasks tripId={at.id} tripPersonnel={tripPers} isAdmin={isAdmin} isSuper={isSuper} editable={editable}
       onTaskCountChange={(done,total)=>{setTaskDone(done);setTaskTotal(total)}}/>}
+
+    {/* ── PACKING TAB ── */}
+    {detailTab==="packing"&&<TripPacking tripId={at.id} tripPersonnel={tripPers} isAdmin={isAdmin} isSuper={isSuper} editable={editable}
+      curUserId={curUserId} onPackingCountChange={(done,total)=>{setPackDone(done);setPackTotal(total)}}/>}
 
     {/* ── USVs TAB ── */}
     {detailTab==="boats"&&<div>

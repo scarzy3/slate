@@ -151,6 +151,25 @@ export const trips = {
   manifest: (id) => request(`/trips/${id}/manifest`),
 };
 
+// ─── Packing Templates ───
+export const packingTemplates = {
+  list: (params = {}) => { const q = new URLSearchParams(params).toString(); return request(`/packing-templates${q ? '?' + q : ''}`); },
+  create: (data) => request('/packing-templates', { method: 'POST', body: data }),
+  update: (id, data) => request(`/packing-templates/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => request(`/packing-templates/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Trip Packing ───
+export const packing = {
+  get: (tripId) => request(`/trips/${tripId}/packing`),
+  addItem: (tripId, data) => request(`/trips/${tripId}/packing/items`, { method: 'POST', body: data }),
+  updateItem: (tripId, itemId, data) => request(`/trips/${tripId}/packing/items/${itemId}`, { method: 'PUT', body: data }),
+  deleteItem: (tripId, itemId) => request(`/trips/${tripId}/packing/items/${itemId}`, { method: 'DELETE' }),
+  bulkAddItems: (tripId, items) => request(`/trips/${tripId}/packing/items/bulk`, { method: 'POST', body: { items } }),
+  check: (tripId, itemKey, checked) => request(`/trips/${tripId}/packing/check`, { method: 'PUT', body: { itemKey, checked } }),
+  myChecks: (tripId) => request(`/trips/${tripId}/packing/my-checks`),
+};
+
 // ─── Tasks ───
 export const tasks = {
   list: (tripId) => request(`/trips/${tripId}/tasks`),
@@ -233,6 +252,7 @@ export const health = () => request('/health');
 
 export default {
   auth, kits, types, components, locations, departments,
-  personnel, consumables, assets, reservations, trips, tasks, taskTemplates, boats, maintenance,
+  personnel, consumables, assets, reservations, trips, tasks, taskTemplates,
+  packingTemplates, packing, boats, maintenance,
   audit, settings, reports, upload, health,
 };
