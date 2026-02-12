@@ -50,6 +50,7 @@ export const kits = {
   inspect: (data) => request('/kits/inspect', { method: 'POST', body: data }),
   updateSerials: (id, serials) => request(`/kits/${id}/serials`, { method: 'PUT', body: { serials } }),
   updateLocation: (id, locId) => request(`/kits/${id}/location`, { method: 'PUT', body: { locId } }),
+  resolveDegraded: (id) => request(`/kits/${id}/resolve-degraded`, { method: 'POST' }),
 };
 
 // ─── Kit Types ───

@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
 import { T } from '../theme/theme.js';
 import { stMeta, fmtDate } from '../theme/helpers.js';
-import { Sw, Bg, Bt, Fl, In, Sl, SH, ModalWrap, DeptBg } from '../components/ui/index.js';
+import { Sw, Bg, Bt, Fl, In, Sl, SH, ModalWrap, ConfirmDialog, DeptBg } from '../components/ui/index.js';
 import InspWF from '../forms/InspWF.jsx';
 import IssueToPicker from '../forms/IssueToPicker.jsx';
 import api from '../api.js';
 
-function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,userRole,curUserId,settings,requests,setRequests,addLog,onNavigateToKit,reservations,apiCheckout,apiReturn,onRefreshKits}){
+function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,userRole,curUserId,settings,requests,setRequests,addLog,onNavigateToKit,reservations,apiCheckout,apiReturn,onRefreshKits,apiSendMaint,apiResolveDegraded}){
   const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
   const hasDept=!!userDeptId;const defaultView=hasDept&&!isSuper?"dept":"all";
   const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[view,setView]=useState(defaultView);
@@ -38,6 +38,12 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
   const doReturn=async(kitId,data)=>{
     try{await apiReturn(kitId,data.serials,data.notes)}catch(e){/* apiReturn shows alert */}
     setMd(null)};
+  const canFix=(rl[userRole]||0)>=(rl["lead"]||1);
+  const getDegradedComps=kit=>{const ty=types.find(t=>t.id===kit.typeId);const critIds=ty?.criticalCompIds||[];
+    return Object.entries(kit.comps||{}).filter(([k,s])=>s!=="GOOD"&&critIds.includes(k.split("#")[0])).map(([k,s])=>{const c=allC.find(x=>x.id===k.split("#")[0]);return{key:k,status:s,label:c?.label||"?"}})};
+  const[confirmFix,setConfirmFix]=useState(null);
+  const doFix=async(kitId)=>{try{await apiResolveDegraded(kitId)}catch(e){}setConfirmFix(null);setMd(null)};
+  const doMaint=async(kitId)=>{try{await apiSendMaint(kitId,"repair","Critical component degraded","")}catch(e){}setMd(null)};
   return(<div>
     <SH title="Checkout / Return" sub={issuedCt+" out | "+(kits.length-issuedCt)+" available | "+myCt+" mine"}
       action={<div style={{display:"flex",gap:6}}>
@@ -63,9 +69,16 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
               api.kits.updateLocation(kit.id,newLocId).then(()=>{if(onRefreshKits)onRefreshKits()}).catch(err=>console.error("Location update error:",err))}} style={{flex:1,fontSize:9,padding:"4px 8px"}}/></div>}
           {inMaint?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.am}}/><span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance ({kit.maintenanceStatus})</span></div>
-          :kit.degraded&&!person?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.12)"}}>
-            <div style={{width:5,height:5,borderRadius:"50%",background:T.or}}/><span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600,flex:1}}>Degraded</span>
-            <span style={{fontSize:8,color:T.dm,fontFamily:T.m}}>Critical component issue</span></div>
+          :kit.degraded&&!person?<div style={{borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.12)",overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px"}}>
+              <div style={{width:5,height:5,borderRadius:"50%",background:T.or}}/><span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600,flex:1}}>Degraded</span>
+              <div style={{display:"flex",gap:4}}>
+                <Bt v="ghost" sm onClick={()=>setMd("degraded:"+kit.id)} style={{fontSize:8,color:T.or}}>Details</Bt>
+                {canFix&&<Bt v="ghost" sm onClick={()=>setConfirmFix(kit.id)} style={{fontSize:8,color:T.gn}}>Fix</Bt>}
+                {(isAdmin||isSuper)&&<Bt v="ghost" sm onClick={()=>doMaint(kit.id)} style={{fontSize:8,color:T.am}}>Maint</Bt>}</div></div>
+            {getDegradedComps(kit).map(c=><div key={c.key} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 12px 3px 25px",borderTop:"1px solid rgba(249,115,22,.08)"}}>
+              <span style={{fontSize:8,color:T.or,fontFamily:T.m,fontWeight:700,width:52}}>{c.status}</span>
+              <span style={{fontSize:8,color:T.mu,fontFamily:T.m}}>{c.label}</span></div>)}</div>
           :person?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:isMine?"rgba(244,114,182,.06)":"rgba(244,114,182,.03)",border:"1px solid rgba(244,114,182,.12)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.pk}}/><span style={{fontSize:10,fontWeight:600,color:T.pk,fontFamily:T.m,flex:1}}>{isMine?"YOU":person.name}</span>
             <Bt v="warn" sm onClick={()=>setMd("return:"+kit.id)}>Return</Bt></div>
@@ -88,6 +101,22 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
         if(!k||!ty)return null;return <InspWF kit={k} type={ty} allC={allC} mode="return" onDone={data=>doReturn(kid,data)} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
     <ModalWrap open={md==="issueTo"} onClose={()=>setMd(null)} title="Issue Kit To..." wide>
       {md==="issueTo"&&<IssueToPicker kits={kits} types={types} locs={locs} personnel={personnel} allC={allC} settings={settings} onIssue={(kid,pid,data)=>doIssueTo(kid,pid,data)} onCancel={()=>setMd(null)}/>}</ModalWrap>
+    <ModalWrap open={String(md).startsWith("degraded:")} onClose={()=>setMd(null)} title="Degraded Kit Details">
+      {String(md).startsWith("degraded:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);if(!k)return null;const badComps=getDegradedComps(k);const ty=types.find(t=>t.id===k.typeId);
+        return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}><Sw color={k.color} size={28}/><div><div style={{fontSize:14,fontWeight:700,color:T.tx,fontFamily:T.u}}>{k.color}</div>
+            <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{ty?.name}</div></div></div>
+          <div style={{padding:"10px 14px",borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.12)"}}>
+            <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:T.or,fontFamily:T.m,fontWeight:600,marginBottom:8}}>Critical Issues ({badComps.length})</div>
+            {badComps.map(c=><div key={c.key} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:"1px solid rgba(249,115,22,.08)"}}>
+              <Bg color={c.status==="DAMAGED"?T.rd:T.am} bg={c.status==="DAMAGED"?"rgba(239,68,68,.08)":"rgba(251,191,36,.08)"}>{c.status}</Bg>
+              <span style={{fontSize:11,color:T.tx,fontFamily:T.m}}>{c.label}</span></div>)}</div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            {(isAdmin||isSuper)&&<Bt v="warn" sm onClick={()=>{setMd(null);doMaint(kid)}}>Send to Maintenance</Bt>}
+            {canFix&&<Bt v="success" sm onClick={()=>{setMd(null);setConfirmFix(kid)}}>Mark All Fixed</Bt>}
+            <Bt sm onClick={()=>setMd(null)}>Close</Bt></div></div>})()}</ModalWrap>
+    <ConfirmDialog open={!!confirmFix} onClose={()=>setConfirmFix(null)} onConfirm={()=>doFix(confirmFix)}
+      title="Mark Kit Fixed?" message="This will set all degraded critical components back to GOOD status. Are you sure?"/>
     </div>);}
 
 export default KitIssuance;
