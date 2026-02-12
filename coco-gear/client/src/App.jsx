@@ -100,7 +100,9 @@ export default function App(){
       fields:(t.fields||[]).map(f=>({key:f.key,label:f.label,type:f.type||"text"})),
       deptIds:(t.departments||[]).map(d=>d.deptId||d.department?.id).filter(Boolean)}};
   const xformLoc=l=>({id:l.id,name:l.name,sc:l.shortCode});
-  const xformDept=d=>({id:d.id,name:d.name,color:d.color||"#60a5fa",site:d.site||"",headId:d.headId||d.head?.id||null,
+  const xformDept=d=>({id:d.id,name:d.name,color:d.color||"#60a5fa",site:d.site||"",
+    managerIds:(d.managers||[]).map(m=>m.userId||m.user?.id).filter(Boolean),
+    leadIds:(d.leads||[]).map(l=>l.userId||l.user?.id).filter(Boolean),
     kitTypeIds:(d.kitTypes||[]).map(kt=>kt.kitTypeId||kt.kitType?.id).filter(Boolean)});
   const xformTrip=t=>({id:t.id,name:t.name,description:t.description||"",location:t.location||"",objectives:t.objectives||"",
     leadId:t.leadId||null,leadName:t.lead?.name||null,startDate:(t.startDate||"").slice(0,10),endDate:(t.endDate||"").slice(0,10),
@@ -180,7 +182,8 @@ export default function App(){
   const isDirector=(isDeveloper&&!devViewAs)||effectiveRole==="director"||effectiveRole==="super"||effectiveRole==="engineer";const isManager=effectiveRole==="manager"||effectiveRole==="admin"||isDirector;
   const isLead=effectiveRole==="lead"||isManager;const isSuper=isDirector;const isAdmin=isManager;
   const analytics=useAnalytics(kits,personnel,depts,comps,types,logs,reservations);
-  const headOf=depts.filter(d=>d.headId===(curUser||authCtx.user?.id)).map(d=>d.id);
+  const _uid=curUser||authCtx.user?.id;
+  const headOf=depts.filter(d=>(d.managerIds||[]).includes(_uid)||(d.leadIds||[]).includes(_uid)).map(d=>d.id);
   const _rl={user:0,lead:1,manager:2,admin:2,director:3,super:3,developer:3,engineer:3};
   const isApprover=headOf.length>0||(_rl[effectiveRole]||0)>=(_rl[settings.deptApprovalMinRole||"lead"]||1);
 
@@ -413,7 +416,7 @@ export default function App(){
         {pg==="types"&&canAccess({access:"admin",perm:"types"})&&<TypeAdmin types={types} setTypes={setTypes} comps={comps} kits={kits} depts={depts} onRefreshTypes={refreshTypes}/>}
         {pg==="components"&&canAccess({access:"admin",perm:"components"})&&<CompAdmin comps={comps} setComps={setComps} types={types} onRefreshComps={refreshComps}/>}
         {pg==="locations"&&canAccess({access:"admin",perm:"locations"})&&<LocAdmin locs={locs} setLocs={setLocs} kits={kits} onRefreshLocs={refreshLocs}/>}
-        {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} locs={locs} onRefreshDepts={refreshDepts}/>}
+        {pg==="departments"&&canAccess({access:"admin",perm:"departments"})&&<DeptAdmin depts={depts} setDepts={setDepts} personnel={personnel} kits={kits} locs={locs} onRefreshDepts={refreshDepts} onRefreshPersonnel={refreshPersonnel}/>}
         {pg==="personnel"&&canAccess({access:"admin",perm:"personnel"})&&<PersonnelAdmin personnel={personnel} setPersonnel={setPersonnel} kits={kits} depts={depts} onRefreshPersonnel={refreshPersonnel} settings={settings} curUserId={user?.id}/>}
         {pg==="boats"&&canAccess({access:"lead",perm:"boats"})&&<BoatAdmin boats={boats} onRefreshBoats={refreshBoats} settings={settings}/>}
         {pg==="settings"&&isSuper&&<SettingsPage settings={settings} setSettings={setSettings} onSaveSettings={saveSettings}/>}

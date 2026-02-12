@@ -61,7 +61,8 @@ export const departmentSchema = z.object({
   name: z.string().min(1).max(200),
   color: z.string().max(20).optional().default('#60a5fa'),
   site: z.string().max(200).nullable().optional(),
-  headId: z.string().uuid().nullable().optional(),
+  managerIds: z.array(z.string().uuid()).optional().default([]),
+  leadIds: z.array(z.string().uuid()).optional().default([]),
 });
 
 // ─── Personnel ───

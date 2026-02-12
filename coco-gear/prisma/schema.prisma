@@ -21,7 +21,8 @@ model User {
   updatedAt DateTime @updatedAt
 
   department      Department?        @relation("UserDepartment", fields: [deptId], references: [id], onDelete: SetNull)
-  headOfDepts     Department[]       @relation("DeptHead")
+  managedDepts    DepartmentManager[] @relation("DeptManager")
+  ledDepts        DepartmentLead[]    @relation("DeptLead")
   kitCheckouts    IssueHistory[]     @relation("IssuedTo")
   kitIssuedBy     IssueHistory[]     @relation("IssuedBy")
   assetCheckouts  AssetIssueHistory[] @relation("AssetIssuedTo")
@@ -47,15 +48,43 @@ model Department {
   name      String
   color     String   @default("#60a5fa")
   site      String?  // physical site/location e.g. "CA - San Diego", "VA - Norfolk"
-  headId    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  head      User?    @relation("DeptHead", fields: [headId], references: [id], onDelete: SetNull)
+  managers  DepartmentManager[]
+  leads     DepartmentLead[]
   members   User[]   @relation("UserDepartment")
   kits      Kit[]
   checkoutRequests CheckoutRequest[]
   kitTypes  KitTypeDepartment[]
+}
+
+// ─── Department <-> Manager (many-to-many) ───
+model DepartmentManager {
+  id     String @id @default(uuid())
+  deptId String
+  userId String
+
+  department Department @relation(fields: [deptId], references: [id], onDelete: Cascade)
+  user       User       @relation("DeptManager", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([deptId, userId])
+  @@index([deptId])
+  @@index([userId])
+}
+
+// ─── Department <-> Lead (many-to-many) ───
+model DepartmentLead {
+  id     String @id @default(uuid())
+  deptId String
+  userId String
+
+  department Department @relation(fields: [deptId], references: [id], onDelete: Cascade)
+  user       User       @relation("DeptLead", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([deptId, userId])
+  @@index([deptId])
+  @@index([userId])
 }
 
 // ─── Locations ───

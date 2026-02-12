@@ -138,13 +138,15 @@ router.put('/:id/approve', authMiddleware, requireApprover, async (req, res) => 
       return res.status(409).json({ error: 'Only pending reservations can be approved' });
     }
 
-    // If the user is a dept head, verify they head the kit's department
+    // If the user is a dept head/manager, verify they manage the kit's department
     if (req.isApproverCheck) {
       if (!reservation.kit.deptId) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
-      const dept = await prisma.department.findUnique({ where: { id: reservation.kit.deptId } });
-      if (!dept || dept.headId !== req.user.id) {
+      const isDeptManager = await prisma.departmentManager.findFirst({
+        where: { deptId: reservation.kit.deptId, userId: req.user.id },
+      });
+      if (!isDeptManager) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
     }
