@@ -149,6 +149,7 @@ export const trips = {
   updateBoat: (tripId, tripBoatId, data) => request(`/trips/${tripId}/boats/${tripBoatId}`, { method: 'PUT', body: data }),
   removeBoat: (tripId, tripBoatId) => request(`/trips/${tripId}/boats/${tripBoatId}`, { method: 'DELETE' }),
   manifest: (id) => request(`/trips/${id}/manifest`),
+  readiness: (id) => request(`/trips/${id}/readiness`),
 };
 
 // ─── Packing Templates ───
