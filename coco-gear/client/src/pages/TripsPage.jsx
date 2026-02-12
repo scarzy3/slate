@@ -8,6 +8,7 @@ import TripPacking from './TripPacking.jsx';
 import TripComms from './TripComms.jsx';
 import ReadinessReview from './ReadinessReview.jsx';
 import ActiveTripDashboard from './ActiveTripDashboard.jsx';
+import TripAAR from './TripAAR.jsx';
 
 function ReadinessCard({tripId,onOpen,readinessData,setReadinessData}){
   const[loading,setLoading]=useState(false);
@@ -43,6 +44,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const[search,setSearch]=useState("");
   const[addBoatMd,setAddBoatMd]=useState(false);const[addBoatIds,setAddBoatIds]=useState([]);const[addBoatRole,setAddBoatRole]=useState("primary");
   const[showReadiness,setShowReadiness]=useState(false);const[readinessData,setReadinessData]=useState(null);
+  const[showAAR,setShowAAR]=useState(false);
   const[taskDone,setTaskDone]=useState(0);const[taskTotal,setTaskTotal]=useState(0);
   const[packDone,setPackDone]=useState(0);const[packTotal,setPackTotal]=useState(0);
   const[commsCount,setCommsCount]=useState(0);
@@ -204,6 +206,35 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
         setDetailTab={setDetailTab} fmtDT={fmtDT}/>:
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {at.status==="planning"&&<ReadinessCard tripId={at.id} onOpen={()=>setShowReadiness(true)} readinessData={readinessData} setReadinessData={setReadinessData}/>}
+
+      {/* AAR card for completed trips */}
+      {at.status==="completed"&&<div onClick={()=>setShowAAR(true)} style={{padding:"16px 20px",borderRadius:10,
+        background:"rgba(37,99,235,.04)",border:"1px solid rgba(37,99,235,.18)",cursor:"pointer",transition:"all .15s"}}
+        onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(37,99,235,.35)";e.currentTarget.style.background="rgba(37,99,235,.07)"}}
+        onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(37,99,235,.18)";e.currentTarget.style.background="rgba(37,99,235,.04)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+              <div style={{width:24,height:24,borderRadius:12,background:"rgba(37,99,235,.12)",display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:12,fontWeight:700,color:T.bl}}>&#9776;</div>
+              <span style={{fontSize:13,fontWeight:700,color:T.tx,fontFamily:T.u}}>After-Action Report</span></div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <Bg color={T.tl} bg="rgba(45,212,191,.1)">{tripPers.length} personnel</Bg>
+              <Bg color={T.ind} bg="rgba(129,140,248,.1)">{tripKits.length} kits</Bg>
+              {(()=>{const tasks=at.tasks||[];const total=tasks.length;const done=tasks.filter(t=>t.status==="done").length;
+                return total>0?<Bg color={done===total?T.gn:T.or} bg={(done===total?T.gn:T.or)+"10"}>{done}/{total} tasks</Bg>:null})()}
+              {tripNotes.filter(n=>n.category==="after-action").length>0&&
+                <Bg color={T.am} bg="rgba(251,191,36,.1)">{tripNotes.filter(n=>n.category==="after-action").length} lessons learned</Bg>}</div></div>
+          <span style={{fontSize:11,fontWeight:600,color:T.bl,fontFamily:T.m,whiteSpace:"nowrap"}}>Generate Report &#8594;</span></div></div>}
+
+      {/* AAR link for active trips */}
+      {at.status==="active"&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:-8}}>
+        <button onClick={()=>setShowAAR(true)} style={{all:"unset",cursor:"pointer",fontSize:10,color:T.bl,fontFamily:T.m,fontWeight:600,
+          padding:"4px 10px",borderRadius:5,background:"rgba(96,165,250,.06)",border:"1px solid rgba(96,165,250,.12)",transition:"all .12s"}}
+          onMouseEnter={e=>e.currentTarget.style.background="rgba(96,165,250,.12)"}
+          onMouseLeave={e=>e.currentTarget.style.background="rgba(96,165,250,.06)"}>
+          Generate interim report &#8594;</button></div>}
+
       {(at.description||at.objectives)&&<div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         {at.description&&<div style={{marginBottom:at.objectives?12:0}}>
           <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1.2,color:T.mu,fontFamily:T.m,marginBottom:4}}>Description</div>
@@ -540,6 +571,10 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
     <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={deleteTrip}
       title="Delete Trip?" message={"This will permanently delete this trip and remove all kit/personnel/USV assignments. This cannot be undone."}
       confirmLabel="Delete Trip" confirmColor={T.rd}/>
+
+    {/* After-Action Report */}
+    {showAAR&&<TripAAR tripId={at.id} tripName={at.name} onClose={()=>setShowAAR(false)}
+      onAddNote={async(data)=>{await api.trips.addNote(at.id,data);await onRefreshTrips()}}/>}
   </div>);}
 
 export default TripsPage;
