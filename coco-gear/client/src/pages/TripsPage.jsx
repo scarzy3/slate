@@ -6,6 +6,7 @@ import api from '../api.js';
 import TripTasks from './TripTasks.jsx';
 import TripPacking from './TripPacking.jsx';
 import ReadinessReview from './ReadinessReview.jsx';
+import ActiveTripDashboard from './ActiveTripDashboard.jsx';
 
 function ReadinessCard({tripId,onOpen,readinessData,setReadinessData}){
   const[loading,setLoading]=useState(false);
@@ -191,7 +192,14 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
       {id:"tasks",l:"Tasks"+(taskTotal>0?" ("+taskDone+"/"+taskTotal+")":"")},{id:"packing",l:"Packing"+(packTotal>0?" ("+packDone+"/"+packTotal+")":"")},{id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
 
     {/* ── OVERVIEW TAB ── */}
-    {detailTab==="overview"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
+    {detailTab==="overview"&&(at.status==="active"?
+      <ActiveTripDashboard trip={at} tripKits={tripKits} tripPers={tripPers} tripBoats={tripBoats} tripNotes={tripNotes}
+        types={types} personnel={personnel} depts={depts}
+        taskDone={taskDone} taskTotal={taskTotal} packDone={packDone} packTotal={packTotal}
+        roleColors={roleColors} roleLabels={roleLabels} noteCatColors={noteCatColors}
+        boatRoleColors={boatRoleColors} boatRoleLabels={boatRoleLabels}
+        setDetailTab={setDetailTab} fmtDT={fmtDT}/>:
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {at.status==="planning"&&<ReadinessCard tripId={at.id} onOpen={()=>setShowReadiness(true)} readinessData={readinessData} setReadinessData={setReadinessData}/>}
       {(at.description||at.objectives)&&<div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         {at.description&&<div style={{marginBottom:at.objectives?12:0}}>
@@ -287,7 +295,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
               <Bg color={noteCatColors[n.category]||T.mu} bg={(noteCatColors[n.category]||T.mu)+"18"}>{n.category}</Bg></div>
             <span style={{fontSize:8,color:T.dm,fontFamily:T.m}}>{fmtDT(n.createdAt)}</span></div>
           <div style={{fontSize:11,color:T.sub,fontFamily:T.m,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{n.content.length>200?n.content.slice(0,200)+"...":n.content}</div></div>)}</div>}
-    </div>}
+    </div>)}
 
     {/* ── PERSONNEL TAB ── */}
     {detailTab==="personnel"&&<div>
