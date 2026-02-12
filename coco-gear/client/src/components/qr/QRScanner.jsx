@@ -11,7 +11,10 @@ function QRScanner({onScan,onClose}){
     if(!active)return;let animId=null;let stopped=false;
     const start=async()=>{
       try{
-        const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+        const stream=await navigator.mediaDevices.getUserMedia({video:{
+          facingMode:'environment',width:{ideal:1920},height:{ideal:1080},
+          focusMode:{ideal:'continuous'},focusDistance:{ideal:0}
+        }});
         streamRef.current=stream;
         if(vidRef.current){vidRef.current.srcObject=stream;await vidRef.current.play()}
         const useNative='BarcodeDetector' in window;
@@ -26,9 +29,11 @@ function QRScanner({onScan,onClose}){
             }
             if(ctx&&vidRef.current.videoWidth){
               const vw=vidRef.current.videoWidth,vh=vidRef.current.videoHeight;
-              const scale=Math.min(1,480/vw);const sw=Math.round(vw*scale),sh=Math.round(vh*scale);
+              const cw=Math.round(vw*0.6),ch=Math.round(vh*0.6);
+              const cx=Math.round((vw-cw)/2),cy=Math.round((vh-ch)/2);
+              const scale=Math.min(1,640/cw);const sw=Math.round(cw*scale),sh=Math.round(ch*scale);
               canvas.width=sw;canvas.height=sh;
-              ctx.drawImage(vidRef.current,0,0,sw,sh);
+              ctx.drawImage(vidRef.current,cx,cy,cw,ch,0,0,sw,sh);
               const imgData=ctx.getImageData(0,0,sw,sh);
               const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:"dontInvert"});
               if(code){onScan(code.data);return}
