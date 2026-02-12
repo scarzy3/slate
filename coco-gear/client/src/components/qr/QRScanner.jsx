@@ -4,6 +4,23 @@ import { BrowserQRCodeReader } from '@zxing/browser';
 import In from '../ui/In.jsx';
 import Bt from '../ui/Bt.jsx';
 
+/* Local adaptive threshold using integral image.
+   Handles overexposed QR stickers on dark backgrounds where the camera
+   blows out the sticker, leaving almost no contrast between modules and bg. */
+function adaptiveBinarize(ctx,w,h){
+  const img=ctx.getImageData(0,0,w,h),d=img.data,n=w*h;
+  const g=new Uint8Array(n);
+  for(let i=0;i<n;i++)g[i]=(d[i*4]*77+d[i*4+1]*150+d[i*4+2]*29)>>8;
+  const W1=w+1,S=new Int32Array(W1*(h+1));
+  for(let y=0;y<h;y++){let rs=0;for(let x=0;x<w;x++){rs+=g[y*w+x];S[(y+1)*W1+(x+1)]=S[y*W1+(x+1)]+rs}}
+  const bs=Math.max(15,(w>>3)|1),hf=bs>>1;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const x1=Math.max(0,x-hf),y1=Math.max(0,y-hf),x2=Math.min(w-1,x+hf),y2=Math.min(h-1,y+hf);
+    const cnt=(x2-x1+1)*(y2-y1+1);
+    const sum=S[(y2+1)*W1+(x2+1)]-S[y1*W1+(x2+1)]-S[(y2+1)*W1+x1]+S[y1*W1+x1];
+    const v=g[y*w+x]<(sum/cnt)-5?0:255;const idx=(y*w+x)*4;d[idx]=d[idx+1]=d[idx+2]=v}
+  ctx.putImageData(img,0,0)}
+
 function QRScanner({onScan,onClose}){
   const vidRef=useRef(null);const canvasRef=useRef(null);const streamRef=useRef(null);
   const[err,setErr]=useState("");const[manual,setManual]=useState("");const[active,setActive]=useState(true);
@@ -13,6 +30,8 @@ function QRScanner({onScan,onClose}){
   useEffect(()=>{
     if(!active)return;let animId=null;let stopped=false;
     const reader=new BrowserQRCodeReader();
+    let native=null;
+    if(typeof BarcodeDetector!=='undefined'){try{native=new BarcodeDetector({formats:['qr_code']})}catch(e){}}
     const start=async()=>{
       try{
         const stream=await navigator.mediaDevices.getUserMedia({video:{
@@ -29,32 +48,30 @@ function QRScanner({onScan,onClose}){
           track.applyConstraints({advanced:[{exposureCompensation:ec}]}).catch(()=>{})}
         if(vidRef.current){vidRef.current.srcObject=stream;await vidRef.current.play()}
         const canvas=canvasRef.current;const ctx=canvas?canvas.getContext('2d',{willReadFrequently:true}):null;
-        const scan=()=>{
+        const scan=async()=>{
           if(stopped||!vidRef.current)return;
           try{
             if(ctx&&vidRef.current.videoWidth){
               const vw=vidRef.current.videoWidth,vh=vidRef.current.videoHeight;
-              /* Try two crop levels: tight (35%) then normal (55%) */
+              /* Native BarcodeDetector on full frame — uses OS-level detection */
+              if(native){try{const res=await native.detect(vidRef.current);
+                if(stopped)return;if(res.length){onScan(res[0].rawValue);return}}catch(e){}}
+              /* Multi-crop with zxing: raw pass then adaptive-threshold pass */
               for(const pct of[0.35,0.55]){
                 const cw=Math.round(vw*pct),ch=Math.round(vh*pct);
                 const cx=Math.round((vw-cw)/2),cy=Math.round((vh-ch)/2);
                 const scale=Math.min(1,640/cw);const sw=Math.round(cw*scale),sh=Math.round(ch*scale);
                 canvas.width=sw;canvas.height=sh;
-                /* Raw pass — let zxing HybridBinarizer handle it */
+                /* Pass 1: raw — let zxing HybridBinarizer handle it */
                 ctx.drawImage(vidRef.current,cx,cy,cw,ch,0,0,sw,sh);
                 try{const r=reader.decodeFromCanvas(canvas);if(r){onScan(r.getText());return}}catch(e){}
-                /* Histogram-normalized pass — stretches whatever contrast exists */
-                const imgData=ctx.getImageData(0,0,sw,sh);const d=imgData.data;
-                let mn=255,mx=0;
-                for(let i=0;i<d.length;i+=4){const v=(d[i]*77+d[i+1]*150+d[i+2]*29)>>8;if(v<mn)mn=v;if(v>mx)mx=v}
-                if(mx-mn>20&&mx-mn<240){const s=255/(mx-mn);
-                  for(let i=0;i<d.length;i+=4){d[i]=Math.min(255,(d[i]-mn)*s)|0;d[i+1]=Math.min(255,(d[i+1]-mn)*s)|0;d[i+2]=Math.min(255,(d[i+2]-mn)*s)|0}}
-                ctx.putImageData(imgData,0,0);
+                /* Pass 2: adaptive local threshold — recovers low-contrast stickers */
+                adaptiveBinarize(ctx,sw,sh);
                 try{const r=reader.decodeFromCanvas(canvas);if(r){onScan(r.getText());return}}catch(e){}
               }
             }
           }catch(e){}
-          animId=setTimeout(scan,120)};
+          animId=setTimeout(scan,150)};
         scan();
       }catch(e){setErr("Camera access denied. Use manual entry.");setActive(false)}};
     start();
