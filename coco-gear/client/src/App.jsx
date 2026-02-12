@@ -122,7 +122,7 @@ export default function App(){
   const xformKit=(k)=>({
     id:k.id,typeId:k.typeId,color:k.color,locId:k.locId,deptId:k.deptId,tripId:k.tripId||null,
     fields:k.fields||{},lastChecked:k.lastChecked,comps:k.comps||{},serials:k.serials||{},calibrationDates:k.calibrationDates||{},
-    inspections:k.inspections||[],issuedTo:k.issuedTo,issueHistory:k.issueHistory||[],
+    inspections:k.inspections||[],issuedTo:k.issuedTo,issueHistory:k.issueHistory||[],degraded:k.degraded||false,
     maintenanceStatus:k.maintenanceStatus,maintenanceHistory:k.maintenanceHistory||[],photos:k.photos||[],reservations:k.reservations||[],
     _type:k._type,_location:k._location,_department:k._department,_issuedTo:k._issuedTo,_trip:k._trip||null,
   });
