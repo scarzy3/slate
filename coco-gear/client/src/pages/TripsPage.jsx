@@ -14,8 +14,8 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const[editRole,setEditRole]=useState(null);const[confirmDel,setConfirmDel]=useState(null);
   const[search,setSearch]=useState("");
   const[addBoatMd,setAddBoatMd]=useState(false);const[addBoatIds,setAddBoatIds]=useState([]);const[addBoatRole,setAddBoatRole]=useState("primary");
-  const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric"}):"";
-  const fmtDT=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
+  const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}):"";
+  const fmtDT=d=>d?new Date(d).toLocaleString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
   const statusLabels={planning:"Planning",active:"Active",completed:"Completed",cancelled:"Cancelled"};
   const roleColors={director:T.rd,manager:T.am,"senior-spec":T.or,specialist:T.bl,engineer:T.tl,other:T.pu};
@@ -143,7 +143,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
         {at.status==="planning"&&<Bt v="success" sm onClick={()=>changeStatus("active")}>▸ Activate</Bt>}
         {at.status==="active"&&<Bt v="primary" sm onClick={()=>changeStatus("completed")}>✓ Complete</Bt>}
         <Bt sm onClick={()=>{setFm({name:at.name,description:at.description,location:at.location,objectives:at.objectives,
-          leadId:at.leadId||"",startDate:at.startDate||"",endDate:at.endDate||"",status:at.status});setMd(at.id)}}>Edit</Bt>
+          leadId:at.leadId||"",startDate:at.startDate?new Date(at.startDate).toISOString().slice(0,10):"",endDate:at.endDate?new Date(at.endDate).toISOString().slice(0,10):"",status:at.status});setMd(at.id)}}>Edit</Bt>
         <Bt v="danger" sm onClick={()=>setConfirmDel(at.id)}>Delete</Bt></div>}</div>
 
     {/* Status timeline indicator */}
