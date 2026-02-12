@@ -3,8 +3,8 @@ import { useAuth } from './auth.jsx';
 import api from './api.js';
 
 import { T, applyTheme } from './theme/theme.js';
-import { uid, SYS_ROLE_LABELS, sysRoleColor, DEF_ROLE_PERMS, DEF_SETTINGS } from './theme/helpers.js';
-import { Bt, ModalWrap } from './components/ui/index.js';
+import { uid, SYS_ROLE_LABELS, sysRoleColor, DEF_ROLE_PERMS, DEF_SETTINGS, fmtDate } from './theme/helpers.js';
+import { Sw, Bg, Bt, ModalWrap, DeptBg } from './components/ui/index.js';
 import useAnalytics from './hooks/useAnalytics.js';
 
 import NavSection from './components/NavSection.jsx';
@@ -74,7 +74,7 @@ export default function App(){
   const[requests,setRequests]=useState([]);const[logs,setLogs]=useState([]);
   const[reservations,setReservations]=useState([]);const[trips,setTrips]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[boats,setBoats]=useState([]);const[favorites,setFavorites]=useState([]);
-  const[searchMd,setSearchMd]=useState(false);const[scanMd,setScanMd]=useState(null);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);const[navAction,setNavAction]=useState(null);
+  const[searchMd,setSearchMd]=useState(false);const[scanMd,setScanMd]=useState(null);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);const[navAction,setNavAction]=useState(null);const[navPersonId,setNavPersonId]=useState(null);
   const[collapsedSections,setCollapsedSections]=useState({});
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
   const[loginUsers,setLoginUsers]=useState([]);
@@ -260,8 +260,10 @@ export default function App(){
   const handleNavigate=(page,kitId,action)=>{if(kitId)setNavKitId(kitId);if(action)setNavAction(action);setPg(page)};
   const handleFilterKits=(filter)=>{setKitFilter(filter);setPg("kits")};
   const handleSearchSelect=(result)=>{
-    if(result.type==="kit"){setPg("kits")}
-    else if(result.type==="person"){setPg("personnel")}
+    if(result.type==="kit"){setNavKitId(result.item.id);setPg("kits")}
+    else if(result.type==="person"){setNavPersonId(result.item.id)}
+    else if(result.type==="location"){setPg("locations")}
+    else if(result.type==="dept"){setPg("departments")}
     setSearchMd(false)};
 
   if(!authCtx.token&&showSignup&&signupDomain)return <SignupScreen domain={signupDomain} isDark={isDark} toggleTheme={toggleTheme}
@@ -430,6 +432,98 @@ export default function App(){
       <ModalWrap open={searchMd} onClose={()=>setSearchMd(false)} title="Search">
         <GlobalSearch kits={kits} personnel={personnel} locs={locs} depts={depts} types={types} comps={comps}
           onSelect={handleSearchSelect} onClose={()=>setSearchMd(false)}/></ModalWrap>
+
+      {/* Person Detail Modal */}
+      <ModalWrap open={!!navPersonId} onClose={()=>setNavPersonId(null)} title="Person Details" wide>
+        {navPersonId&&(()=>{const person=personnel.find(p=>p.id===navPersonId);if(!person)return null;
+          const pDept=person.deptId?depts.find(d=>d.id===person.deptId):null;
+          const pKits=kits.filter(k=>k.issuedTo===person.id);
+          const pTrips=trips.filter(t=>(t.personnel||[]).some(tp=>tp.userId===person.id||tp.id===person.id));
+          const pReservations=reservations.filter(r=>r.personId===person.id&&r.status!=="cancelled");
+          const pCheckoutHistory=kits.reduce((acc,k)=>{(k.issueHistory||[]).forEach(h=>{if(h.personId===person.id)acc.push({...h,kitColor:k.color,kitId:k.id})});return acc},[])
+            .sort((a,b)=>new Date(b.issuedDate)-new Date(a.issuedDate)).slice(0,10);
+          const rc=sysRoleColor(person.role);
+          return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
+            {/* Header */}
+            <div style={{display:"flex",alignItems:"center",gap:16}}>
+              <div style={{width:56,height:56,borderRadius:28,background:rc+"22",border:"2px solid "+rc+"44",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,color:rc,fontFamily:T.u}}>
+                {person.name.split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:18,fontWeight:700,color:T.tx,fontFamily:T.u}}>{person.name}</div>
+                <div style={{fontSize:12,color:T.mu,fontFamily:T.m}}>{person.title||"No title"}</div>
+                <div style={{display:"flex",gap:6,marginTop:4}}>
+                  <Bg color={rc} bg={rc+"18"}>{SYS_ROLE_LABELS[person.role]||person.role}</Bg>
+                  {pDept&&<DeptBg dept={pDept}/>}</div></div></div>
+
+            {/* Stats Row */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+              <div style={{padding:12,borderRadius:8,background:"rgba(244,114,182,.04)",border:"1px solid rgba(244,114,182,.12)"}}>
+                <div style={{fontSize:20,fontWeight:700,color:T.pk,fontFamily:T.u}}>{pKits.length}</div>
+                <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>Kits Checked Out</div></div>
+              <div style={{padding:12,borderRadius:8,background:"rgba(168,85,247,.04)",border:"1px solid rgba(168,85,247,.12)"}}>
+                <div style={{fontSize:20,fontWeight:700,color:T.pu||"#a855f7",fontFamily:T.u}}>{pTrips.length}</div>
+                <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>Active Trips</div></div>
+              <div style={{padding:12,borderRadius:8,background:"rgba(96,165,250,.04)",border:"1px solid rgba(96,165,250,.12)"}}>
+                <div style={{fontSize:20,fontWeight:700,color:T.bl,fontFamily:T.u}}>{pReservations.length}</div>
+                <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>Reservations</div></div>
+              <div style={{padding:12,borderRadius:8,background:"rgba(34,197,94,.04)",border:"1px solid rgba(34,197,94,.12)"}}>
+                <div style={{fontSize:20,fontWeight:700,color:T.gn,fontFamily:T.u}}>{pCheckoutHistory.length}</div>
+                <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>Recent Checkouts</div></div></div>
+
+            {/* Current Kits */}
+            {pKits.length>0&&<div>
+              <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.pk,fontFamily:T.m,fontWeight:600,marginBottom:8}}>Kits Checked Out ({pKits.length})</div>
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {pKits.map(k=>{const ty=types.find(t=>t.id===k.typeId);const lastIssue=(k.issueHistory||[]).filter(h=>h.personId===person.id).slice(-1)[0];
+                  return(<button key={k.id} onClick={()=>{setNavPersonId(null);setNavKitId(k.id);setPg("kits")}} style={{all:"unset",cursor:"pointer",
+                    display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:7,background:"rgba(244,114,182,.03)",border:"1px solid rgba(244,114,182,.12)",transition:"all .12s"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="rgba(244,114,182,.08)"}
+                    onMouseLeave={e=>e.currentTarget.style.background="rgba(244,114,182,.03)"}>
+                    <Sw color={k.color} size={22}/>
+                    <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u}}>Kit {k.color}</div>
+                      <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{ty?.name||"Unknown type"}{lastIssue?" | Since "+fmtDate(lastIssue.issuedDate):""}</div></div>
+                    <span style={{fontSize:10,color:T.dm}}>View →</span></button>)})}</div></div>}
+
+            {/* Trips */}
+            {pTrips.length>0&&<div>
+              <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.pu||"#a855f7",fontFamily:T.m,fontWeight:600,marginBottom:8}}>Trips ({pTrips.length})</div>
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {pTrips.map(t=>{const tp=(t.personnel||[]).find(p=>p.userId===person.id||p.id===person.id);
+                  return(<button key={t.id} onClick={()=>{setNavPersonId(null);setPg("trips")}} style={{all:"unset",cursor:"pointer",
+                    display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:7,background:"rgba(168,85,247,.03)",border:"1px solid rgba(168,85,247,.12)",transition:"all .12s"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="rgba(168,85,247,.08)"}
+                    onMouseLeave={e=>e.currentTarget.style.background="rgba(168,85,247,.03)"}>
+                    <div style={{width:22,height:22,borderRadius:6,background:"rgba(168,85,247,.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:T.pu||"#a855f7"}}>▸</div>
+                    <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u}}>{t.name}</div>
+                      <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{t.location||"No location"}{tp?.tripRole?" | "+tp.tripRole:""} | {t.status}</div></div>
+                    <Bg color={t.status==="active"?T.gn:t.status==="completed"?T.bl:T.am} bg={(t.status==="active"?T.gn:t.status==="completed"?T.bl:T.am)+"18"}>{t.status}</Bg></button>)})}</div></div>}
+
+            {/* Reservations */}
+            {pReservations.length>0&&<div>
+              <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.bl,fontFamily:T.m,fontWeight:600,marginBottom:8}}>Reservations ({pReservations.length})</div>
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {pReservations.map(r=>{const k=kits.find(x=>x.id===r.kitId);
+                  return(<div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:7,background:"rgba(96,165,250,.03)",border:"1px solid rgba(96,165,250,.12)"}}>
+                    {k&&<Sw color={k.color} size={18}/>}
+                    <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k?"Kit "+k.color:"Kit"}{r.tripName?" for "+r.tripName:""}</div>
+                      <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{r.startDate} to {r.endDate}{r.purpose?" | "+r.purpose:""}</div></div>
+                    <Bg color={r.status==="approved"?T.gn:r.status==="pending"?T.am:T.mu} bg={(r.status==="approved"?T.gn:r.status==="pending"?T.am:T.mu)+"18"}>{r.status}</Bg></div>)})}</div></div>}
+
+            {/* Recent Checkout History */}
+            {pCheckoutHistory.length>0&&<div>
+              <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:T.tl,fontFamily:T.m,fontWeight:600,marginBottom:8}}>Recent Checkout History</div>
+              <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                {pCheckoutHistory.map((h,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",borderRadius:5,background:i%2===0?"transparent":"rgba(255,255,255,.015)"}}>
+                  <Sw color={h.kitColor} size={16}/>
+                  <span style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m,minWidth:80}}>Kit {h.kitColor}</span>
+                  <span style={{fontSize:10,color:T.mu,fontFamily:T.m,flex:1}}>{fmtDate(h.issuedDate)}</span>
+                  {h.returnedDate?<Bg color={T.gn} bg="rgba(34,197,94,.08)">Returned {fmtDate(h.returnedDate)}</Bg>
+                    :<Bg color={T.pk} bg="rgba(244,114,182,.08)">Outstanding</Bg>}</div>))}</div></div>}
+
+            {pKits.length===0&&pTrips.length===0&&pReservations.length===0&&pCheckoutHistory.length===0&&
+              <div style={{padding:30,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11}}>No activity found for this person</div>}
+          </div>)})()}</ModalWrap>
 
       {settings.enableQR!==false&&<ScanAction scanMd={scanMd} setScanMd={setScanMd} kits={kits} types={types} locs={locs} comps={comps}
         personnel={personnel} depts={depts} settings={settings} curUserId={curUser} isAdmin={isAdmin} isSuper={isSuper}
