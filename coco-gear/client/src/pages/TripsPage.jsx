@@ -5,6 +5,7 @@ import { Sw, Bg, Bt, Fl, In, Ta, Sl, SH, Tabs, ModalWrap, ConfirmDialog, DeptBg,
 import api from '../api.js';
 import TripTasks from './TripTasks.jsx';
 import TripPacking from './TripPacking.jsx';
+import TripComms from './TripComms.jsx';
 import ReadinessReview from './ReadinessReview.jsx';
 import ActiveTripDashboard from './ActiveTripDashboard.jsx';
 
@@ -44,6 +45,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const[showReadiness,setShowReadiness]=useState(false);const[readinessData,setReadinessData]=useState(null);
   const[taskDone,setTaskDone]=useState(0);const[taskTotal,setTaskTotal]=useState(0);
   const[packDone,setPackDone]=useState(0);const[packTotal,setPackTotal]=useState(0);
+  const[commsCount,setCommsCount]=useState(0);
   const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}):"";
   const fmtDT=d=>d?new Date(d).toLocaleString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
@@ -189,7 +191,8 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
 
     {/* Tabs */}
     <Tabs tabs={[{id:"overview",l:"Overview"},{id:"personnel",l:"Personnel ("+tripPers.length+")"},{id:"equipment",l:"Equipment ("+tripKits.length+")"},
-      {id:"tasks",l:"Tasks"+(taskTotal>0?" ("+taskDone+"/"+taskTotal+")":"")},{id:"packing",l:"Packing"+(packTotal>0?" ("+packDone+"/"+packTotal+")":"")},{id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
+      {id:"tasks",l:"Tasks"+(taskTotal>0?" ("+taskDone+"/"+taskTotal+")":"")},{id:"packing",l:"Packing"+(packTotal>0?" ("+packDone+"/"+packTotal+")":"")},
+      {id:"comms",l:"Comms"+(commsCount>0?" ("+commsCount+")":"")},{id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
 
     {/* ── OVERVIEW TAB ── */}
     {detailTab==="overview"&&(at.status==="active"?
@@ -269,6 +272,16 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
           <Bg color={T.tl} bg="rgba(45,212,191,.1)">{Object.keys(roleLabels).filter(r=>tripPers.some(p=>p.tripRole===r)).length} roles</Bg>
           {packTotal>0&&<Bg color={packDone===packTotal?T.gn:T.or} bg={(packDone===packTotal?T.gn:T.or)+"10"}>My progress: {packDone}/{packTotal}</Bg>}
         </div></div>
+
+      {/* Comms preview */}
+      <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.tx,fontFamily:T.u}}>Comms</div>
+          <Bt v="ghost" sm onClick={()=>setDetailTab("comms")}>View all →</Bt></div>
+        {commsCount===0?<div style={{fontSize:10,color:T.dm,fontFamily:T.m,textAlign:"center",padding:10}}>No comms plan</div>:
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <Bg color={T.ind} bg="rgba(129,140,248,.1)">{commsCount} {commsCount===1?"entry":"entries"}</Bg>
+          </div>}</div>
 
       {/* USVs preview */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
@@ -376,6 +389,11 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
     {/* ── PACKING TAB ── */}
     {detailTab==="packing"&&<TripPacking tripId={at.id} tripPersonnel={tripPers} isAdmin={isAdmin} isSuper={isSuper} editable={editable}
       curUserId={curUserId} onPackingCountChange={(done,total)=>{setPackDone(done);setPackTotal(total)}}/>}
+
+    {/* ── COMMS TAB ── */}
+    {detailTab==="comms"&&<TripComms tripId={at.id} tripName={at.name} tripLocation={at.location} tripStart={at.startDate} tripEnd={at.endDate}
+      tripPersonnel={tripPers} isAdmin={isAdmin} editable={editable}
+      onCommsCountChange={(count)=>{setCommsCount(count)}}/>}
 
     {/* ── USVs TAB ── */}
     {detailTab==="boats"&&<div>

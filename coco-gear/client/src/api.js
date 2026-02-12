@@ -152,6 +152,15 @@ export const trips = {
   readiness: (id) => request(`/trips/${id}/readiness`),
 };
 
+// ─── Trip Comms ───
+export const comms = {
+  list: (tripId) => request(`/trips/${tripId}/comms`),
+  create: (tripId, data) => request(`/trips/${tripId}/comms`, { method: 'POST', body: data }),
+  update: (tripId, id, data) => request(`/trips/${tripId}/comms/${id}`, { method: 'PUT', body: data }),
+  delete: (tripId, id) => request(`/trips/${tripId}/comms/${id}`, { method: 'DELETE' }),
+  reorder: (tripId, entryIds) => request(`/trips/${tripId}/comms/reorder`, { method: 'POST', body: { entryIds } }),
+};
+
 // ─── Packing Templates ───
 export const packingTemplates = {
   list: (params = {}) => { const q = new URLSearchParams(params).toString(); return request(`/packing-templates${q ? '?' + q : ''}`); },
@@ -254,6 +263,6 @@ export const health = () => request('/health');
 export default {
   auth, kits, types, components, locations, departments,
   personnel, consumables, assets, reservations, trips, tasks, taskTemplates,
-  packingTemplates, packing, boats, maintenance,
+  packingTemplates, packing, comms, boats, maintenance,
   audit, settings, reports, upload, health,
 };

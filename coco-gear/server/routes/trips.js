@@ -56,7 +56,7 @@ const tripIncludes = {
     },
     orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
   },
-  _count: { select: { reservations: true, personnel: true, boats: true, tasks: true } },
+  _count: { select: { reservations: true, personnel: true, boats: true, tasks: true, commsEntries: true } },
 };
 
 // GET / - list all trips with kit counts
@@ -574,6 +574,10 @@ router.get('/:id/manifest', async (req, res) => {
         notes: {
           include: { author: { select: { id: true, name: true } } },
           orderBy: { createdAt: 'desc' },
+        },
+        commsEntries: {
+          include: { assignedTo: { select: { id: true, name: true, title: true } } },
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         },
       },
     });
