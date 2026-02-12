@@ -24,6 +24,7 @@ export const kitTypeSchema = z.object({
   components: z.array(z.object({
     componentId: z.string().uuid(),
     quantity: z.number().int().min(1).default(1),
+    critical: z.boolean().optional().default(false),
   })).optional().default([]),
   fields: z.array(z.object({
     key: z.string().min(1),

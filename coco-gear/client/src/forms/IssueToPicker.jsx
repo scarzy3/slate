@@ -4,7 +4,7 @@ import InspWF from './InspWF.jsx';
 
 function IssueToPicker({kits,types,locs,personnel,allC,settings,onIssue,onCancel}){
   const[selKit,setSelKit]=useState("");const[selPerson,setSelPerson]=useState("");const[phase,setPhase]=useState("pick");
-  const availKits=kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus);const kit=kits.find(k=>k.id===selKit);const ty=kit?types.find(t=>t.id===kit.typeId):null;
+  const availKits=kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus&&!k.degraded);const kit=kits.find(k=>k.id===selKit);const ty=kit?types.find(t=>t.id===kit.typeId):null;
   if(phase==="serials"&&kit&&ty)return <InspWF kit={kit} type={ty} allC={allC} mode="checkout" onDone={data=>onIssue(selKit,selPerson,data)} onCancel={()=>setPhase("pick")} settings={settings}/>;
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
     <Fl label="Kit"><Sl options={[{v:"",l:"-- Select --"},...availKits.map(k=>{const lo=locs.find(l=>l.id===k.locId);return{v:k.id,l:k.color+" ("+(lo?.name||"?")+")"}})]} value={selKit} onChange={e=>setSelKit(e.target.value)}/></Fl>

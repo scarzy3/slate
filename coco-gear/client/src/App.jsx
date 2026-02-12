@@ -97,6 +97,7 @@ export default function App(){
     return{id:t.id,name:t.name,desc:t.desc||"",
       compIds:tComps.map(c=>c.componentId||c.component?.id),
       compQtys:Object.fromEntries(tComps.filter(c=>c.quantity>1).map(c=>[c.componentId||c.component?.id,c.quantity])),
+      criticalCompIds:tComps.filter(c=>c.critical).map(c=>c.componentId||c.component?.id),
       fields:(t.fields||[]).map(f=>({key:f.key,label:f.label,type:f.type||"text"})),
       deptIds:(t.departments||[]).map(d=>d.deptId||d.department?.id).filter(Boolean)}};
   const xformLoc=l=>({id:l.id,name:l.name,sc:l.shortCode});

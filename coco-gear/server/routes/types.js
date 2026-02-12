@@ -62,6 +62,7 @@ router.post('/', authMiddleware, requireAdminPerm('types'), validate(kitTypeSche
           create: components.map(c => ({
             componentId: c.componentId,
             quantity: c.quantity,
+            critical: c.critical ?? false,
           })),
         },
         fields: {
@@ -119,6 +120,7 @@ router.put('/:id', authMiddleware, requireAdminPerm('types'), async (req, res) =
               kitTypeId: id,
               componentId: c.componentId,
               quantity: c.quantity || 1,
+              critical: c.critical ?? false,
             })),
           });
         }

@@ -115,6 +115,9 @@ async function main() {
 
   // ─── Kit Types ───
   const silvusBattComp = comps.find(c => c.key === 'silvusBatt');
+  // Critical components: UXV, Silvus 4200, and Pelican Case are critical for COCO kits
+  const criticalKeys = ['uxv', 'silvus4200', 'pelican'];
+  const criticalIds = new Set(comps.filter(c => criticalKeys.includes(c.key)).map(c => c.id));
   const cocoType = await prisma.kitType.create({
     data: {
       name: 'COCO Kit',
@@ -123,6 +126,7 @@ async function main() {
         create: comps.map(c => ({
           componentId: c.id,
           quantity: c.id === silvusBattComp.id ? 2 : 1,
+          critical: criticalIds.has(c.id),
         })),
       },
       fields: {
@@ -266,6 +270,25 @@ async function main() {
     kits.push(kit);
   }
   console.log(`  Created ${kits.length} kits`);
+
+  // ─── Set some critical components as DAMAGED/MISSING to demonstrate degraded status ───
+  const uxvComp = comps.find(c => c.key === 'uxv');
+  const silvusComp = comps.find(c => c.key === 'silvus4200');
+  // ORANGE kit (index 2) - UXV is DAMAGED → degraded
+  if (uxvComp) {
+    await prisma.kitComponentStatus.updateMany({
+      where: { kitId: kits[2].id, componentId: uxvComp.id },
+      data: { status: 'DAMAGED' },
+    });
+  }
+  // CHECKER kit (index 9) - Silvus 4200 is MISSING → degraded
+  if (silvusComp) {
+    await prisma.kitComponentStatus.updateMany({
+      where: { kitId: kits[9].id, componentId: silvusComp.id },
+      data: { status: 'MISSING' },
+    });
+  }
+  console.log('  Set 2 kits as degraded (critical component issues)');
 
   // ─── Consumables ───
   const consumables = await Promise.all([

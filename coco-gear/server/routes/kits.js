@@ -48,9 +48,11 @@ function parseCompKey(key) {
 
 function serializeKit(kit) {
   const qtyMap = {};
+  const criticalSet = new Set();
   if (kit.type?.components) {
     for (const c of kit.type.components) {
       qtyMap[c.componentId] = c.quantity ?? 1;
+      if (c.critical) criticalSet.add(c.componentId);
     }
   }
 
@@ -83,6 +85,17 @@ function serializeKit(kit) {
     }
   }
 
+  // Compute degraded status: kit is degraded if any critical component is DAMAGED or MISSING
+  let degraded = false;
+  if (criticalSet.size > 0 && kit.componentStatuses) {
+    for (const cs of kit.componentStatuses) {
+      if (criticalSet.has(cs.componentId) && cs.status !== 'GOOD') {
+        degraded = true;
+        break;
+      }
+    }
+  }
+
   return {
     id: kit.id,
     typeId: kit.typeId,
@@ -92,6 +105,7 @@ function serializeKit(kit) {
     issuedTo: kit.issuedToId ?? null,
     lastChecked: kit.lastChecked ?? null,
     maintenanceStatus: kit.maintenanceStatus ?? null,
+    degraded,
     fields,
     comps,
     serials,
@@ -148,6 +162,7 @@ function serializeKit(kit) {
       desc: kit.type.desc,
       compIds: kit.type.components.map(c => c.componentId),
       compQtys: Object.fromEntries(kit.type.components.filter(c => c.quantity > 1).map(c => [c.componentId, c.quantity])),
+      criticalCompIds: kit.type.components.filter(c => c.critical).map(c => c.componentId),
       fields: kit.type.fields.map(f => ({ key: f.key, label: f.label, type: f.type })),
     } : null,
     _location: kit.location,
@@ -168,6 +183,7 @@ router.get('/', async (req, res) => {
       if (status === 'available') { where.issuedToId = null; where.maintenanceStatus = null; }
       else if (status === 'issued') { where.issuedToId = { not: null }; }
       else if (status === 'maintenance') { where.maintenanceStatus = { not: null }; }
+      // Note: 'degraded' filtering is done post-serialization on the client since it depends on component status + critical flag
     }
     if (locId) where.locId = locId;
     if (typeId) where.typeId = typeId;
@@ -296,10 +312,24 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
 router.post('/checkout', validate(checkoutSchema), async (req, res) => {
   try {
     const { kitId, personId, serials, notes } = req.validated;
-    const kit = await prisma.kit.findUnique({ where: { id: kitId }, include: { department: true } });
+    const kit = await prisma.kit.findUnique({
+      where: { id: kitId },
+      include: {
+        department: true,
+        type: { include: { components: true } },
+        componentStatuses: true,
+      },
+    });
     if (!kit) return res.status(404).json({ error: 'Kit not found' });
     if (kit.issuedToId) return res.status(409).json({ error: 'Kit already issued' });
     if (kit.maintenanceStatus) return res.status(409).json({ error: 'Kit in maintenance' });
+
+    // Check if kit is degraded (critical component damaged or missing)
+    const criticalCompIds = new Set((kit.type?.components || []).filter(c => c.critical).map(c => c.componentId));
+    if (criticalCompIds.size > 0) {
+      const hasCriticalIssue = (kit.componentStatuses || []).some(cs => criticalCompIds.has(cs.componentId) && cs.status !== 'GOOD');
+      if (hasCriticalIssue) return res.status(409).json({ error: 'Kit is degraded — a critical component is damaged or missing' });
+    }
 
     const recipientId = personId || req.user.id;
     const directorRoles = ['developer','director','super','engineer'];
