@@ -10,7 +10,7 @@ import SerialManageForm from '../forms/SerialManageForm.jsx';
 import InspWF from '../forms/InspWF.jsx';
 import api from '../api.js';
 
-function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics,onRefreshKits,initialSelectedKit,onClearSelectedKit,initialAction,onClearAction,apiInspect,isMobile}){
+function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSuper,settings,favorites,setFavorites,addLog,curUserId,initialFilter="all",onFilterChange,analytics,onRefreshKits,initialSelectedKit,onClearSelectedKit,initialAction,onClearAction,apiInspect,isMobile,apiSendMaint,apiResolveDegraded}){
   const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
   const[selId,setSelId]=useState(initialSelectedKit||null);const[md,setMd]=useState(null);const[histExp,setHistExp]=useState(null);const[search,setSearch]=useState("");const[lf,setLf]=useState("ALL");
   const[df,setDf]=useState(()=>userDeptId&&!isSuper?userDeptId:"ALL");
@@ -36,6 +36,11 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
   const doneInsp=async data=>{const kid=String(md).split(":")[1];
     try{await apiInspect(kid,"",data.notes,data.results)}catch(e){/* apiInspect logs error */}
     setMd(null)};
+
+  const getDegradedComps=kit=>{const ty=types.find(t=>t.id===kit.typeId);const critIds=ty?.criticalCompIds||[];
+    return Object.entries(kit.comps||{}).filter(([k,s])=>s!=="GOOD"&&critIds.includes(k.split("#")[0])).map(([k,s])=>{const c=allC.find(x=>x.id===k.split("#")[0]);return{key:k,status:s,label:c?.label||"?"}})};
+  const doResolveDegraded=async(kitId)=>{try{await apiResolveDegraded(kitId)}catch(e){}};
+  const doSendDegradedMaint=async(kitId)=>{try{await apiSendMaint(kitId,"repair","Critical component degraded","")}catch(e){}};
 
   /* Get overdue kit IDs from analytics if available */
   const overdueIds=useMemo(()=>new Set((analytics?.overdueReturns||[]).map(k=>k.id)),[analytics]);
@@ -128,8 +133,15 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
           {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!sel.maintenanceStatus&&<div style={{marginBottom:14}}><Fl label="Storage">
             <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={sel.locId} onChange={e=>{setKits(p=>p.map(k=>k.id===sel.id?{...k,locId:e.target.value}:k));
               addLog("location_change","kit",sel.id,curUserId,now(),{kitColor:sel.color,to:locs.find(l=>l.id===e.target.value)?.name})}}/></Fl></div>}
-          {sel.degraded&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.15)"}}>
-            <span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600}}>Degraded — critical component damaged or missing</span></div>}
+          {sel.degraded&&(()=>{const badC=getDegradedComps(sel);return <div style={{marginBottom:14,borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.15)",overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px"}}>
+              <span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600,flex:1}}>Degraded — {badC.length} critical issue{badC.length!==1?"s":""}</span>
+              <div style={{display:"flex",gap:4}}>
+                {(isAdmin||isSuper)&&!sel.issuedTo&&<Bt v="ghost" sm onClick={()=>doSendDegradedMaint(sel.id)} style={{fontSize:8,color:T.am}}>Maintenance</Bt>}
+                {(isAdmin||isSuper)&&<Bt v="ghost" sm onClick={()=>doResolveDegraded(sel.id)} style={{fontSize:8,color:T.gn}}>Mark Fixed</Bt>}</div></div>
+            {badC.map(c=><div key={c.key} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 12px",borderTop:"1px solid rgba(249,115,22,.08)"}}>
+              <Bg color={c.status==="DAMAGED"?T.rd:T.am} bg={c.status==="DAMAGED"?"rgba(239,68,68,.08)":"rgba(251,191,36,.08)"}>{c.status}</Bg>
+              <span style={{fontSize:9,color:T.tx,fontFamily:T.m}}>{c.label}</span></div>)}</div>})()}
           {sel.maintenanceStatus&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
             <span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance: {sel.maintenanceStatus}</span></div>}
           {person&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(244,114,182,.04)",border:"1px solid rgba(244,114,182,.15)"}}>
@@ -181,8 +193,15 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
               {(settings.allowUserLocationUpdate||isAdmin||isSuper)&&!sel.maintenanceStatus&&<div style={{marginBottom:14}}><Fl label="Storage">
                 <Sl options={locs.map(l=>({v:l.id,l:l.name}))} value={sel.locId} onChange={e=>{setKits(p=>p.map(k=>k.id===sel.id?{...k,locId:e.target.value}:k));
                   addLog("location_change","kit",sel.id,curUserId,now(),{kitColor:sel.color,to:locs.find(l=>l.id===e.target.value)?.name})}}/></Fl></div>}
-              {sel.degraded&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.15)"}}>
-                <span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600}}>Degraded — critical component damaged or missing</span></div>}
+              {sel.degraded&&(()=>{const badC=getDegradedComps(sel);return <div style={{marginBottom:14,borderRadius:7,background:"rgba(249,115,22,.04)",border:"1px solid rgba(249,115,22,.15)",overflow:"hidden"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px"}}>
+                  <span style={{fontSize:10,color:T.or,fontFamily:T.m,fontWeight:600,flex:1}}>Degraded — {badC.length} critical issue{badC.length!==1?"s":""}</span>
+                  <div style={{display:"flex",gap:4}}>
+                    {(isAdmin||isSuper)&&!sel.issuedTo&&<Bt v="ghost" sm onClick={()=>doSendDegradedMaint(sel.id)} style={{fontSize:8,color:T.am}}>Maint</Bt>}
+                    {(isAdmin||isSuper)&&<Bt v="ghost" sm onClick={()=>doResolveDegraded(sel.id)} style={{fontSize:8,color:T.gn}}>Fix</Bt>}</div></div>
+                {badC.map(c=><div key={c.key} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 12px",borderTop:"1px solid rgba(249,115,22,.08)"}}>
+                  <Bg color={c.status==="DAMAGED"?T.rd:T.am} bg={c.status==="DAMAGED"?"rgba(239,68,68,.08)":"rgba(251,191,36,.08)"}>{c.status}</Bg>
+                  <span style={{fontSize:9,color:T.tx,fontFamily:T.m}}>{c.label}</span></div>)}</div>})()}
               {sel.maintenanceStatus&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.12)"}}>
                 <span style={{fontSize:10,color:T.am,fontFamily:T.m}}>In Maintenance: {sel.maintenanceStatus}</span></div>}
               {person&&<div style={{padding:"8px 12px",marginBottom:14,borderRadius:7,background:"rgba(244,114,182,.04)",border:"1px solid rgba(244,114,182,.15)"}}>

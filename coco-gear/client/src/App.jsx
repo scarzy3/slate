@@ -205,6 +205,8 @@ export default function App(){
     try{await api.maintenance.send({kitId,type,reason,notes});await refreshKits()}catch(e){alert(e.message);throw e}};
   const apiReturnMaint=async(kitId,notes)=>{
     try{await api.maintenance.return(kitId,notes);await refreshKits()}catch(e){alert(e.message);throw e}};
+  const apiResolveDegraded=async(kitId)=>{
+    try{await api.kits.resolveDegraded(kitId);await refreshKits()}catch(e){alert(e.message);throw e}};
   const parseCompKeyForApi=(key)=>{const parts=key.split('#');
     const compId=parts[0];const comp=comps.find(c=>c.id===compId);
     return{componentId:compId,slotIndex:parts.length>1?parseInt(parts[1],10):0}};
@@ -395,11 +397,12 @@ export default function App(){
         {pg==="kits"&&<KitInv kits={kits} setKits={setKits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} settings={settings} favorites={favorites} setFavorites={setFavorites} addLog={addLog} curUserId={curUser}
           initialFilter={kitFilter} onFilterChange={setKitFilter} analytics={analytics} onRefreshKits={refreshKits}
-          initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)} initialAction={navAction} onClearAction={()=>setNavAction(null)} apiInspect={apiInspect} isMobile={isMobile}/>}
+          initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)} initialAction={navAction} onClearAction={()=>setNavAction(null)} apiInspect={apiInspect} isMobile={isMobile}
+          apiSendMaint={apiSendMaint} apiResolveDegraded={apiResolveDegraded}/>}
         {pg==="issuance"&&<KitIssuance kits={kits} setKits={setKits} types={types} locs={locs} personnel={personnel} allC={comps} depts={depts}
           isAdmin={isAdmin} isSuper={isSuper} userRole={effectiveRole} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests} addLog={addLog}
           reservations={reservations} onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}}
-          apiCheckout={apiCheckout} apiReturn={apiReturn} onRefreshKits={refreshKits}/>}
+          apiCheckout={apiCheckout} apiReturn={apiReturn} onRefreshKits={refreshKits} apiSendMaint={apiSendMaint} apiResolveDegraded={apiResolveDegraded}/>}
         {pg==="analytics"&&canAccess({access:"admin",perm:"analytics"})&&<AnalyticsPage analytics={analytics} kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs}/>}
         {pg==="reports"&&canAccess({access:"admin",perm:"reports"})&&<ReportsPage kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs} logs={logs} analytics={analytics}/>}
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}

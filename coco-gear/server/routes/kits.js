@@ -507,6 +507,35 @@ router.put('/:id/serials', requireRole('admin'), validate(kitSerialUpdateSchema)
   }
 });
 
+// POST /:id/resolve-degraded - mark all non-GOOD critical components as GOOD
+router.post('/:id/resolve-degraded', authMiddleware, requireRole('lead'), async (req, res) => {
+  try {
+    const kit = await prisma.kit.findUnique({
+      where: { id: req.params.id },
+      include: { type: { include: { components: true } }, componentStatuses: true },
+    });
+    if (!kit) return res.status(404).json({ error: 'Kit not found' });
+
+    const criticalCompIds = new Set((kit.type?.components || []).filter(c => c.critical).map(c => c.componentId));
+    if (criticalCompIds.size === 0) return res.status(400).json({ error: 'No critical components defined' });
+
+    const degraded = (kit.componentStatuses || []).filter(cs => criticalCompIds.has(cs.componentId) && cs.status !== 'GOOD');
+    if (degraded.length === 0) return res.status(400).json({ error: 'Kit is not degraded' });
+
+    await prisma.kitComponentStatus.updateMany({
+      where: { kitId: kit.id, componentId: { in: [...criticalCompIds] }, status: { not: 'GOOD' } },
+      data: { status: 'GOOD' },
+    });
+
+    const updated = await prisma.kit.findUnique({ where: { id: kit.id }, include: KIT_INCLUDE });
+    await auditLog('resolve_degraded', 'kit', kit.id, req.user.id, { kitColor: kit.color, resolved: degraded.length });
+    res.json(serializeKit(updated));
+  } catch (err) {
+    console.error('Resolve degraded error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // PUT /:id/location - update kit location
 router.put('/:id/location', async (req, res) => {
   try {
