@@ -12,8 +12,9 @@ const STATUS_LABELS = { todo: 'To Do', 'in-progress': 'In Progress', blocked: 'B
 const STATUS_COLORS = { todo: T.mu, 'in-progress': T.bl, blocked: T.rd, done: T.gn };
 
 const emptyTask = () => ({ title: '', description: '', phase: 'pre-deployment', priority: 'medium', assignedToId: '', dueDate: '' });
+const emptyTplTask = () => ({ title: '', description: '', phase: 'pre-deployment', priority: 'medium' });
 
-function TripTasks({ tripId, tripPersonnel, isAdmin, editable, onTaskCountChange }) {
+function TripTasks({ tripId, tripPersonnel, isAdmin, isSuper, editable, onTaskCountChange }) {
   const [tasksByPhase, setTasksByPhase] = useState({ 'pre-deployment': [], 'deployment': [], 'post-deployment': [] });
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState([]);
@@ -27,6 +28,11 @@ function TripTasks({ tripId, tripPersonnel, isAdmin, editable, onTaskCountChange
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
+  // Template management state
+  const [tplCreateMd, setTplCreateMd] = useState(false);
+  const [tplForm, setTplForm] = useState({ name: '', description: '', tasks: [emptyTplTask()] });
+  const [editingTplId, setEditingTplId] = useState(null);
+  const [confirmDelTpl, setConfirmDelTpl] = useState(null);
 
   const allTasks = useMemo(() => PHASES.flatMap(p => tasksByPhase[p] || []), [tasksByPhase]);
   const totalTasks = allTasks.length;
@@ -161,6 +167,55 @@ function TripTasks({ tripId, tripPersonnel, isAdmin, editable, onTaskCountChange
   };
 
   const initials = (name) => name ? name.split(' ').map(n => n[0]).join('').slice(0, 2) : '?';
+
+  // ─── Template CRUD ───
+  const openCreateTemplate = () => {
+    setEditingTplId(null);
+    setTplForm({ name: '', description: '', tasks: [emptyTplTask()] });
+    setTplCreateMd(true);
+  };
+
+  const openEditTemplate = (tpl) => {
+    setEditingTplId(tpl.id);
+    setTplForm({
+      name: tpl.name,
+      description: tpl.description || '',
+      tasks: (tpl.tasks || []).length > 0
+        ? tpl.tasks.map(t => ({ title: t.title || '', description: t.description || '', phase: t.phase || 'pre-deployment', priority: t.priority || 'medium' }))
+        : [emptyTplTask()],
+    });
+    setTplCreateMd(true);
+  };
+
+  const saveTemplate = async () => {
+    if (!tplForm.name.trim()) return;
+    const validTasks = tplForm.tasks.filter(t => t.title.trim());
+    if (validTasks.length === 0) { alert('Add at least one task with a title'); return; }
+    const payload = {
+      name: tplForm.name.trim(),
+      description: tplForm.description.trim() || undefined,
+      tasks: validTasks.map((t, i) => ({ title: t.title.trim(), description: t.description?.trim() || undefined, phase: t.phase, priority: t.priority, sortOrder: i })),
+    };
+    try {
+      if (editingTplId) { await api.taskTemplates.update(editingTplId, payload); }
+      else { await api.taskTemplates.create(payload); }
+      setTplCreateMd(false);
+      await loadTemplates();
+    } catch (e) { alert(e.message); }
+  };
+
+  const deleteTemplate = async () => {
+    if (!confirmDelTpl) return;
+    try {
+      await api.taskTemplates.delete(confirmDelTpl);
+      setConfirmDelTpl(null);
+      await loadTemplates();
+    } catch (e) { alert(e.message); }
+  };
+
+  const addTplTask = () => setTplForm(p => ({ ...p, tasks: [...p.tasks, emptyTplTask()] }));
+  const removeTplTask = (i) => setTplForm(p => ({ ...p, tasks: p.tasks.filter((_, j) => j !== i) }));
+  const updateTplTask = (i, field, val) => setTplForm(p => ({ ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, [field]: val } : t) }));
 
   if (loading) return <div style={{ padding: 30, textAlign: 'center', color: T.dm, fontFamily: T.m, fontSize: 11 }}>Loading tasks...</div>;
 
@@ -329,10 +384,10 @@ function TripTasks({ tripId, tripPersonnel, isAdmin, editable, onTaskCountChange
       </ModalWrap>
 
       {/* Template Picker Modal */}
-      <ModalWrap open={tplMd} onClose={() => setTplMd(false)} title="Apply Task Template">
+      <ModalWrap open={tplMd} onClose={() => setTplMd(false)} title="Task Templates" wide>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {templates.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: T.dm, fontFamily: T.m, fontSize: 11 }}>
-            No templates available. Directors can create templates in the system settings.</div>}
+            No templates yet.{isAdmin ? ' Create one below to get started.' : ' Ask a manager or director to create templates.'}</div>}
           {templates.map(tpl => {
             const tplTasks = tpl.tasks || [];
             const byPhase = PHASES.reduce((a, p) => { a[p] = tplTasks.filter(t => t.phase === p).length; return a; }, {});
@@ -342,26 +397,82 @@ function TripTasks({ tripId, tripPersonnel, isAdmin, editable, onTaskCountChange
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: T.tx, fontFamily: T.u }}>{tpl.name}</div>
                   {tpl.description && <div style={{ fontSize: 9, color: T.dm, fontFamily: T.m, marginTop: 1 }}>{tpl.description}</div>}
-                  <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                  <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                     <Bg color={T.bl} bg={T.bl + '18'}>{tplTasks.length} tasks</Bg>
                     {PHASES.filter(p => byPhase[p] > 0).map(p =>
                       <Bg key={p} color={PHASE_COLORS[p]} bg={PHASE_COLORS[p] + '18'}>{byPhase[p]} {PHASE_LABELS[p].toLowerCase()}</Bg>)}
                   </div>
                 </div>
-                <Bt v="primary" sm onClick={() => applyTemplate(tpl.id)}>Apply</Bt>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  {isAdmin && <>
+                    <Bt sm onClick={() => openEditTemplate(tpl)}>Edit</Bt>
+                    <Bt v="danger" sm onClick={() => setConfirmDelTpl(tpl.id)}>Delete</Bt>
+                  </>}
+                  {editable && <Bt v="primary" sm onClick={() => applyTemplate(tpl.id)}>Apply to Trip</Bt>}
+                </div>
               </div>
             );
           })}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, borderTop: '1px solid ' + T.bd, paddingTop: 10 }}>
+            {isAdmin ? <Bt v="success" sm onClick={openCreateTemplate}>+ New Template</Bt> : <div />}
             <Bt onClick={() => setTplMd(false)}>Close</Bt>
           </div>
         </div>
       </ModalWrap>
 
-      {/* Delete confirmation */}
+      {/* Create/Edit Template Modal */}
+      <ModalWrap open={tplCreateMd} onClose={() => setTplCreateMd(false)} title={editingTplId ? 'Edit Template' : 'Create Template'} wide>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Fl label="Template Name"><In value={tplForm.name} onChange={e => setTplForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Standard Deployment Checklist" /></Fl>
+          <Fl label="Description"><Ta value={tplForm.description} onChange={e => setTplForm(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." rows={2} /></Fl>
+
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.tx, fontFamily: T.m, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+              Template Tasks ({tplForm.tasks.filter(t => t.title.trim()).length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {tplForm.tasks.map((t, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', padding: '8px 10px', borderRadius: 8,
+                  background: T.card, border: '1px solid ' + T.bd }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <In value={t.title} onChange={e => updateTplTask(i, 'title', e.target.value)} placeholder="Task title..."
+                      style={{ fontSize: 10, padding: '4px 6px' }} />
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <Sl options={PHASES.map(p => ({ v: p, l: PHASE_LABELS[p] }))} value={t.phase}
+                        onChange={e => updateTplTask(i, 'phase', e.target.value)} style={{ fontSize: 9, padding: '3px 5px', flex: 1 }} />
+                      <Sl options={Object.entries(PRIORITY_LABELS).map(([v, l]) => ({ v, l }))} value={t.priority}
+                        onChange={e => updateTplTask(i, 'priority', e.target.value)} style={{ fontSize: 9, padding: '3px 5px', flex: 1 }} />
+                    </div>
+                    <In value={t.description} onChange={e => updateTplTask(i, 'description', e.target.value)} placeholder="Description (optional)..."
+                      style={{ fontSize: 9, padding: '3px 6px' }} />
+                  </div>
+                  {tplForm.tasks.length > 1 && <button onClick={() => removeTplTask(i)}
+                    style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: T.rd, padding: '2px 4px', lineHeight: 1, marginTop: 2 }}
+                    title="Remove task">×</button>}
+                </div>
+              ))}
+            </div>
+            <Bt sm onClick={addTplTask} style={{ marginTop: 6 }}>+ Add Task</Bt>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid ' + T.bd, paddingTop: 12 }}>
+            <Bt onClick={() => setTplCreateMd(false)}>Cancel</Bt>
+            <Bt v="primary" onClick={saveTemplate} disabled={!tplForm.name.trim() || tplForm.tasks.filter(t => t.title.trim()).length === 0}>
+              {editingTplId ? 'Save Changes' : 'Create Template'}
+            </Bt>
+          </div>
+        </div>
+      </ModalWrap>
+
+      {/* Delete task confirmation */}
       <ConfirmDialog open={!!confirmDel} onClose={() => setConfirmDel(null)} onConfirm={deleteTask}
         title="Delete Task?" message="This will permanently delete this task. This cannot be undone."
         confirmLabel="Delete Task" confirmColor={T.rd} />
+
+      {/* Delete template confirmation */}
+      <ConfirmDialog open={!!confirmDelTpl} onClose={() => setConfirmDelTpl(null)} onConfirm={deleteTemplate}
+        title="Delete Template?" message="This will permanently delete this template. Existing tasks created from it will not be affected."
+        confirmLabel="Delete Template" confirmColor={T.rd} />
     </div>
   );
 }
