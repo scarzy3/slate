@@ -37,6 +37,13 @@ function TripPacking({ tripId, tripPersonnel, isAdmin, isSuper, editable, curUse
   // Print mode
   const [printMode, setPrintMode] = useState(null);
 
+  // Clear print mode after printing completes
+  useEffect(() => {
+    const onAfterPrint = () => setPrintMode(null);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => window.removeEventListener('afterprint', onAfterPrint);
+  }, []);
+
   const isUserOnTrip = useMemo(() => tripPersonnel.some(p => p.userId === curUserId), [tripPersonnel, curUserId]);
   const myTripRole = useMemo(() => {
     const p = tripPersonnel.find(p => p.userId === curUserId);
@@ -474,83 +481,145 @@ function TripPacking({ tripId, tripPersonnel, isAdmin, isSuper, editable, curUse
 
   // ─── PRINT VIEWS ───
   const PrintEquipment = () => (
-    <div className="print-only" style={{ padding: 20, fontFamily: 'Arial, sans-serif', color: '#000', background: '#fff' }}>
-      <h1 style={{ fontSize: 18, margin: '0 0 4px' }}>Equipment Packing List</h1>
-      <div style={{ fontSize: 11, color: '#666', marginBottom: 16 }}>Generated {new Date().toLocaleDateString()}</div>
+    <div className="print-only" style={{ padding: '24px 32px', fontFamily: "'Outfit', system-ui, sans-serif", color: '#111', background: '#fff' }}>
+      <div style={{ textAlign: 'center', marginBottom: 20, paddingBottom: 16, borderBottom: '2px solid #2563eb' }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: '#2563eb', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: 3, marginBottom: 6 }}>Equipment Packing List</div>
+        <h1 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 4px', color: '#0f0f23' }}>Equipment Manifest & Checklist</h1>
+        <div style={{ fontSize: 10, color: '#7a7a9a', fontFamily: "'IBM Plex Mono', monospace" }}>Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} | {equipment.summary.totalKits} kits from {equipment.summary.locationCount} locations</div>
+      </div>
       {equipment.byLocation.map(loc => (
-        <div key={loc.location.id} style={{ marginBottom: 16, pageBreakInside: 'avoid' }}>
-          <h3 style={{ fontSize: 13, borderBottom: '1px solid #ccc', paddingBottom: 4 }}>{loc.location.name} ({loc.location.shortCode}) — {loc.kits.length} kits</h3>
-          {loc.kits.map(kit => (
-            <div key={kit.id} style={{ marginLeft: 12, marginBottom: 8 }}>
-              <div style={{ fontSize: 11 }}><PrintCheckBox /><strong>{kit.color}</strong> — {kit.typeName}{kit.deptName ? ' [' + kit.deptName + ']' : ''}</div>
-              {kit.components.map(comp => (
-                <div key={comp.componentId} style={{ marginLeft: 24, fontSize: 9, color: '#444' }}>
-                  {comp.label}{comp.quantity > 1 ? ' ×' + comp.quantity : ''}{comp.serialNumbers.length > 0 ? ' (S/N: ' + comp.serialNumbers.join(', ') + ')' : ''} — {comp.status}
-                </div>
-              ))}
-            </div>
-          ))}
+        <div key={loc.location.id} style={{ marginBottom: 20, pageBreakInside: 'avoid' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid #d4d4de' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: 1 }}>{loc.location.name} ({loc.location.shortCode})</div>
+            <span style={{ fontSize: 9, color: '#7a7a9a', fontFamily: "'IBM Plex Mono', monospace" }}>{loc.kits.length} kits</span>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 4 }}>
+            <thead><tr>
+              <th style={{ width: 24, padding: '4px 6px', textAlign: 'center', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace" }}>✓</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Kit</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Type</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Dept</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Components</th>
+            </tr></thead>
+            <tbody>{loc.kits.map((kit, ki) => (
+              <tr key={kit.id} style={{ background: ki % 2 === 0 ? '#fff' : '#f8f8fc' }}>
+                <td style={{ padding: '5px 6px', borderBottom: '1px solid #eee', textAlign: 'center' }}><PrintCheckBox /></td>
+                <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee', fontWeight: 600 }}>{kit.color}</td>
+                <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee', color: '#4a4a6a' }}>{kit.typeName}</td>
+                <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee', color: '#7a7a9a', fontSize: 10 }}>{kit.deptName || '—'}</td>
+                <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee', fontSize: 9, color: '#4a4a6a', fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {kit.components.map(c => c.label + (c.quantity > 1 ? ' ×' + c.quantity : '')).join(', ')}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
         </div>
       ))}
       {equipment.tripItems.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <h3 style={{ fontSize: 13, borderBottom: '1px solid #ccc', paddingBottom: 4 }}>Additional Equipment</h3>
+        <div style={{ marginTop: 16, pageBreakInside: 'avoid' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#d97706', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid #d4d4de' }}>Additional Equipment</div>
           {equipment.tripItems.map(item => (
-            <div key={item.id} style={{ marginLeft: 12, fontSize: 11, marginBottom: 4 }}>
-              <PrintCheckBox />{item.name}{item.quantity > 1 ? ' ×' + item.quantity : ''}{item.notes ? ' — ' + item.notes : ''}
+            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', fontSize: 11 }}>
+              <PrintCheckBox /><span style={{ fontWeight: 600 }}>{item.name}</span>
+              {item.quantity > 1 && <span style={{ color: '#7a7a9a' }}>×{item.quantity}</span>}
+              {item.notes && <span style={{ color: '#7a7a9a', fontSize: 9, fontStyle: 'italic' }}>{item.notes}</span>}
             </div>
           ))}
         </div>
       )}
-      <div style={{ marginTop: 16, fontSize: 10, color: '#666', borderTop: '1px solid #ccc', paddingTop: 8 }}>
-        Summary: {equipment.summary.totalKits} kits — {Object.entries(equipment.summary.kitTypeBreakdown).map(([t, c]) => c + '× ' + t).join(', ')}
+      <div style={{ marginTop: 24, fontSize: 9, color: '#7a7a9a', borderTop: '1px solid #d4d4de', paddingTop: 8, fontFamily: "'IBM Plex Mono', monospace", textAlign: 'center' }}>
+        Summary: {equipment.summary.totalKits} kits — {Object.entries(equipment.summary.kitTypeBreakdown).map(([t, c]) => c + '× ' + t).join(', ')} | Generated by COCO Gear
       </div>
     </div>
   );
 
   const PrintPersonalRole = () => (
-    <div className="print-only" style={{ padding: 20, fontFamily: 'Arial, sans-serif', color: '#000', background: '#fff' }}>
-      <h1 style={{ fontSize: 18, margin: '0 0 4px' }}>Personal Packing List — Role Summary</h1>
-      <div style={{ fontSize: 11, color: '#666', marginBottom: 16 }}>Generated {new Date().toLocaleDateString()}</div>
+    <div className="print-only" style={{ padding: '24px 32px', fontFamily: "'Outfit', system-ui, sans-serif", color: '#111', background: '#fff' }}>
+      <div style={{ textAlign: 'center', marginBottom: 20, paddingBottom: 16, borderBottom: '2px solid #2563eb' }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: '#2563eb', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: 3, marginBottom: 6 }}>Personal Packing List</div>
+        <h1 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 4px', color: '#0f0f23' }}>Role Summary</h1>
+        <div style={{ fontSize: 10, color: '#7a7a9a', fontFamily: "'IBM Plex Mono', monospace" }}>Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+      </div>
       {(personal.byRole || []).map(roleGroup => (
-        <div key={roleGroup.role} style={{ marginBottom: 16, pageBreakInside: 'avoid' }}>
-          <h3 style={{ fontSize: 13, borderBottom: '1px solid #ccc', paddingBottom: 4 }}>{roleGroup.roleName} ({roleGroup.personnel.length} personnel)</h3>
-          {CATEGORIES.filter(cat => roleGroup.items.some(i => (i.category || 'general') === cat)).map(cat => (
-            <div key={cat} style={{ marginLeft: 12, marginBottom: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 2 }}>{CAT_LABELS[cat]}</div>
-              {roleGroup.items.filter(i => (i.category || 'general') === cat).map((item, idx) => (
-                <div key={idx} style={{ marginLeft: 12, fontSize: 10, marginBottom: 2 }}>
-                  <PrintCheckBox />{item.name}{item.quantity > 1 ? ' ×' + item.quantity : ''}{item.required ? ' *' : ''}{item.notes ? ' — ' + item.notes : ''}
-                </div>
-              ))}
-            </div>
-          ))}
+        <div key={roleGroup.role} style={{ marginBottom: 24, pageBreakInside: 'avoid' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, paddingBottom: 4, borderBottom: '1px solid #d4d4de' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#0f0f23', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: 1 }}>{roleGroup.roleName}</span>
+            <span style={{ fontSize: 9, color: '#7a7a9a', fontFamily: "'IBM Plex Mono', monospace" }}>{roleGroup.personnel.length} personnel</span>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 4 }}>
+            <thead><tr>
+              <th style={{ width: 24, padding: '4px 6px', textAlign: 'center', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace" }}>✓</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Item</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Category</th>
+              <th style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Qty</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Notes</th>
+            </tr></thead>
+            <tbody>{CATEGORIES.filter(cat => roleGroup.items.some(i => (i.category || 'general') === cat)).flatMap(cat =>
+              roleGroup.items.filter(i => (i.category || 'general') === cat).map((item, idx) => (
+                <tr key={cat + '-' + idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8f8fc' }}>
+                  <td style={{ padding: '4px 6px', borderBottom: '1px solid #eee', textAlign: 'center' }}><PrintCheckBox /></td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', fontWeight: 600 }}>
+                    {item.name}{item.required && <span style={{ color: '#dc2626', fontSize: 8, marginLeft: 3 }}>*</span>}
+                  </td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', fontSize: 9, color: '#7a7a9a' }}>{CAT_LABELS[cat]}</td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'center', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10 }}>{item.quantity}</td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', fontSize: 9, color: '#7a7a9a', fontStyle: 'italic' }}>{item.notes || ''}</td>
+                </tr>
+              ))
+            )}</tbody>
+          </table>
         </div>
       ))}
+      <div style={{ marginTop: 16, fontSize: 9, color: '#7a7a9a', borderTop: '1px solid #d4d4de', paddingTop: 8, fontFamily: "'IBM Plex Mono', monospace", textAlign: 'center' }}>
+        <span style={{ color: '#dc2626' }}>*</span> = Required item | Generated by COCO Gear
+      </div>
     </div>
   );
 
   const PrintPersonalIndividual = () => (
-    <div className="print-only" style={{ padding: 20, fontFamily: 'Arial, sans-serif', color: '#000', background: '#fff' }}>
-      <h1 style={{ fontSize: 18, margin: '0 0 4px' }}>Personal Packing Lists — Individual</h1>
-      <div style={{ fontSize: 11, color: '#666', marginBottom: 16 }}>Generated {new Date().toLocaleDateString()}</div>
+    <div className="print-only" style={{ padding: '24px 32px', fontFamily: "'Outfit', system-ui, sans-serif", color: '#111', background: '#fff' }}>
       {(personal.byPerson || []).map((person, pi) => (
-        <div key={person.user.id} style={{ marginBottom: 16, pageBreakBefore: pi > 0 ? 'always' : 'auto' }}>
-          <h3 style={{ fontSize: 13, borderBottom: '1px solid #ccc', paddingBottom: 4 }}>
-            {person.user.name}{person.user.title ? ' — ' + person.user.title : ''} ({ROLE_LABELS[person.user.tripRole] || person.user.tripRole})
-          </h3>
-          {CATEGORIES.filter(cat => person.items.some(i => (i.category || 'general') === cat)).map(cat => (
-            <div key={cat} style={{ marginLeft: 12, marginBottom: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 2 }}>{CAT_LABELS[cat]}</div>
-              {person.items.filter(i => (i.category || 'general') === cat).map((item, idx) => (
-                <div key={idx} style={{ marginLeft: 12, fontSize: 10, marginBottom: 2 }}>
-                  <PrintCheckBox />{item.name}{item.quantity > 1 ? ' ×' + item.quantity : ''}{item.required ? ' *' : ''}{item.notes ? ' — ' + item.notes : ''}
-                </div>
-              ))}
+        <div key={person.user.id} style={{ marginBottom: 20, pageBreakBefore: pi > 0 ? 'always' : 'auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 16, paddingBottom: 12, borderBottom: '2px solid #2563eb' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#2563eb', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: 3, marginBottom: 6 }}>Personal Packing Checklist</div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 4px', color: '#0f0f23' }}>
+              {person.user.name}
+            </h2>
+            <div style={{ fontSize: 11, color: '#4a4a6a' }}>
+              {person.user.title ? person.user.title + ' — ' : ''}{ROLE_LABELS[person.user.tripRole] || person.user.tripRole}
             </div>
-          ))}
+            <div style={{ fontSize: 9, color: '#7a7a9a', fontFamily: "'IBM Plex Mono', monospace", marginTop: 4 }}>Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead><tr>
+              <th style={{ width: 24, padding: '4px 6px', textAlign: 'center', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace" }}>✓</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Item</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Category</th>
+              <th style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Qty</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #d4d4de', background: '#f8f8fc', fontSize: 9, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>Notes</th>
+            </tr></thead>
+            <tbody>{CATEGORIES.filter(cat => person.items.some(i => (i.category || 'general') === cat)).flatMap(cat =>
+              person.items.filter(i => (i.category || 'general') === cat).map((item, idx) => (
+                <tr key={cat + '-' + idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8f8fc' }}>
+                  <td style={{ padding: '4px 6px', borderBottom: '1px solid #eee', textAlign: 'center' }}><PrintCheckBox /></td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', fontWeight: 600 }}>
+                    {item.name}{item.required && <span style={{ color: '#dc2626', fontSize: 8, marginLeft: 3 }}>*</span>}
+                  </td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', fontSize: 9, color: '#7a7a9a' }}>{CAT_LABELS[cat]}</td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'center', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10 }}>{item.quantity}</td>
+                  <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', fontSize: 9, color: '#7a7a9a', fontStyle: 'italic' }}>{item.notes || ''}</td>
+                </tr>
+              ))
+            )}</tbody>
+          </table>
+          <div style={{ marginTop: 12, fontSize: 9, color: '#7a7a9a', fontFamily: "'IBM Plex Mono', monospace", textAlign: 'right' }}>
+            {person.items.length} items total | <span style={{ color: '#dc2626' }}>*</span> = Required
+          </div>
         </div>
       ))}
+      <div style={{ marginTop: 16, fontSize: 9, color: '#7a7a9a', borderTop: '1px solid #d4d4de', paddingTop: 8, fontFamily: "'IBM Plex Mono', monospace", textAlign: 'center' }}>
+        Generated by COCO Gear
+      </div>
     </div>
   );
 
@@ -681,13 +750,18 @@ function TripPacking({ tripId, tripPersonnel, isAdmin, isSuper, editable, curUse
         title="Delete Template?" message="This will permanently delete this packing template."
         confirmLabel="Delete Template" confirmColor={T.rd} />
 
-      {/* Print views (hidden in screen, shown in print) */}
+      {/* Print views (hidden on screen, shown in print) */}
       <style>{`
         @media screen { .print-only { display: none !important; } }
         @media print {
-          .print-only { display: block !important; }
-          body > *:not(.print-only) { display: none !important; }
+          body * { visibility: hidden !important; }
+          .print-only, .print-only * { visibility: visible !important; }
+          .print-only {
+            position: fixed !important; top: 0; left: 0; width: 100%; z-index: 99999;
+            background: #fff !important; overflow: visible !important;
+          }
           nav, header, .no-print { display: none !important; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
         }
       `}</style>
       {printMode === 'equipment' && <PrintEquipment />}
