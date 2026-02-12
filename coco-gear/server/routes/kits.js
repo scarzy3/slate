@@ -85,13 +85,23 @@ function serializeKit(kit) {
     }
   }
 
-  // Compute degraded status: kit is degraded if any critical component is DAMAGED or MISSING
+  // Compute degraded status: kit is degraded if any critical component is DAMAGED, MISSING,
+  // or has no status record at all (e.g. component added to type after kit was created)
   let degraded = false;
-  if (criticalSet.size > 0 && kit.componentStatuses) {
-    for (const cs of kit.componentStatuses) {
+  if (criticalSet.size > 0) {
+    const statusCompIds = new Set((kit.componentStatuses || []).map(cs => cs.componentId));
+    for (const cs of (kit.componentStatuses || [])) {
       if (criticalSet.has(cs.componentId) && cs.status !== 'GOOD') {
         degraded = true;
         break;
+      }
+    }
+    if (!degraded) {
+      for (const cid of criticalSet) {
+        if (!statusCompIds.has(cid)) {
+          degraded = true;
+          break;
+        }
       }
     }
   }
@@ -324,11 +334,13 @@ router.post('/checkout', validate(checkoutSchema), async (req, res) => {
     if (kit.issuedToId) return res.status(409).json({ error: 'Kit already issued' });
     if (kit.maintenanceStatus) return res.status(409).json({ error: 'Kit in maintenance' });
 
-    // Check if kit is degraded (critical component damaged or missing)
+    // Check if kit is degraded (critical component damaged, missing, or has no status record)
     const criticalCompIds = new Set((kit.type?.components || []).filter(c => c.critical).map(c => c.componentId));
     if (criticalCompIds.size > 0) {
       const hasCriticalIssue = (kit.componentStatuses || []).some(cs => criticalCompIds.has(cs.componentId) && cs.status !== 'GOOD');
-      if (hasCriticalIssue) return res.status(409).json({ error: 'Kit is degraded — a critical component is damaged or missing' });
+      const statusCompIds = new Set((kit.componentStatuses || []).map(cs => cs.componentId));
+      const hasMissingRecord = [...criticalCompIds].some(cid => !statusCompIds.has(cid));
+      if (hasCriticalIssue || hasMissingRecord) return res.status(409).json({ error: 'Kit is degraded — a critical component is damaged or missing' });
     }
 
     const recipientId = personId || req.user.id;
@@ -516,19 +528,36 @@ router.post('/:id/resolve-degraded', authMiddleware, requireRole('lead'), async 
     });
     if (!kit) return res.status(404).json({ error: 'Kit not found' });
 
-    const criticalCompIds = new Set((kit.type?.components || []).filter(c => c.critical).map(c => c.componentId));
+    const criticalComps = (kit.type?.components || []).filter(c => c.critical);
+    const criticalCompIds = new Set(criticalComps.map(c => c.componentId));
     if (criticalCompIds.size === 0) return res.status(400).json({ error: 'No critical components defined' });
 
-    const degraded = (kit.componentStatuses || []).filter(cs => criticalCompIds.has(cs.componentId) && cs.status !== 'GOOD');
-    if (degraded.length === 0) return res.status(400).json({ error: 'Kit is not degraded' });
+    const statusCompIds = new Set((kit.componentStatuses || []).map(cs => cs.componentId));
+    const degradedStatuses = (kit.componentStatuses || []).filter(cs => criticalCompIds.has(cs.componentId) && cs.status !== 'GOOD');
+    const missingRecords = criticalComps.filter(c => !statusCompIds.has(c.componentId));
+    if (degradedStatuses.length === 0 && missingRecords.length === 0) return res.status(400).json({ error: 'Kit is not degraded' });
 
-    await prisma.kitComponentStatus.updateMany({
-      where: { kitId: kit.id, componentId: { in: [...criticalCompIds] }, status: { not: 'GOOD' } },
-      data: { status: 'GOOD' },
+    await prisma.$transaction(async (tx) => {
+      // Fix existing non-GOOD critical component statuses
+      if (degradedStatuses.length > 0) {
+        await tx.kitComponentStatus.updateMany({
+          where: { kitId: kit.id, componentId: { in: [...criticalCompIds] }, status: { not: 'GOOD' } },
+          data: { status: 'GOOD' },
+        });
+      }
+      // Create missing status records for critical components that have none
+      for (const comp of missingRecords) {
+        const qty = comp.quantity ?? 1;
+        for (let i = 0; i < qty; i++) {
+          await tx.kitComponentStatus.create({
+            data: { kitId: kit.id, componentId: comp.componentId, slotIndex: i, status: 'GOOD' },
+          });
+        }
+      }
     });
 
     const updated = await prisma.kit.findUnique({ where: { id: kit.id }, include: KIT_INCLUDE });
-    await auditLog('resolve_degraded', 'kit', kit.id, req.user.id, { kitColor: kit.color, resolved: degraded.length });
+    await auditLog('resolve_degraded', 'kit', kit.id, req.user.id, { kitColor: kit.color, resolved: degradedStatuses.length + missingRecords.length });
     res.json(serializeKit(updated));
   } catch (err) {
     console.error('Resolve degraded error:', err);
