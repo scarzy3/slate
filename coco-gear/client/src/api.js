@@ -150,6 +150,7 @@ export const trips = {
   removeBoat: (tripId, tripBoatId) => request(`/trips/${tripId}/boats/${tripBoatId}`, { method: 'DELETE' }),
   manifest: (id) => request(`/trips/${id}/manifest`),
   readiness: (id) => request(`/trips/${id}/readiness`),
+  aar: (id) => request(`/trips/${id}/aar`),
 };
 
 // ─── Trip Comms ───

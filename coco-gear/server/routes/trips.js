@@ -590,6 +590,394 @@ router.get('/:id/manifest', async (req, res) => {
   }
 });
 
+// ─── After-Action Report ───
+
+// GET /:id/aar - compile comprehensive after-action report data
+router.get('/:id/aar', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Load trip with all direct relations
+    const trip = await prisma.trip.findUnique({
+      where: { id },
+      include: {
+        lead: { select: { id: true, name: true, title: true } },
+        personnel: {
+          include: {
+            user: {
+              select: {
+                id: true, name: true, title: true, role: true, deptId: true,
+                department: { select: { id: true, name: true, color: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        boats: { include: { boat: true } },
+        notes: {
+          include: { author: { select: { id: true, name: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+        tasks: {
+          include: {
+            assignedTo: { select: { id: true, name: true } },
+            completedBy: { select: { id: true, name: true } },
+          },
+          orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+        },
+        commsEntries: {
+          include: { assignedTo: { select: { id: true, name: true, title: true } } },
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        },
+        kits: {
+          include: {
+            type: { select: { id: true, name: true } },
+            department: { select: { id: true, name: true, color: true } },
+            componentStatuses: {
+              include: { component: { select: { id: true, key: true, label: true, category: true } } },
+            },
+            serials: {
+              include: { component: { select: { id: true, key: true, label: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    // For completed trips, kits are unassigned — find them via reservations
+    let kitIds = trip.kits.map(k => k.id);
+    if (kitIds.length === 0) {
+      const tripReservations = await prisma.reservation.findMany({
+        where: { tripId: id },
+        select: { kitId: true },
+      });
+      kitIds = [...new Set(tripReservations.map(r => r.kitId))];
+    }
+
+    // Load kits if we found them through reservations
+    let allKits = trip.kits;
+    if (trip.kits.length === 0 && kitIds.length > 0) {
+      allKits = await prisma.kit.findMany({
+        where: { id: { in: kitIds } },
+        include: {
+          type: { select: { id: true, name: true } },
+          department: { select: { id: true, name: true, color: true } },
+          componentStatuses: {
+            include: { component: { select: { id: true, key: true, label: true, category: true } } },
+          },
+          serials: {
+            include: { component: { select: { id: true, key: true, label: true } } },
+          },
+        },
+      });
+    }
+
+    // Define trip date window with 7-day buffer for activity queries
+    const DAY_MS = 86400000;
+    const bufferDays = 7;
+    const windowStart = new Date(new Date(trip.startDate).getTime() - bufferDays * DAY_MS);
+    const windowEnd = new Date(new Date(trip.endDate).getTime() + bufferDays * DAY_MS);
+
+    // Query equipment issues, activity, and maintenance for trip kits
+    let damageReport = [];
+    let maintenanceEvents = [];
+    let checkouts = [];
+    let returns = [];
+    let inspections = [];
+
+    if (kitIds.length > 0) {
+      // Component statuses that aren't GOOD
+      const badStatuses = await prisma.kitComponentStatus.findMany({
+        where: { kitId: { in: kitIds }, status: { not: 'GOOD' } },
+        include: {
+          kit: { select: { id: true, color: true, type: { select: { name: true } } } },
+          component: { select: { id: true, label: true, category: true } },
+        },
+      });
+      damageReport = badStatuses.map(cs => ({
+        kitColor: cs.kit.color,
+        kitType: cs.kit.type?.name || 'Unknown',
+        componentLabel: cs.component?.label || 'Unknown',
+        status: cs.status,
+        discoveredDuring: 'inspection',
+      }));
+
+      // Maintenance events within trip window
+      const maintRecords = await prisma.maintenanceHistory.findMany({
+        where: {
+          kitId: { in: kitIds },
+          startDate: { gte: windowStart, lte: windowEnd },
+        },
+        include: {
+          kit: { select: { id: true, color: true, type: { select: { name: true } } } },
+          startedBy: { select: { name: true } },
+          completedBy: { select: { name: true } },
+        },
+        orderBy: { startDate: 'asc' },
+      });
+      maintenanceEvents = maintRecords.map(m => ({
+        kitColor: m.kit.color,
+        kitType: m.kit.type?.name || 'Unknown',
+        maintenanceType: m.type,
+        reason: m.reason || '',
+        startDate: m.startDate,
+        endDate: m.endDate,
+        startedBy: m.startedBy?.name || null,
+        completedBy: m.completedBy?.name || null,
+      }));
+
+      // Issue history (checkouts/returns) within trip window
+      const issueRecords = await prisma.issueHistory.findMany({
+        where: {
+          kitId: { in: kitIds },
+          issuedDate: { gte: windowStart, lte: windowEnd },
+        },
+        include: {
+          kit: { select: { id: true, color: true } },
+          person: { select: { id: true, name: true } },
+        },
+        orderBy: { issuedDate: 'asc' },
+      });
+      for (const issue of issueRecords) {
+        checkouts.push({
+          kitColor: issue.kit.color,
+          personName: issue.person?.name || 'Unknown',
+          date: issue.issuedDate,
+        });
+        if (issue.returnedDate) {
+          returns.push({
+            kitColor: issue.kit.color,
+            personName: issue.person?.name || 'Unknown',
+            date: issue.returnedDate,
+            notes: issue.returnNotes || '',
+          });
+        }
+      }
+
+      // Inspections within trip window
+      const inspRecords = await prisma.inspection.findMany({
+        where: {
+          kitId: { in: kitIds },
+          date: { gte: windowStart, lte: windowEnd },
+        },
+        include: {
+          kit: { select: { id: true, color: true } },
+          results: true,
+        },
+        orderBy: { date: 'asc' },
+      });
+      inspections = inspRecords.map(insp => ({
+        kitColor: insp.kit.color,
+        inspector: insp.inspector || 'Unknown',
+        date: insp.date,
+        issuesFound: insp.results.filter(r => r.status !== 'GOOD').length,
+      }));
+    }
+
+    // Compute duration
+    const durationMs = new Date(trip.endDate).getTime() - new Date(trip.startDate).getTime();
+    const durationDays = Math.max(1, Math.ceil(durationMs / DAY_MS));
+
+    // Build personnel by role
+    const roleNames = {
+      director: 'Director', manager: 'Manager', 'senior-spec': 'Senior Specialist',
+      specialist: 'Specialist', engineer: 'Engineer', lead: 'Lead', other: 'Other',
+    };
+    const personnelByRole = {};
+    for (const p of trip.personnel) {
+      const role = p.role || 'other';
+      if (!personnelByRole[role]) personnelByRole[role] = [];
+      personnelByRole[role].push({
+        name: p.user?.name || 'Unknown',
+        title: p.user?.title || '',
+        department: p.user?.department?.name || '',
+        tripRole: roleNames[role] || role,
+      });
+    }
+
+    // Build equipment data
+    const kitsByType = {};
+    const kitsData = allKits.map(k => {
+      const typeName = k.type?.name || 'Unknown';
+      kitsByType[typeName] = (kitsByType[typeName] || 0) + 1;
+
+      const serialsByComp = {};
+      for (const s of (k.serials || [])) {
+        if (s.serial) {
+          const label = s.component?.label || 'Unknown';
+          if (!serialsByComp[label]) serialsByComp[label] = [];
+          serialsByComp[label].push(s.serial);
+        }
+      }
+
+      const components = (k.componentStatuses || []).map(cs => ({
+        label: cs.component?.label || 'Unknown',
+        category: cs.component?.category || 'Other',
+        status: cs.status,
+      }));
+
+      return {
+        color: k.color,
+        typeName,
+        department: k.department?.name || '',
+        components,
+        serialNumbers: Object.entries(serialsByComp).map(([comp, sns]) => `${comp}: ${sns.join(', ')}`),
+      };
+    });
+
+    // Build tasks data
+    const taskPhases = {};
+    const incompleteTasks = [];
+    for (const t of trip.tasks) {
+      const phase = t.phase || 'pre-deployment';
+      if (!taskPhases[phase]) taskPhases[phase] = { tasks: [], completed: 0, total: 0 };
+      taskPhases[phase].total++;
+      if (t.status === 'done') taskPhases[phase].completed++;
+      taskPhases[phase].tasks.push({
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        assignedTo: t.assignedTo?.name || null,
+        completedAt: t.completedAt,
+      });
+      if (t.status !== 'done') {
+        incompleteTasks.push({
+          title: t.title,
+          phase,
+          priority: t.priority,
+          status: t.status,
+          assignedTo: t.assignedTo?.name || null,
+        });
+      }
+    }
+
+    // Build notes data
+    const notesByCategory = {};
+    const afterActionNotes = [];
+    for (const n of trip.notes) {
+      const cat = n.category || 'general';
+      const entry = {
+        content: n.content,
+        authorName: n.author?.name || 'Unknown',
+        createdAt: n.createdAt,
+      };
+      if (cat === 'after-action') {
+        afterActionNotes.push(entry);
+      }
+      if (!notesByCategory[cat]) notesByCategory[cat] = [];
+      notesByCategory[cat].push(entry);
+    }
+
+    // Get unique departments from personnel
+    const deptSet = new Set();
+    for (const p of trip.personnel) {
+      if (p.user?.department?.name) deptSet.add(p.user.department.name);
+    }
+
+    // Build response
+    const totalTasks = trip.tasks.length;
+    const completedTasks = trip.tasks.filter(t => t.status === 'done').length;
+
+    const response = {
+      trip: {
+        name: trip.name,
+        description: trip.description || '',
+        location: trip.location || '',
+        objectives: trip.objectives || '',
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        duration: durationDays,
+        status: trip.status,
+        lead: trip.lead ? { id: trip.lead.id, name: trip.lead.name, title: trip.lead.title || '' } : null,
+      },
+
+      personnel: {
+        total: trip.personnel.length,
+        departments: deptSet.size,
+        byRole: Object.entries(personnelByRole).map(([role, members]) => ({
+          role,
+          roleName: roleNames[role] || role,
+          members,
+        })),
+      },
+
+      equipment: {
+        totalKits: allKits.length,
+        byType: Object.entries(kitsByType).map(([typeName, count]) => ({ typeName, count })),
+        kits: kitsData,
+      },
+
+      usvs: trip.boats.map(tb => ({
+        name: tb.boat?.name || 'Unknown',
+        type: tb.boat?.type || '',
+        hullId: tb.boat?.hullId || '',
+        role: tb.role,
+        notes: tb.notes || '',
+      })),
+
+      tasks: {
+        total: totalTasks,
+        completed: completedTasks,
+        byPhase: Object.entries(taskPhases).map(([phase, data]) => ({
+          phase,
+          total: data.total,
+          completed: data.completed,
+          tasks: data.tasks,
+        })),
+        incomplete: incompleteTasks,
+      },
+
+      comms: trip.commsEntries.map(c => ({
+        type: c.type,
+        label: c.label,
+        value: c.value,
+        assignedTo: c.assignedTo?.name || null,
+        notes: c.notes || '',
+      })),
+
+      notes: {
+        byCategory: Object.entries(notesByCategory).map(([category, notes]) => ({
+          category,
+          notes,
+        })),
+        afterAction: afterActionNotes,
+      },
+
+      equipmentIssues: {
+        damageReport,
+        maintenanceEvents,
+      },
+
+      activity: {
+        checkouts,
+        returns,
+        inspections,
+      },
+
+      summary: {
+        totalPersonnel: trip.personnel.length,
+        totalKits: allKits.length,
+        totalUSVs: trip.boats.length,
+        daysOfOperation: durationDays,
+        tasksCompleted: completedTasks,
+        tasksTotal: totalTasks,
+        equipmentIssuesFound: damageReport.length,
+        maintenanceEventsCount: maintenanceEvents.length,
+        totalCheckouts: checkouts.length,
+        totalReturns: returns.length,
+        totalInspections: inspections.length,
+      },
+    };
+
+    return res.json(response);
+  } catch (err) {
+    console.error('Get trip AAR error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── Trip Readiness ───
 
 // GET /:id/readiness - compile readiness data for deployment gate
