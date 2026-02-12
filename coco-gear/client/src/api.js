@@ -32,7 +32,7 @@ export const auth = {
   signup: (data) => request('/auth/signup', { method: 'POST', body: data }),
   me: () => request('/auth/me'),
   updateProfile: (data) => request('/auth/me', { method: 'PUT', body: data }),
-  changePassword: (newPassword) => request('/auth/me/password', { method: 'PUT', body: { newPassword } }),
+  changePassword: (newPassword, currentPassword) => request('/auth/me/password', { method: 'PUT', body: { newPassword, currentPassword } }),
 };
 
 // ─── Kits ───

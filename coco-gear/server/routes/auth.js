@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import { Router } from 'express';
 import { generateToken, authMiddleware } from '../middleware/auth.js';
-import { validate, loginSchema, signupSchema } from '../utils/validation.js';
+import { validate, loginSchema, signupSchema, changePasswordSchema, profileUpdateSchema, validatePasswordStrength } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -174,14 +174,23 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /me - update own profile (name and title only)
-router.put('/me', authMiddleware, async (req, res) => {
+// PUT /me - update own profile (name, title, email)
+router.put('/me', authMiddleware, validate(profileUpdateSchema), async (req, res) => {
   try {
-    const { name, title } = req.body;
+    const { name, email, title } = req.validated;
 
     const data = {};
     if (name !== undefined) data.name = name;
     if (title !== undefined) data.title = title;
+    if (email !== undefined) {
+      const normalizedEmail = email.toLowerCase();
+      // Check uniqueness if changing email
+      const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (existing && existing.id !== req.user.id) {
+        return res.status(409).json({ error: 'That email address is already in use' });
+      }
+      data.email = normalizedEmail;
+    }
 
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
@@ -209,15 +218,33 @@ router.put('/me', authMiddleware, async (req, res) => {
 // PUT /me/password - change own password
 router.put('/me/password', authMiddleware, async (req, res) => {
   try {
-    const { newPassword } = req.body;
+    const { currentPassword, newPassword } = req.body;
 
-    if (!newPassword || newPassword.length < 1) {
+    // Validate new password strength
+    if (!newPassword) {
       return res.status(400).json({ error: 'New password is required' });
     }
+    const pwErrors = validatePasswordStrength(newPassword);
+    if (pwErrors.length > 0) {
+      return res.status(400).json({ error: 'Password does not meet requirements', details: pwErrors });
+    }
 
-    const hashed = await bcrypt.hash(newPassword, 10);
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
 
-    const user = await prisma.user.update({
+    // If user is changing password voluntarily (not forced), require current password
+    if (!user.mustChangePassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'Current password is required' });
+      }
+      const valid = await bcrypt.compare(currentPassword, user.pin);
+      if (!valid) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+    }
+
+    const hashed = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+    await prisma.user.update({
       where: { id: req.user.id },
       data: { pin: hashed, mustChangePassword: false },
     });
