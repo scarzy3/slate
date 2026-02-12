@@ -17,6 +17,7 @@ function QRScanner({onScan,onClose}){
         const useNative='BarcodeDetector' in window;
         const detector=useNative?new BarcodeDetector({formats:['qr_code']}):null;
         const canvas=canvasRef.current;const ctx=canvas?canvas.getContext('2d',{willReadFrequently:true}):null;
+        let invertFrame=false;
         const scan=async()=>{
           if(stopped||!vidRef.current)return;
           try{
@@ -24,18 +25,21 @@ function QRScanner({onScan,onClose}){
               const codes=await detector.detect(vidRef.current);
               if(codes.length>0){onScan(codes[0].rawValue);return}
             }else if(ctx&&vidRef.current.videoWidth){
-              canvas.width=vidRef.current.videoWidth;canvas.height=vidRef.current.videoHeight;
-              ctx.drawImage(vidRef.current,0,0);
-              const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
-              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:"attemptBoth"});
+              const vw=vidRef.current.videoWidth,vh=vidRef.current.videoHeight;
+              const scale=Math.min(1,480/vw);const sw=Math.round(vw*scale),sh=Math.round(vh*scale);
+              canvas.width=sw;canvas.height=sh;
+              ctx.drawImage(vidRef.current,0,0,sw,sh);
+              const imgData=ctx.getImageData(0,0,sw,sh);
+              const mode=invertFrame?"onlyInvert":"dontInvert";invertFrame=!invertFrame;
+              const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:mode});
               if(code){onScan(code.data);return}
             }
           }catch(e){}
-          animId=requestAnimationFrame(scan)};
+          animId=setTimeout(scan,150)};
         scan();
       }catch(e){setErr("Camera access denied. Use manual entry.");setActive(false)}};
     start();
-    return()=>{stopped=true;if(animId)cancelAnimationFrame(animId);
+    return()=>{stopped=true;if(animId)clearTimeout(animId);
       if(streamRef.current)streamRef.current.getTracks().forEach(t=>t.stop())};
   },[active]);
   const go=()=>{if(manual.trim())onScan(manual.trim())};
