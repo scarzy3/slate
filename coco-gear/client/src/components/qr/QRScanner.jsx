@@ -7,6 +7,9 @@ import Bt from '../ui/Bt.jsx';
 function QRScanner({onScan,onClose}){
   const vidRef=useRef(null);const canvasRef=useRef(null);const streamRef=useRef(null);
   const[err,setErr]=useState("");const[manual,setManual]=useState("");const[active,setActive]=useState(true);
+  const[torch,setTorch]=useState(false);const[hasTorch,setHasTorch]=useState(false);
+  const toggleTorch=()=>{const track=streamRef.current?.getVideoTracks()[0];
+    if(track){const next=!torch;track.applyConstraints({advanced:[{torch:next}]}).catch(()=>{});setTorch(next)}};
   useEffect(()=>{
     if(!active)return;let animId=null;let stopped=false;
     const start=async()=>{
@@ -16,6 +19,8 @@ function QRScanner({onScan,onClose}){
           focusMode:{ideal:'continuous'},focusDistance:{ideal:0}
         }});
         streamRef.current=stream;
+        const track=stream.getVideoTracks()[0];
+        if(track?.getCapabilities?.()?.torch)setHasTorch(true);
         if(vidRef.current){vidRef.current.srcObject=stream;await vidRef.current.play()}
         const useNative='BarcodeDetector' in window;
         const detector=useNative?new BarcodeDetector({formats:['qr_code']}):null;
@@ -33,7 +38,9 @@ function QRScanner({onScan,onClose}){
               const cx=Math.round((vw-cw)/2),cy=Math.round((vh-ch)/2);
               const scale=Math.min(1,640/cw);const sw=Math.round(cw*scale),sh=Math.round(ch*scale);
               canvas.width=sw;canvas.height=sh;
+              ctx.filter='contrast(1.5)';
               ctx.drawImage(vidRef.current,cx,cy,cw,ch,0,0,sw,sh);
+              ctx.filter='none';
               const imgData=ctx.getImageData(0,0,sw,sh);
               const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:"dontInvert"});
               if(code){onScan(code.data);return}
@@ -53,6 +60,10 @@ function QRScanner({onScan,onClose}){
       <canvas ref={canvasRef} style={{display:"none"}}/>
       <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
         <div style={{width:"55%",height:"55%",border:"2px solid rgba(96,165,250,.6)",borderRadius:12}}/></div>
+      {hasTorch&&<button onClick={toggleTorch} style={{position:"absolute",top:10,right:10,width:36,height:36,
+        borderRadius:"50%",border:"none",background:torch?"rgba(251,191,36,.9)":"rgba(255,255,255,.2)",
+        color:torch?"#000":"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}
+        aria-label="Toggle flashlight">{torch?"☀":"☀"}</button>}
       <div style={{position:"absolute",bottom:10,left:0,right:0,textAlign:"center",fontSize:10,color:"rgba(255,255,255,.7)",fontFamily:T.m}}>
         Point camera at QR code</div></div>}
     {err&&<div style={{padding:12,borderRadius:8,background:"rgba(251,191,36,.04)",border:"1px solid rgba(251,191,36,.15)",
