@@ -172,6 +172,10 @@ export const audit = {
     const q = new URLSearchParams(params).toString();
     return request(`/audit${q ? '?' + q : ''}`);
   },
+  stats: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/audit/stats${q ? '?' + q : ''}`);
+  },
 };
 
 // ─── Settings ───
