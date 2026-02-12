@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { T, CM } from '../theme/theme.js';
 import { fmtDate, SYS_ROLE_LABELS, sysRoleColor } from '../theme/helpers.js';
-import { Sw, Bg, Bt, Fl, In, Ta, Sl, SH, Tabs, ModalWrap, ConfirmDialog, DeptBg } from '../components/ui/index.js';
+import { Sw, Bg, Bt, Fl, In, Ta, Sl, SH, Tabs, ModalWrap, ConfirmDialog, DeptBg, ProgressBar } from '../components/ui/index.js';
 import api from '../api.js';
+import TripTasks from './TripTasks.jsx';
 
 function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,isSuper,curUserId,settings,onRefreshTrips,onRefreshKits,onRefreshPersonnel,onRefreshBoats,onRefreshReservations}){
   const[md,setMd]=useState(null);
@@ -14,6 +15,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const[editRole,setEditRole]=useState(null);const[confirmDel,setConfirmDel]=useState(null);
   const[search,setSearch]=useState("");
   const[addBoatMd,setAddBoatMd]=useState(false);const[addBoatIds,setAddBoatIds]=useState([]);const[addBoatRole,setAddBoatRole]=useState("primary");
+  const[taskDone,setTaskDone]=useState(0);const[taskTotal,setTaskTotal]=useState(0);
   const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}):"";
   const fmtDT=d=>d?new Date(d).toLocaleString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
@@ -102,6 +104,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
             <Bg color={T.tl} bg="rgba(45,212,191,.1)">{t.personnelCount||t.personnel?.length||0} personnel</Bg>
             {t.boatCount>0&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">{t.boatCount} USV{t.boatCount!==1?"s":""}</Bg>}
             {t.reservationCount>0&&<Bg color={T.pu} bg="rgba(168,85,247,.1)">{t.reservationCount} reservations</Bg>}
+            {t.taskCount>0&&<Bg color={t.taskDone===t.taskCount?T.gn:T.or} bg={(t.taskDone===t.taskCount?T.gn:T.or)+"10"}>{t.taskDone}/{t.taskCount} tasks</Bg>}
             {t.kits.length>0&&<div style={{display:"flex",gap:2,alignItems:"center",marginLeft:4}}>
               {t.kits.slice(0,5).map(k=><div key={k.id} style={{width:14,height:14,borderRadius:7,background:CM[k.color]||"#888",border:"1px solid rgba(0,0,0,.2)"}} title={k.color}/>)}
               {t.kits.length>5&&<span style={{fontSize:8,color:T.dm}}>+{t.kits.length-5}</span>}</div>}</div></div>)})}</div>
@@ -158,7 +161,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
 
     {/* Tabs */}
     <Tabs tabs={[{id:"overview",l:"Overview"},{id:"personnel",l:"Personnel ("+tripPers.length+")"},{id:"equipment",l:"Equipment ("+tripKits.length+")"},
-      {id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
+      {id:"tasks",l:"Tasks"+(taskTotal>0?" ("+taskDone+"/"+taskTotal+")":"")},{id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
 
     {/* ── OVERVIEW TAB ── */}
     {detailTab==="overview"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -199,6 +202,26 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
                   <div style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k.color} <span style={{color:T.dm}}>({ty?.name})</span></div>
                   {holder&&<div style={{fontSize:8,color:T.am,fontFamily:T.m}}>→ {holder.name}</div>}</div></div>)})}
             {tripKits.length>6&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,textAlign:"center"}}>+{tripKits.length-6} more kits</div>}</div>}</div>
+
+      {/* Tasks summary */}
+      {(()=>{const tasks=at.tasks||[];const total=tasks.length;const done=tasks.filter(t=>t.status==="done").length;
+        const blocked=tasks.filter(t=>t.status==="blocked").length;
+        const overdue=tasks.filter(t=>t.dueDate&&t.status!=="done"&&new Date(t.dueDate)<new Date()).length;
+        const prePh=tasks.filter(t=>t.phase==="pre-deployment");const depPh=tasks.filter(t=>t.phase==="deployment");const postPh=tasks.filter(t=>t.phase==="post-deployment");
+        return(<div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:T.tx,fontFamily:T.u}}>Tasks</div>
+            <Bt v="ghost" sm onClick={()=>setDetailTab("tasks")}>View all →</Bt></div>
+          {total===0?<div style={{fontSize:10,color:T.dm,fontFamily:T.m,textAlign:"center",padding:10}}>No tasks defined</div>:
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <div style={{flex:1}}><ProgressBar value={done} max={Math.max(total,1)} color={done===total?T.gn:T.bl} height={4}/></div>
+                <span style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m}}>{done}/{total}</span></div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {[["Pre",prePh,T.bl],["Deploy",depPh,T.gn],["Post",postPh,T.am]].map(([l,ph,c])=>ph.length>0&&
+                  <Bg key={l} color={c} bg={c+"18"}>{l}: {ph.filter(t=>t.status==="done").length}/{ph.length}</Bg>)}
+                {blocked>0&&<Bg color={T.rd} bg={T.rd+"18"}>{blocked} blocked</Bg>}
+                {overdue>0&&<Bg color={T.rd} bg={T.rd+"18"}>{overdue} overdue</Bg>}</div></div>}</div>)})()}
 
       {/* USVs preview */}
       <div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
@@ -298,6 +321,10 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
                     <div style={{fontSize:8,color:T.dm,fontFamily:T.m}}>{fmtD(r.startDate)} → {fmtD(r.endDate)}</div></div>
                   <Bg color={r.status==="confirmed"?T.gn:r.status==="pending"?T.or:T.rd} bg={(r.status==="confirmed"?T.gn:r.status==="pending"?T.or:T.rd)+"18"}>{r.status}</Bg></div>)})}</div></div>}
         </div>}</div>}
+
+    {/* ── TASKS TAB ── */}
+    {detailTab==="tasks"&&<TripTasks tripId={at.id} tripPersonnel={tripPers} isAdmin={isAdmin} editable={editable}
+      onTaskCountChange={(done,total)=>{setTaskDone(done);setTaskTotal(total)}}/>}
 
     {/* ── USVs TAB ── */}
     {detailTab==="boats"&&<div>

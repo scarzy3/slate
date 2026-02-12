@@ -41,7 +41,22 @@ const tripIncludes = {
     },
     orderBy: { createdAt: 'desc' },
   },
-  _count: { select: { reservations: true, personnel: true, boats: true } },
+  tasks: {
+    select: {
+      id: true,
+      title: true,
+      phase: true,
+      priority: true,
+      status: true,
+      sortOrder: true,
+      dueDate: true,
+      completedAt: true,
+      assignedTo: { select: { id: true, name: true } },
+      completedBy: { select: { id: true, name: true } },
+    },
+    orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+  },
+  _count: { select: { reservations: true, personnel: true, boats: true, tasks: true } },
 };
 
 // GET / - list all trips with kit counts
@@ -70,6 +85,25 @@ router.get('/:id', async (req, res) => {
       where: { id: req.params.id },
       include: {
         ...tripIncludes,
+        tasks: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            assignedToId: true,
+            phase: true,
+            priority: true,
+            status: true,
+            dueDate: true,
+            completedAt: true,
+            completedById: true,
+            sortOrder: true,
+            createdAt: true,
+            assignedTo: { select: { id: true, name: true } },
+            completedBy: { select: { id: true, name: true } },
+          },
+          orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+        },
         reservations: {
           include: {
             kit: { select: { id: true, color: true, type: { select: { name: true } } } },
