@@ -125,8 +125,8 @@ router.post('/', requirePerm('trips'), validate(tripSchema), async (req, res) =>
   try {
     const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus } = req.validated;
 
-    if (new Date(startDate) >= new Date(endDate)) {
-      return res.status(400).json({ error: 'Start date must be before end date' });
+    if (new Date(startDate) > new Date(endDate)) {
+      return res.status(400).json({ error: 'Start date must be before or equal to end date' });
     }
 
     const trip = await prisma.trip.create({
@@ -242,14 +242,30 @@ router.post('/:id/kits', requirePerm('trips'), async (req, res) => {
       return res.status(409).json({ error: 'Cannot assign kits to a ' + trip.status + ' trip' });
     }
 
-    await prisma.kit.updateMany({
-      where: { id: { in: kitIds } },
-      data: { tripId: id },
+    // Deduplicate kit IDs and filter out kits already assigned to this trip
+    const uniqueKitIds = [...new Set(kitIds)];
+    const alreadyAssigned = await prisma.kit.findMany({
+      where: { id: { in: uniqueKitIds }, tripId: id },
+      select: { id: true },
     });
+    const alreadyAssignedIds = new Set(alreadyAssigned.map(k => k.id));
+    const newKitIds = uniqueKitIds.filter(kid => !alreadyAssignedIds.has(kid));
 
-    // Auto-create reservations for the trip date range
-    if (autoReserve) {
-      for (const kitId of kitIds) {
+    if (newKitIds.length > 0) {
+      await prisma.kit.updateMany({
+        where: { id: { in: newKitIds } },
+        data: { tripId: id },
+      });
+    }
+
+    // Auto-create reservations for the trip date range (only for newly assigned kits)
+    if (autoReserve && newKitIds.length > 0) {
+      for (const kitId of newKitIds) {
+        // Check for existing reservation to avoid duplicates
+        const existing = await prisma.reservation.count({
+          where: { kitId, tripId: id, status: { in: ['confirmed', 'pending'] } },
+        });
+        if (existing > 0) continue;
         try {
           await prisma.reservation.create({
             data: {
