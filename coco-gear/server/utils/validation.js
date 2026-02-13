@@ -178,6 +178,8 @@ export const tripSchema = z.object({
   startDate: z.string().refine(d => !isNaN(Date.parse(d))),
   endDate: z.string().refine(d => !isNaN(Date.parse(d))),
   status: z.enum(['planning', 'active', 'completed', 'cancelled']).optional().default('planning'),
+  restricted: z.boolean().optional().default(false),
+  classification: z.string().max(100).nullable().optional().default(null),
 });
 
 export const tripPersonnelSchema = z.object({

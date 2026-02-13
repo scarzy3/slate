@@ -98,12 +98,39 @@ packingTemplateRouter.delete('/:id', requirePerm('trips'), async (req, res) => {
   }
 });
 
+const PRIVILEGED_ROLES = ['developer', 'director', 'super', 'admin', 'engineer'];
+
+function canAccessTrip(trip, userId, userRole) {
+  if (!trip.restricted) return true;
+  if (PRIVILEGED_ROLES.includes(userRole)) return true;
+  if (trip.leadId === userId) return true;
+  if (trip.personnel?.some(p => p.userId === userId)) return true;
+  return false;
+}
+
+async function requireTripAccess(req, res, next) {
+  try {
+    const tripId = req.params.tripId || req.params.id;
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { personnel: { select: { userId: true } } },
+    });
+    if (!trip || !canAccessTrip(trip, req.user.id, req.user.role)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    req.trip = trip;
+    next();
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 // ─── Trip Packing Routes (mounted at /api/trips) ───
 export const packingRouter = Router();
 packingRouter.use(authMiddleware);
 
 // GET /:tripId/packing - compile and return full packing list
-packingRouter.get('/:tripId/packing', async (req, res) => {
+packingRouter.get('/:tripId/packing', requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
 
@@ -355,7 +382,7 @@ packingRouter.get('/:tripId/packing', async (req, res) => {
 });
 
 // POST /:tripId/packing/items - add trip-specific item(s)
-packingRouter.post('/:tripId/packing/items', requirePerm('trips'), async (req, res) => {
+packingRouter.post('/:tripId/packing/items', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
     const { tier, scope, category, name, quantity, notes, required, sortOrder } = req.body;
@@ -390,7 +417,7 @@ packingRouter.post('/:tripId/packing/items', requirePerm('trips'), async (req, r
 });
 
 // PUT /:tripId/packing/items/:id - update a trip packing item
-packingRouter.put('/:tripId/packing/items/:id', requirePerm('trips'), async (req, res) => {
+packingRouter.put('/:tripId/packing/items/:id', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId, id } = req.params;
     const { name, quantity, notes, required, category, scope, sortOrder } = req.body;
@@ -419,7 +446,7 @@ packingRouter.put('/:tripId/packing/items/:id', requirePerm('trips'), async (req
 });
 
 // DELETE /:tripId/packing/items/:id - delete a trip packing item
-packingRouter.delete('/:tripId/packing/items/:id', requirePerm('trips'), async (req, res) => {
+packingRouter.delete('/:tripId/packing/items/:id', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId, id } = req.params;
 
@@ -438,7 +465,7 @@ packingRouter.delete('/:tripId/packing/items/:id', requirePerm('trips'), async (
 });
 
 // POST /:tripId/packing/items/bulk - bulk add items
-packingRouter.post('/:tripId/packing/items/bulk', requirePerm('trips'), async (req, res) => {
+packingRouter.post('/:tripId/packing/items/bulk', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
     const { items } = req.body;
@@ -478,7 +505,7 @@ packingRouter.post('/:tripId/packing/items/bulk', requirePerm('trips'), async (r
 });
 
 // PUT /:tripId/packing/check - toggle check state for current user
-packingRouter.put('/:tripId/packing/check', async (req, res) => {
+packingRouter.put('/:tripId/packing/check', requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
     const { itemKey, checked } = req.body;
@@ -519,7 +546,7 @@ packingRouter.put('/:tripId/packing/check', async (req, res) => {
 });
 
 // GET /:tripId/packing/my-checks - get current user's check states
-packingRouter.get('/:tripId/packing/my-checks', async (req, res) => {
+packingRouter.get('/:tripId/packing/my-checks', requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
 

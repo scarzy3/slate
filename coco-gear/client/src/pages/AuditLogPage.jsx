@@ -97,7 +97,7 @@ function resolveDetailValue(key,val,refs){
   if(key==='deptId'&&refs.depts){const d=refs.depts.find(x=>x.id===val);if(d)return d.name}
   if((key==='recipientId'||key==='personId'||key==='inspector')&&refs.personnel){const p=refs.personnel.find(x=>x.id===val);if(p)return p.name}
   if(key==='kitId'&&refs.kits){const k=refs.kits.find(x=>x.id===val);if(k)return 'Kit '+k.color}
-  if(key==='tripId'&&refs.trips){const t=refs.trips.find(x=>x.id===val);if(t)return t.name}
+  if(key==='tripId'&&refs.trips){const t=refs.trips.find(x=>x.id===val);if(t)return t.name;return 'Restricted trip'}
   if(key==='boatId'&&refs.boats){const b=refs.boats.find(x=>x.id===val);if(b)return b.name}
   if(key==='from'||key==='to'){
     if(refs.locs){const l=refs.locs.find(x=>x.id===val);if(l)return l.name}
@@ -117,7 +117,7 @@ function resolveTargetName(log,refs){
   if(t==='consumable'&&refs.consumables){const c=refs.consumables.find(x=>x.id===log.targetId);if(c)return c.name}
   if((t==='user'||t==='personnel')&&refs.personnel){const p=refs.personnel.find(x=>x.id===log.targetId);if(p)return p.name}
   if(t==='reservation'&&refs.reservations){const r=refs.reservations.find(x=>x.id===log.targetId);if(r){const k=refs.kits?.find(x=>x.id===r.kitId);return k?'Reservation for Kit '+k.color:'Reservation'}}
-  if(t==='trip'&&refs.trips){const tr=refs.trips.find(x=>x.id===log.targetId);if(tr)return tr.name}
+  if(t==='trip'&&refs.trips){const tr=refs.trips.find(x=>x.id===log.targetId);if(tr)return tr.name;return 'Restricted trip'}
   if(t==='component'&&refs.comps){const c=refs.comps.find(x=>x.id===log.targetId);if(c)return c.label}
   if(t==='location'&&refs.locs){const l=refs.locs.find(x=>x.id===log.targetId);if(l)return l.name}
   if(t==='department'&&refs.depts){const d=refs.depts.find(x=>x.id===log.targetId);if(d)return d.name}

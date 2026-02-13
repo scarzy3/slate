@@ -15,7 +15,7 @@ function ReservationsPage({reservations,setReservations,kits,personnel,trips,cur
     return reservations.some(r=>r.id!==excludeId&&r.kitId===kitId&&r.status!=="cancelled"&&
       new Date(r.startDate)<=new Date(end)&&new Date(r.endDate)>=new Date(start))};
 
-  const activeTrips=(trips||[]).filter(t=>t.status==="planning"||t.status==="active");
+  const activeTrips=(trips||[]).filter(t=>(t.status==="planning"||t.status==="active"));
   const createRes=async()=>{
     if(checkConflict(fm.kitId,fm.startDate,fm.endDate)){alert("Conflict with existing reservation");return}
     try{await api.reservations.create({kitId:fm.kitId,tripId:fm.tripId||null,startDate:fm.startDate,endDate:fm.endDate,purpose:fm.purpose});
@@ -71,7 +71,7 @@ function ReservationsPage({reservations,setReservations,kits,personnel,trips,cur
             const dateStr=`${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
             const isToday=dateStr===today;const isSelected=day===selectedDay;
             const dayRes=getResForDay(day);const hasRes=dayRes.length>0;
-            const resColors=dayRes.map(r=>{const k=kits.find(x=>x.id===r.kitId);return CM[k?.color]||"#888"});
+            const resColors=dayRes.map(r=>{if(r.tripRestricted)return "#555";const k=kits.find(x=>x.id===r.kitId);return CM[k?.color]||"#888"});
             return(<button key={i} onClick={()=>setSelectedDay(day===selectedDay?null:day)} style={{all:"unset",cursor:"pointer",
               aspectRatio:"1",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
               background:isSelected?"rgba(96,165,250,.15)":isToday?"rgba(45,212,191,.08)":"rgba(255,255,255,.02)",
@@ -97,10 +97,11 @@ function ReservationsPage({reservations,setReservations,kits,personnel,trips,cur
                   <span style={{fontSize:12,fontWeight:600,color:T.tx,fontFamily:T.u}}>Kit {k?.color}</span>
                   {r.status==="pending"&&<Bg color={T.or} bg="rgba(251,146,60,.1)">Pending</Bg>}
                   {isMine&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">Mine</Bg>}</div>
-                <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{p?.name}</div>
+                <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>{r.tripRestricted?<span style={{color:T.dm,fontStyle:"italic"}}>Restricted</span>:p?.name}</div>
                 <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:4}}>{r.startDate} → {r.endDate}</div>
-                {r.tripName&&<div style={{fontSize:9,color:T.pu,fontFamily:T.m,marginTop:3}}>▸ {r.tripName}</div>}
-                {r.purpose&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,fontStyle:"italic",marginTop:4}}>{r.purpose}</div>}
+                {r.tripName&&<div style={{fontSize:9,color:r.tripRestricted?T.dm:T.pu,fontFamily:T.m,marginTop:3,fontStyle:r.tripRestricted?"italic":"normal"}}>{r.tripRestricted?"&#128274; Restricted":"▸ "+r.tripName}</div>}
+                {r.purpose&&!r.tripRestricted&&<div style={{fontSize:10,color:T.mu,fontFamily:T.m,fontStyle:"italic",marginTop:4}}>{r.purpose}</div>}
+                {r.tripRestricted&&<div style={{fontSize:10,color:T.dm,fontFamily:T.m,fontStyle:"italic",marginTop:4}}>Restricted</div>}
                 {(isMine||isAdmin)&&<div style={{display:"flex",gap:4,marginTop:8}}>
                   {isAdmin&&r.status==="pending"&&<Bt v="success" sm onClick={()=>approveRes(r.id)}>Approve</Bt>}
                   <Bt v="danger" sm onClick={()=>deleteRes(r.id)}>Delete</Bt></div>}</div>)})}

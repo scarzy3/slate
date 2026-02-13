@@ -24,7 +24,7 @@ function MyKitsWidget({ kits, types, locs, curUserId, onFilterKits }) {
               </div>
               <Bg color={dOut > 14 ? T.rd : dOut > 7 ? T.am : T.gn} bg={(dOut > 14 ? T.rd : dOut > 7 ? T.am : T.gn) + "18"}>{dOut}d</Bg>
             </div>
-            {k._trip && <div style={{ fontSize: 9, color: T.ind, fontFamily: T.m }}>▸ Trip: {k._trip.name}</div>}
+            {k._trip && <div style={{ fontSize: 9, color: k._tripRestricted ? T.dm : T.ind, fontFamily: T.m, fontStyle: k._tripRestricted ? "italic" : "normal" }}>{k._tripRestricted ? "\u{1F512} Restricted" : "\u25B8 Trip: " + k._trip.name}</div>}
           </div>
         );
       })}

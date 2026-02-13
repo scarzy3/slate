@@ -223,17 +223,19 @@ model Kit {
 
 // ─── Trips / Missions ───
 model Trip {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  location    String?
-  objectives  String?
-  leadId      String?
-  startDate   DateTime
-  endDate     DateTime
-  status      String   @default("planning") // planning | active | completed | cancelled
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  location       String?
+  objectives     String?
+  leadId         String?
+  startDate      DateTime
+  endDate        DateTime
+  status         String   @default("planning") // planning | active | completed | cancelled
+  restricted     Boolean  @default(false)       // if true, only assigned personnel + admins can see trip details
+  classification String?                         // optional label: e.g. "OPSEC", "Restricted", "Need-to-Know"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   lead          User?            @relation("TripLead", fields: [leadId], references: [id], onDelete: SetNull)
   kits          Kit[]

@@ -8,6 +8,28 @@ import { auditLog } from '../utils/auditLogger.js';
 const prisma = new PrismaClient();
 const router = Router();
 
+const PRIVILEGED_ROLES = ['developer', 'director', 'super', 'admin', 'engineer'];
+
+/**
+ * Redact trip info on a reservation if the user cannot access the restricted trip.
+ * Shows that the kit is reserved but hides trip details, person, and purpose.
+ */
+function redactReservation(reservation, userId, userRole) {
+  if (!reservation.trip || !reservation.trip.restricted) return reservation;
+  const trip = reservation.trip;
+  if (PRIVILEGED_ROLES.includes(userRole)) return reservation;
+  if (trip.leadId === userId) return reservation;
+  if (trip.personnel?.some(p => p.userId === userId)) return reservation;
+  // Redact — hide trip details, person, and purpose
+  return {
+    ...reservation,
+    trip: { id: null, name: 'Restricted', status: trip.status, restricted: true },
+    person: null,
+    purpose: 'Restricted',
+    _tripRestricted: true,
+  };
+}
+
 /**
  * Check for conflicting reservations (confirmed or pending) for the same kit
  * in an overlapping date range, optionally excluding a specific reservation ID.
@@ -46,12 +68,14 @@ router.get('/', authMiddleware, async (req, res) => {
           },
         },
         person: { select: { id: true, name: true, title: true } },
-        trip: { select: { id: true, name: true, status: true } },
+        trip: { select: { id: true, name: true, status: true, restricted: true, leadId: true, personnel: { select: { userId: true } } } },
       },
       orderBy: { startDate: 'asc' },
     });
 
-    return res.json(reservations);
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    return res.json(reservations.map(r => redactReservation(r, userId, userRole)));
   } catch (err) {
     console.error('List reservations error:', err);
     return res.status(500).json({ error: 'Internal server error' });

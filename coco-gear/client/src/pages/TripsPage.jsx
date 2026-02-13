@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { T, CM } from '../theme/theme.js';
 import { fmtDate, SYS_ROLE_LABELS, sysRoleColor } from '../theme/helpers.js';
-import { Sw, Bg, Bt, Fl, In, Ta, Sl, SH, Tabs, ModalWrap, ConfirmDialog, DeptBg, ProgressBar } from '../components/ui/index.js';
+import { Sw, Bg, Bt, Fl, In, Ta, Sl, Tg, SH, Tabs, ModalWrap, ConfirmDialog, DeptBg, ProgressBar } from '../components/ui/index.js';
 import api from '../api.js';
 import TripTasks from './TripTasks.jsx';
 import TripPacking from './TripPacking.jsx';
@@ -35,7 +35,7 @@ function ReadinessCard({tripId,onOpen,readinessData,setReadinessData}){
 
 function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,isSuper,curUserId,settings,onRefreshTrips,onRefreshKits,onRefreshPersonnel,onRefreshBoats,onRefreshReservations}){
   const[md,setMd]=useState(null);
-  const[fm,setFm]=useState({name:"",description:"",location:"",objectives:"",leadId:"",startDate:"",endDate:"",status:"planning"});
+  const[fm,setFm]=useState({name:"",description:"",location:"",objectives:"",leadId:"",startDate:"",endDate:"",status:"planning",restricted:false,classification:""});
   const[selTrip,setSelTrip]=useState(null);const[assignMd,setAssignMd]=useState(false);const[assignKits,setAssignKits]=useState([]);
   const[addPersonMd,setAddPersonMd]=useState(false);const[addPersonIds,setAddPersonIds]=useState([]);const[addPersonRole,setAddPersonRole]=useState("member");
   const[tab,setTab]=useState("active");const[detailTab,setDetailTab]=useState("overview");
@@ -77,10 +77,11 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const availablePersonnel=personnel.filter(p=>!assignedUserIds.has(p.id));
   const editable=activeTrip&&(activeTrip.status==="planning"||activeTrip.status==="active");
 
-  const emptyFm=()=>({name:"",description:"",location:"",objectives:"",leadId:"",startDate:"",endDate:"",status:"planning"});
+  const emptyFm=()=>({name:"",description:"",location:"",objectives:"",leadId:"",startDate:"",endDate:"",status:"planning",restricted:false,classification:""});
   const saveTrip=async()=>{if(!fm.name.trim()||!fm.startDate||!fm.endDate)return;
     try{const payload={name:fm.name.trim(),description:fm.description.trim(),location:fm.location.trim(),objectives:fm.objectives.trim(),
-      leadId:fm.leadId||null,startDate:fm.startDate,endDate:fm.endDate,status:fm.status};
+      leadId:fm.leadId||null,startDate:fm.startDate,endDate:fm.endDate,status:fm.status,
+      restricted:fm.restricted||false,classification:fm.restricted?(fm.classification||null):null};
       if(md==="add"){const created=await api.trips.create(payload);setSelTrip(created.id)}
       else{await api.trips.update(md,payload)}
       await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}setMd(null)};
@@ -168,7 +169,9 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
           onMouseEnter={e=>e.currentTarget.style.borderColor=T.bdH} onMouseLeave={e=>e.currentTarget.style.borderColor=T.bd}>
           <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:6}}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>{t.name}</div>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                <div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>{t.restricted&&<span title="Restricted">&#128274; </span>}{t.name}</div>
+                {t.restricted&&t.classification&&<Bg color={T.rd} bg={T.rd+"18"}>{t.classification}</Bg>}</div>
               {t.location&&<div style={{fontSize:10,color:T.sub,fontFamily:T.m,marginTop:1}}>⌖ {t.location}</div>}
               {t.description&&<div style={{fontSize:10,color:T.dm,fontFamily:T.m,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.description}</div>}</div>
             <Bg color={statusColors[t.status]} bg={statusColors[t.status]+"18"}>{statusLabels[t.status]}</Bg></div>
@@ -225,6 +228,22 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
             value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl></div>
         <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["developer","director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
           } value={fm.leadId} onChange={e=>setFm(p=>({...p,leadId:e.target.value}))}/></Fl>
+        {/* Restricted access toggle */}
+        <div style={{padding:"12px 14px",borderRadius:8,background:fm.restricted?"rgba(239,68,68,.04)":"rgba(255,255,255,.02)",border:"1px solid "+(fm.restricted?"rgba(239,68,68,.15)":T.bd),transition:"all .15s"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <Tg checked={fm.restricted} onChange={v=>setFm(p=>({...p,restricted:v}))}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:600,color:fm.restricted?T.rd:T.tx,fontFamily:T.m}}>Restricted Access</div>
+              <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:1}}>When enabled, only assigned personnel and administrators can view this trip. Other users will not see the trip in their trip list.</div></div></div>
+          {fm.restricted&&<div style={{marginTop:10}}>
+            <Fl label="Classification Label (optional)">
+              <div style={{display:"flex",gap:6,marginBottom:6}}>
+                {["OPSEC","Restricted","Need-to-Know"].map(c=>
+                  <button key={c} onClick={()=>setFm(p=>({...p,classification:p.classification===c?"":c}))}
+                    style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:4,fontSize:9,fontFamily:T.m,fontWeight:600,
+                      background:fm.classification===c?T.rd+"18":"transparent",border:"1px solid "+(fm.classification===c?T.rd+"44":T.bd),
+                      color:fm.classification===c?T.rd:T.dm}}>{c}</button>)}</div>
+              <In value={fm.classification} onChange={e=>setFm(p=>({...p,classification:e.target.value}))} placeholder="Custom label or select above..."/></Fl></div>}</div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt>
           <Bt v="primary" onClick={saveTrip} disabled={!fm.name.trim()||!fm.startDate||!fm.endDate}>{md==="add"?"Create Trip":"Save Changes"}</Bt></div></div></ModalWrap>
 
@@ -277,19 +296,22 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
       <Bt onClick={()=>setSelTrip(null)} style={{fontSize:13}}>← Back</Bt>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-          <h2 style={{margin:0,fontSize:20,fontWeight:800,fontFamily:T.u,color:T.tx}}>{at.name}</h2>
-          <Bg color={statusColors[at.status]} bg={statusColors[at.status]+"18"}>{statusLabels[at.status]}</Bg></div>
+          <h2 style={{margin:0,fontSize:20,fontWeight:800,fontFamily:T.u,color:T.tx}}>{at.restricted&&<span title="Restricted">&#128274; </span>}{at.name}</h2>
+          <Bg color={statusColors[at.status]} bg={statusColors[at.status]+"18"}>{statusLabels[at.status]}</Bg>
+          {at.restricted&&at.classification&&<Bg color={T.rd} bg={T.rd+"18"}>{at.classification}</Bg>}</div>
         <div style={{fontSize:10,color:T.dm,fontFamily:T.m,marginTop:2}}>
           {fmtD(at.startDate)} → {fmtD(at.endDate)} · {duration} days
           {at.location&&<span style={{marginLeft:8}}>⌖ {at.location}</span>}
-          {at.leadName&&<span style={{marginLeft:8}}>Lead: {at.leadName}</span>}</div></div>
+          {at.leadName&&<span style={{marginLeft:8}}>Lead: {at.leadName}</span>}</div>
+        {at.restricted&&<div style={{fontSize:9,color:T.dm,fontFamily:T.m,fontStyle:"italic",marginTop:2}}>This trip is restricted. Only assigned personnel and administrators can view it.</div>}</div>
       {isAdmin&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
         {at.status==="planning"&&<Bt v="success" sm onClick={()=>setShowReadiness(true)}>▸ Activate</Bt>}
         {at.status==="active"&&<Bt v="primary" sm onClick={()=>changeStatus("completed")}>✓ Complete</Bt>}
         {(at.status==="active"||at.status==="completed")&&<Bt sm onClick={()=>{setCloneFm({name:at.name+" (Copy)",startDate:"",endDate:"",location:at.location||""});setCloneMd(true)}}>Clone</Bt>}
         <Bt sm onClick={()=>{setTplName(at.name);setSaveTplMd(true)}}>Save as Template</Bt>
         <Bt sm onClick={()=>{setFm({name:at.name,description:at.description,location:at.location,objectives:at.objectives,
-          leadId:at.leadId||"",startDate:at.startDate?new Date(at.startDate).toISOString().slice(0,10):"",endDate:at.endDate?new Date(at.endDate).toISOString().slice(0,10):"",status:at.status});setMd(at.id)}}>Edit</Bt>
+          leadId:at.leadId||"",startDate:at.startDate?new Date(at.startDate).toISOString().slice(0,10):"",endDate:at.endDate?new Date(at.endDate).toISOString().slice(0,10):"",status:at.status,
+          restricted:at.restricted||false,classification:at.classification||""});setMd(at.id)}}>Edit</Bt>
         <Bt v="danger" sm onClick={()=>setConfirmDel(at.id)}>Delete</Bt></div>}</div>
 
     {/* Status timeline indicator */}
@@ -663,6 +685,22 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
             value={fm.status} onChange={e=>setFm(p=>({...p,status:e.target.value}))}/></Fl></div>
         <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["developer","director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
           } value={fm.leadId} onChange={e=>setFm(p=>({...p,leadId:e.target.value}))}/></Fl>
+        {/* Restricted access toggle */}
+        <div style={{padding:"12px 14px",borderRadius:8,background:fm.restricted?"rgba(239,68,68,.04)":"rgba(255,255,255,.02)",border:"1px solid "+(fm.restricted?"rgba(239,68,68,.15)":T.bd),transition:"all .15s"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <Tg checked={fm.restricted} onChange={v=>setFm(p=>({...p,restricted:v}))}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:600,color:fm.restricted?T.rd:T.tx,fontFamily:T.m}}>Restricted Access</div>
+              <div style={{fontSize:9,color:T.dm,fontFamily:T.m,marginTop:1}}>When enabled, only assigned personnel and administrators can view this trip. Other users will not see the trip in their trip list.</div></div></div>
+          {fm.restricted&&<div style={{marginTop:10}}>
+            <Fl label="Classification Label (optional)">
+              <div style={{display:"flex",gap:6,marginBottom:6}}>
+                {["OPSEC","Restricted","Need-to-Know"].map(c=>
+                  <button key={c} onClick={()=>setFm(p=>({...p,classification:p.classification===c?"":c}))}
+                    style={{all:"unset",cursor:"pointer",padding:"3px 10px",borderRadius:4,fontSize:9,fontFamily:T.m,fontWeight:600,
+                      background:fm.classification===c?T.rd+"18":"transparent",border:"1px solid "+(fm.classification===c?T.rd+"44":T.bd),
+                      color:fm.classification===c?T.rd:T.dm}}>{c}</button>)}</div>
+              <In value={fm.classification} onChange={e=>setFm(p=>({...p,classification:e.target.value}))} placeholder="Custom label or select above..."/></Fl></div>}</div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt>
           <Bt v="primary" onClick={saveTrip} disabled={!fm.name.trim()||!fm.startDate||!fm.endDate}>{md==="add"?"Create Trip":"Save Changes"}</Bt></div></div></ModalWrap>
 
