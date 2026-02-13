@@ -151,6 +151,38 @@ router.post('/signup', validate(signupSchema), async (req, res) => {
   }
 });
 
+// POST /refresh - issue a new token using the current valid token
+router.post('/refresh', authMiddleware, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) {
+      return res.status(401).json({ error: 'User no longer exists' });
+    }
+
+    const token = generateToken({
+      id: user.id,
+      role: user.role,
+      deptId: user.deptId,
+    });
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        title: user.title,
+        role: user.role,
+        deptId: user.deptId,
+        mustChangePassword: !!user.mustChangePassword,
+      },
+    });
+  } catch (err) {
+    console.error('Token refresh error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /me - return current user profile (requires auth)
 router.get('/me', authMiddleware, async (req, res) => {
   try {

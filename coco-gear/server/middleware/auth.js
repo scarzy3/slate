@@ -20,7 +20,22 @@ export async function authMiddleware(req, res, next) {
 
   const token = header.slice(7);
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      // Allow recently-expired tokens (within 7 days) for the refresh endpoint only
+      if (err.name === 'TokenExpiredError' && req.path === '/refresh') {
+        decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
+        const expiredAt = decoded.exp * 1000;
+        const gracePeriod = 7 * 24 * 60 * 60 * 1000; // 7 days
+        if (Date.now() - expiredAt > gracePeriod) {
+          return res.status(401).json({ error: 'Token expired beyond refresh window' });
+        }
+      } else {
+        throw err;
+      }
+    }
 
     // Fetch current user from DB so role/permissions are never stale
     const currentUser = await prisma.user.findUnique({
