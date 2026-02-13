@@ -1,11 +1,13 @@
 import 'dotenv/config';
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { initSocket } from './socket.js';
 
 import authRoutes from './routes/auth.js';
 import kitRoutes from './routes/kits.js';
@@ -27,13 +29,18 @@ import auditRoutes from './routes/audit.js';
 import settingsRoutes from './routes/settings.js';
 import reportRoutes from './routes/reports.js';
 import { authMiddleware } from './middleware/auth.js';
+import { realtimeBroadcast } from './middleware/realtimeBroadcast.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const httpServer = createServer(app);
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
+
+// ─── Socket.IO ───
+initSocket(httpServer);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
 
 // ─── Middleware ───
@@ -82,6 +89,9 @@ app.post('/api/upload', authMiddleware, upload.array('photos', 10), (req, res) =
   }));
   res.json({ files });
 });
+
+// ─── Real-time broadcast for mutations ───
+app.use(realtimeBroadcast);
 
 // ─── API Routes ───
 app.use('/api/auth', authRoutes);
@@ -172,7 +182,7 @@ async function ensureDefaultUser() {
 
 // ─── Start ───
 ensureDefaultUser().then(() => {
-  app.listen(PORT, () => {
+  httpServer.listen(PORT, () => {
     console.log(`COCO Gear server running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
