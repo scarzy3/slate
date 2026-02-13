@@ -16,8 +16,8 @@ async function hasConflict(kitId, startDate, endDate, excludeId = null) {
   const where = {
     kitId,
     status: { in: ['confirmed', 'pending'] },
-    startDate: { lt: new Date(endDate) },
-    endDate: { gt: new Date(startDate) },
+    startDate: { lte: new Date(endDate) },
+    endDate: { gte: new Date(startDate) },
   };
   if (excludeId) {
     where.id = { not: excludeId };
@@ -64,8 +64,8 @@ router.post('/', authMiddleware, validate(reservationSchema), async (req, res) =
     const { kitId, tripId, startDate, endDate, purpose } = req.validated;
 
     // Validate dates
-    if (new Date(startDate) >= new Date(endDate)) {
-      return res.status(400).json({ error: 'Start date must be before end date' });
+    if (new Date(startDate) > new Date(endDate)) {
+      return res.status(400).json({ error: 'Start date must be before or equal to end date' });
     }
 
     // Check kit exists
