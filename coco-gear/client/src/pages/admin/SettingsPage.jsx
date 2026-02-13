@@ -35,6 +35,7 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     {k:"enableQR",l:"Enable QR codes",d:"QR code generation, printing, and scanning"},
     {k:"autoReserveOnTrip",l:"Auto-reserve on trip creation",d:"Automatically create reservations for equipment, boats, and personnel when assigned to trips"},
     {k:"enableSelfSignup",l:"Enable team self-signup",d:"Allow new members to create their own accounts using a verified email domain"},
+    {k:"requireSignupApproval",l:"Require signup approval",d:"New signups must be approved by a director, manager, or engineer (MOE) before accessing the system"},
   ];
   const boatFieldItems=[
     {k:"type",l:"Type",d:"USV model/type (e.g. WAM-V, Heron)"},

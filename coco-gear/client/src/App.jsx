@@ -27,6 +27,7 @@ import MyProfile from './pages/MyProfile.jsx';
 import LoginScreen from './pages/LoginScreen.jsx';
 import SignupScreen from './pages/SignupScreen.jsx';
 import SetPasswordScreen from './pages/SetPasswordScreen.jsx';
+import PendingApprovalScreen from './pages/PendingApprovalScreen.jsx';
 
 import CompAdmin from './pages/admin/CompAdmin.jsx';
 import TypeAdmin from './pages/admin/TypeAdmin.jsx';
@@ -80,6 +81,8 @@ export default function App(){
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
   const[loginUsers,setLoginUsers]=useState([]);
   const[showSignup,setShowSignup]=useState(false);const[signupDomain,setSignupDomain]=useState("");
+  const[pendingApprovalEmail,setPendingApprovalEmail]=useState(()=>localStorage.getItem("slate_pending_email")||"");
+  const[pendingUserCount,setPendingUserCount]=useState(0);
   const[isDark,setIsDark]=useState(()=>localStorage.getItem("slate_theme")!=="light");
   const[mobileNav,setMobileNav]=useState(false);
   const[isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
@@ -155,6 +158,7 @@ export default function App(){
       try{const sett=await api.settings.get();setSettings(s=>({...s,...sett}))}catch(e){}
       try{const accessD=await api.kits.accessRequests();setAccessRequests(accessD||[])}catch(e){}
       try{const reqD=await api.kits.checkoutRequests();setRequests(reqD||[])}catch(e){}
+      try{const countD=await api.approval.count();setPendingUserCount(countD.count||0)}catch(e){}
       setDataLoaded(true);setLoadError("");
     }catch(e){setLoadError(e.message||"Failed to load data");console.error("Load error:",e)}
   },[]);
@@ -184,6 +188,7 @@ export default function App(){
   const refreshLogs=async()=>{try{const d=await api.audit.list({limit:500});setLogs((d.logs||[]).map(xformLog))}catch(e){}};
   const refreshAccessRequests=async()=>{try{const d=await api.kits.accessRequests();setAccessRequests(d||[])}catch(e){}};
   const refreshCheckoutRequests=async()=>{try{const d=await api.kits.checkoutRequests();setRequests(d||[])}catch(e){}};
+  const refreshPendingUserCount=async()=>{try{const d=await api.approval.count();setPendingUserCount(d.count||0)}catch(e){}};
   const saveSettings=async(s)=>{try{await api.settings.update(s)}catch(e){console.error("Settings save error:",e)}};
   const refreshSettings=async()=>{try{const s=await api.settings.get();setSettings(prev=>({...prev,...s}))}catch(e){}};
 
@@ -194,6 +199,7 @@ export default function App(){
     departments:refreshDepts,reservations:refreshReservations,
     consumables:refreshConsumables,assets:refreshAssets,boats:refreshBoats,
     settings:refreshSettings,requests:()=>{refreshCheckoutRequests();refreshAccessRequests()},
+    approvals:refreshPendingUserCount,
   }),[]);
   const{connected:socketConnected,lastEvent:socketLastEvent}=useSocket(authCtx.token,socketRefreshCallbacks,curUser||authCtx.user?.id);
 
@@ -267,7 +273,7 @@ export default function App(){
   const currentItem=allItems.find(i=>i.id===pg);
   if(currentItem&&!canAccess(currentItem))setPg("dashboard");
 
-  const pendCt=requests.filter(r=>r.status==="pending"&&(isLead||headOf.includes(r.deptId))).length+accessRequests.filter(r=>r.status==="pending"&&isLead).length;
+  const pendCt=requests.filter(r=>r.status==="pending"&&(isLead||headOf.includes(r.deptId))).length+accessRequests.filter(r=>r.status==="pending"&&isLead).length+(isManager?pendingUserCount:0);
   const lowStock=consumables.filter(c=>c.qty<=c.minQty).length;
   const getBadge=(id)=>id==="approvals"?pendCt:id==="consumables"?lowStock:0;
 
@@ -288,14 +294,32 @@ export default function App(){
     else if(result.type==="dept"){setPg("departments")}
     setSearchMd(false)};
 
+  // Show pending approval screen if user just signed up and is awaiting approval
+  if(pendingApprovalEmail&&!authCtx.token)return <PendingApprovalScreen email={pendingApprovalEmail} isDark={isDark} toggleTheme={toggleTheme}
+    onBack={()=>{setPendingApprovalEmail("");localStorage.removeItem("slate_pending_email")}}
+    onApproved={()=>{setPendingApprovalEmail("");localStorage.removeItem("slate_pending_email")}}/>;
   if(!authCtx.token&&showSignup&&signupDomain)return <SignupScreen domain={signupDomain} isDark={isDark} toggleTheme={toggleTheme}
     onBack={()=>setShowSignup(false)}
     onSignup={async(data)=>{const res=await api.auth.signup(data);
+      if(res.pendingApproval){
+        // User needs approval — show the pending screen
+        localStorage.setItem("slate_pending_email",data.email.toLowerCase());
+        setPendingApprovalEmail(data.email.toLowerCase());setShowSignup(false);return;
+      }
       localStorage.setItem('slate_token',res.token);localStorage.setItem('slate_user',JSON.stringify(res.user));
       authCtx.setUser(res.user);setCurUser(res.user.id);setShowSignup(false);window.location.reload()}}/>;
   if(!authCtx.token)return <LoginScreen personnel={loginUsers.length?loginUsers.map(xformPerson):personnel} isDark={isDark} toggleTheme={toggleTheme}
     signupDomain={signupDomain} onShowSignup={()=>setShowSignup(true)}
     onLogin={async(userId,pin)=>{
+    // Pre-check for pending/denied status before full login
+    const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId,pin})});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Login failed');
+    if(data.pendingApproval){
+      if(data.user?.email){localStorage.setItem("slate_pending_email",data.user.email);setPendingApprovalEmail(data.user.email)}
+      return;
+    }
+    // Approved user — proceed with normal auth context login
     const userData=await authCtx.login(userId,pin);setCurUser(userData.id);
     if(userData.mustChangePassword)setMustChangePw(true)}}/>;
   if(mustChangePw)return <SetPasswordScreen userName={authCtx.user?.name||"User"} isDark={isDark} toggleTheme={toggleTheme}
@@ -436,7 +460,7 @@ export default function App(){
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests}
           accessRequests={accessRequests} setAccessRequests={setAccessRequests}
           kits={kits} setKits={setKits}
-          personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} userRole={effectiveRole} settings={settings} addLog={addLog} onRefreshKits={refreshKits} onRefreshRequests={refreshCheckoutRequests}/>}
+          personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} userRole={effectiveRole} settings={settings} addLog={addLog} onRefreshKits={refreshKits} onRefreshRequests={refreshCheckoutRequests} onRefreshPersonnel={refreshPersonnel}/>}
         {pg==="trips"&&<TripsPage trips={trips} kits={kits} types={types} depts={depts} personnel={personnel} reservations={reservations} boats={boats}
           isAdmin={canManageTrips} isSuper={isSuper} curUserId={curUser} settings={settings} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits} onRefreshPersonnel={refreshPersonnel} onRefreshBoats={refreshBoats} onRefreshReservations={refreshReservations}/>}
         {pg==="reservations"&&settings.enableReservations&&<ReservationsPage reservations={reservations} setReservations={setReservations}

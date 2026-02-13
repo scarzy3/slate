@@ -10,16 +10,41 @@ const router = Router();
 const SALT_ROUNDS = 10;
 
 // GET /users - public user list for login screen (id, name, title, role only)
+// Only shows approved users — pending/denied users are excluded from the login picker
 router.get('/users', async (req, res) => {
   try {
     const users = await prisma.user.findMany({
+      where: { approvalStatus: 'approved' },
       select: { id: true, name: true, title: true, role: true, deptId: true },
       orderBy: { name: 'asc' },
     });
-    console.log(`GET /api/auth/users — returning ${users.length} users`);
+    console.log(`GET /api/auth/users — returning ${users.length} approved users`);
     return res.json(users);
   } catch (err) {
     console.error('List users error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /signup-status/:email - check approval status for a pending signup (public, rate-limited by design)
+router.get('/signup-status/:email', async (req, res) => {
+  try {
+    const email = req.params.email.toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { approvalStatus: true, denialReason: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with that email' });
+    }
+
+    return res.json({
+      approvalStatus: user.approvalStatus,
+      denialReason: user.approvalStatus === 'denied' ? user.denialReason : null,
+    });
+  } catch (err) {
+    console.error('Signup status error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -41,6 +66,28 @@ router.post('/login', validate(loginSchema), async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Block denied users from logging in
+    if (user.approvalStatus === 'denied') {
+      return res.status(403).json({
+        error: 'Your account has been denied. Contact an administrator.',
+        code: 'ACCOUNT_DENIED',
+        denialReason: user.denialReason || null,
+      });
+    }
+
+    // Pending users can log in but get a restricted response
+    if (user.approvalStatus === 'pending') {
+      return res.json({
+        pendingApproval: true,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          approvalStatus: 'pending',
+        },
+      });
+    }
+
     const token = generateToken({
       id: user.id,
       role: user.role,
@@ -57,6 +104,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
         role: user.role,
         deptId: user.deptId,
         mustChangePassword: !!user.mustChangePassword,
+        approvalStatus: user.approvalStatus,
       },
     });
   } catch (err) {
@@ -114,6 +162,10 @@ router.post('/signup', validate(signupSchema), async (req, res) => {
 
     const pinHash = await bcrypt.hash(password, SALT_ROUNDS);
 
+    // Check if signup approval is required (defaults to true for security)
+    const approvalSetting = await prisma.systemSetting.findUnique({ where: { key: 'requireSignupApproval' } });
+    const requireApproval = approvalSetting ? approvalSetting.value === true : true;
+
     const user = await prisma.user.create({
       data: {
         name,
@@ -122,10 +174,32 @@ router.post('/signup', validate(signupSchema), async (req, res) => {
         role: 'user',
         pin: pinHash,
         mustChangePassword: false,
+        approvalStatus: requireApproval ? 'pending' : 'approved',
       },
     });
 
-    await auditLog('self_signup', 'user', user.id, user.id, { name, email: email.toLowerCase() });
+    await auditLog('self_signup', 'user', user.id, user.id, {
+      name, email: email.toLowerCase(),
+      approvalStatus: user.approvalStatus,
+    });
+
+    // If approval is required, don't issue a full session token
+    if (user.approvalStatus === 'pending') {
+      // Emit real-time event so approvers see the new request
+      if (req.app.get('io')) {
+        req.app.get('io').emit('update:approvals', { type: 'new_signup', userId: user.id, name: user.name });
+      }
+
+      return res.status(201).json({
+        pendingApproval: true,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          approvalStatus: 'pending',
+        },
+      });
+    }
 
     const token = generateToken({
       id: user.id,
@@ -143,6 +217,7 @@ router.post('/signup', validate(signupSchema), async (req, res) => {
         role: user.role,
         deptId: user.deptId,
         mustChangePassword: false,
+        approvalStatus: 'approved',
       },
     });
   } catch (err) {
@@ -175,6 +250,7 @@ router.post('/refresh', authMiddleware, async (req, res) => {
         role: user.role,
         deptId: user.deptId,
         mustChangePassword: !!user.mustChangePassword,
+        approvalStatus: user.approvalStatus,
       },
     });
   } catch (err) {

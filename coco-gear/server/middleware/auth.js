@@ -40,18 +40,43 @@ export async function authMiddleware(req, res, next) {
     // Fetch current user from DB so role/permissions are never stale
     const currentUser = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, role: true, name: true, deptId: true },
+      select: { id: true, role: true, name: true, deptId: true, approvalStatus: true },
     });
 
     if (!currentUser) {
       return res.status(401).json({ error: 'User no longer exists' });
     }
 
-    req.user = { ...decoded, role: currentUser.role, name: currentUser.name, deptId: currentUser.deptId };
+    req.user = { ...decoded, role: currentUser.role, name: currentUser.name, deptId: currentUser.deptId, approvalStatus: currentUser.approvalStatus };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+}
+
+/**
+ * Middleware that blocks users whose account has not been approved.
+ * Must be used AFTER authMiddleware so req.user is populated.
+ * Returns 403 with a specific code so the frontend can show the right screen.
+ */
+export function requireApproved(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+
+  if (req.user.approvalStatus === 'pending') {
+    return res.status(403).json({
+      error: 'Your account is pending approval',
+      code: 'PENDING_APPROVAL',
+    });
+  }
+
+  if (req.user.approvalStatus === 'denied') {
+    return res.status(403).json({
+      error: 'Your account has been denied',
+      code: 'ACCOUNT_DENIED',
+    });
+  }
+
+  next();
 }
 
 export async function optionalAuth(req, res, next) {
@@ -61,10 +86,10 @@ export async function optionalAuth(req, res, next) {
       const decoded = jwt.verify(header.slice(7), JWT_SECRET);
       const currentUser = await prisma.user.findUnique({
         where: { id: decoded.id },
-        select: { id: true, role: true, name: true, deptId: true },
+        select: { id: true, role: true, name: true, deptId: true, approvalStatus: true },
       });
       if (currentUser) {
-        req.user = { ...decoded, role: currentUser.role, name: currentUser.name, deptId: currentUser.deptId };
+        req.user = { ...decoded, role: currentUser.role, name: currentUser.name, deptId: currentUser.deptId, approvalStatus: currentUser.approvalStatus };
       }
     } catch {
       // ignore invalid tokens for optional auth
