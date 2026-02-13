@@ -496,6 +496,11 @@ router.post('/checkout-requests', validate(checkoutRequestSchema), async (req, r
     if (kit.issuedToId) return res.status(409).json({ error: 'Kit already issued' });
     if (kit.maintenanceStatus) return res.status(409).json({ error: 'Kit in maintenance' });
 
+    // Restrict same-department requests: personnel should only request kits outside their department
+    if (kit.deptId && req.user.deptId === kit.deptId) {
+      return res.status(403).json({ error: 'You cannot request kits from your own department — you can check them out directly' });
+    }
+
     // Check for existing pending request
     const existing = await prisma.checkoutRequest.findFirst({
       where: { kitId, personId: req.user.id, status: 'pending' },
