@@ -276,6 +276,7 @@ export const trips = {
   manifest: (id) => request(`/trips/${id}/manifest`),
   readiness: (id) => request(`/trips/${id}/readiness`),
   aar: (id) => request(`/trips/${id}/aar`),
+  clone: (id, data) => request(`/trips/${id}/clone`, { method: 'POST', body: data }),
 };
 
 // ─── Trip Comms ───
@@ -322,6 +323,17 @@ export const taskTemplates = {
   create: (data) => request('/task-templates', { method: 'POST', body: data }),
   update: (id, data) => request(`/task-templates/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/task-templates/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Trip Templates ───
+export const tripTemplates = {
+  list: () => request('/trip-templates'),
+  get: (id) => request(`/trip-templates/${id}`),
+  create: (data) => request('/trip-templates', { method: 'POST', body: data }),
+  fromTrip: (tripId, data) => request(`/trip-templates/from-trip/${tripId}`, { method: 'POST', body: data }),
+  update: (id, data) => request(`/trip-templates/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => request(`/trip-templates/${id}`, { method: 'DELETE' }),
+  apply: (id, data) => request(`/trip-templates/${id}/apply`, { method: 'POST', body: data }),
 };
 
 // ─── Boats ───
@@ -395,6 +407,6 @@ export const health = () => request('/health');
 export default {
   auth, kits, types, components, locations, departments,
   personnel, consumables, assets, reservations, trips, tasks, taskTemplates,
-  packingTemplates, packing, comms, boats, maintenance,
+  tripTemplates, packingTemplates, packing, comms, boats, maintenance,
   audit, settings, reports, upload, dashboard, health,
 };

@@ -44,6 +44,7 @@ model User {
   tasksCompleted  TripTask[]         @relation("TaskCompleter")
   packingChecks   TripPackingCheck[] @relation("PackingChecks")
   commsAssignments TripCommsEntry[]  @relation("CommsAssignment")
+  tripTemplates   TripTemplate[]     @relation("TemplateCreator")
 
   @@index([role])
   @@index([deptId])
@@ -689,6 +690,27 @@ model TripCommsEntry {
   assignedTo User? @relation("CommsAssignment", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   @@index([tripId])
+}
+
+// ─── Trip Templates (reusable trip blueprints) ───
+model TripTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  location    String?
+  objectives  String?
+
+  personnelRoles      Json?   // array of { role: string, count: number, notes?: string }
+  kitTypeRequirements Json?   // array of { typeId: string, typeName: string, quantity: number }
+  tasks               Json?   // array of { title: string, description?: string, phase: string, priority: string, sortOrder: number }
+  commsEntries        Json?   // array of { type: string, label: string, value?: string, notes?: string, sortOrder: number }
+  packingItems        Json?   // array of { tier: string, scope: string, category: string, name: string, quantity: number, notes?: string, required: boolean, sortOrder: number }
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User? @relation("TemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
 }
 
 // ─── System Settings ───

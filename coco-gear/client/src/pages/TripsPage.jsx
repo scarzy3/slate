@@ -48,6 +48,13 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const[taskDone,setTaskDone]=useState(0);const[taskTotal,setTaskTotal]=useState(0);
   const[packDone,setPackDone]=useState(0);const[packTotal,setPackTotal]=useState(0);
   const[commsCount,setCommsCount]=useState(0);
+  // Clone & template state
+  const[cloneMd,setCloneMd]=useState(false);const[cloneFm,setCloneFm]=useState({name:"",startDate:"",endDate:"",location:""});const[cloning,setCloning]=useState(false);
+  const[saveTplMd,setSaveTplMd]=useState(false);const[tplName,setTplName]=useState("");const[savingTpl,setSavingTpl]=useState(false);
+  const[templates,setTemplates]=useState([]);const[listTab,setListTab]=useState("trips");const[tplLoaded,setTplLoaded]=useState(false);
+  const[fromTplMd,setFromTplMd]=useState(null);const[fromTplFm,setFromTplFm]=useState({name:"",startDate:"",endDate:"",location:"",leadId:""});const[applyingTpl,setApplyingTpl]=useState(false);
+  const[editTplMd,setEditTplMd]=useState(null);const[editTplFm,setEditTplFm]=useState({name:"",description:"",location:"",objectives:""});
+  const[confirmDelTpl,setConfirmDelTpl]=useState(null);
   const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}):"";
   const fmtDT=d=>d?new Date(d).toLocaleString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
@@ -101,6 +108,23 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const removeBoat=async(tripBoatId)=>{if(!activeTrip)return;
     try{await api.trips.removeBoat(activeTrip.id,tripBoatId);await onRefreshTrips();await onRefreshBoats()}catch(e){alert(e.message)}};
 
+  // Load templates when switching to templates tab
+  useEffect(()=>{if(listTab==="templates"&&!tplLoaded){api.tripTemplates.list().then(d=>{setTemplates(d);setTplLoaded(true)}).catch(()=>{})}},[listTab,tplLoaded]);
+  const refreshTemplates=()=>{api.tripTemplates.list().then(d=>{setTemplates(d);setTplLoaded(true)}).catch(()=>{})};
+  const doClone=async()=>{if(!activeTrip||!cloneFm.startDate||!cloneFm.endDate)return;setCloning(true);
+    try{const result=await api.trips.clone(activeTrip.id,{name:cloneFm.name||undefined,startDate:cloneFm.startDate,endDate:cloneFm.endDate,location:cloneFm.location||undefined});
+      await onRefreshTrips();setCloneMd(false);setSelTrip(result.id);setDetailTab("overview")}catch(e){alert(e.message)}setCloning(false)};
+  const doSaveAsTemplate=async()=>{if(!activeTrip||!tplName.trim())return;setSavingTpl(true);
+    try{await api.tripTemplates.fromTrip(activeTrip.id,{name:tplName.trim()});setSaveTplMd(false);setTplName("");setTplLoaded(false)}catch(e){alert(e.message)}setSavingTpl(false)};
+  const doApplyTemplate=async()=>{if(!fromTplMd||!fromTplFm.name.trim()||!fromTplFm.startDate||!fromTplFm.endDate)return;setApplyingTpl(true);
+    try{const result=await api.tripTemplates.apply(fromTplMd.id,{name:fromTplFm.name.trim(),startDate:fromTplFm.startDate,endDate:fromTplFm.endDate,
+      location:fromTplFm.location||undefined,leadId:fromTplFm.leadId||undefined});
+      await onRefreshTrips();setFromTplMd(null);setListTab("trips");setSelTrip(result.id);setDetailTab("overview")}catch(e){alert(e.message)}setApplyingTpl(false)};
+  const doUpdateTemplate=async()=>{if(!editTplMd||!editTplFm.name.trim())return;
+    try{await api.tripTemplates.update(editTplMd,{name:editTplFm.name.trim(),description:editTplFm.description.trim()||null,location:editTplFm.location.trim()||null,objectives:editTplFm.objectives.trim()||null});
+      setEditTplMd(null);refreshTemplates()}catch(e){alert(e.message)}};
+  const doDeleteTemplate=async()=>{if(!confirmDelTpl)return;try{await api.tripTemplates.delete(confirmDelTpl);refreshTemplates()}catch(e){alert(e.message)}setConfirmDelTpl(null)};
+
   const daysUntilStart=activeTrip?Math.ceil((new Date(activeTrip.startDate)-Date.now())/864e5):0;
   const daysUntilEnd=activeTrip?Math.ceil((new Date(activeTrip.endDate)-Date.now())/864e5):0;
   const duration=activeTrip?Math.ceil((new Date(activeTrip.endDate)-new Date(activeTrip.startDate))/864e5):0;
@@ -108,8 +132,18 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   /* ── List View (no trip selected) ── */
   if(!selTrip)return(<div>
     <SH title="Trips" sub={trips.filter(t=>t.status==="active").length+" active · "+trips.filter(t=>t.status==="planning").length+" planning · "+trips.length+" total"}
-      action={isAdmin&&<Bt v="primary" onClick={()=>{setFm(emptyFm());setMd("add")}}>+ New Trip</Bt>}/>
+      action={isAdmin&&<div style={{display:"flex",gap:6}}>{templates.length>0&&<Bt onClick={()=>setListTab(listTab==="templates"?"trips":"templates")}>{listTab==="templates"?"View Trips":"Templates"}</Bt>}
+        <Bt v="primary" onClick={()=>{setFm(emptyFm());setMd("add")}}>+ New Trip</Bt></div>}/>
 
+    {/* Trips / Templates toggle tabs */}
+    {isAdmin&&<div style={{display:"flex",gap:4,marginBottom:12}}>
+      {[{id:"trips",l:"Trips"},{id:"templates",l:"Templates"+(templates.length>0?" ("+templates.length+")":"")}].map(t=>
+        <button key={t.id} onClick={()=>setListTab(t.id)} style={{all:"unset",cursor:"pointer",padding:"5px 14px",borderRadius:5,fontSize:10,fontFamily:T.m,fontWeight:600,
+          background:listTab===t.id?"rgba(129,140,248,.12)":"rgba(255,255,255,.03)",border:"1px solid "+(listTab===t.id?"rgba(129,140,248,.3)":T.bd),
+          color:listTab===t.id?T.ind:T.mu}}>{t.l}</button>)}</div>}
+
+    {/* ── TRIPS LIST ── */}
+    {listTab==="trips"&&<div>
     <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
         {["active","planning","completed","cancelled","all"].map(t=>
@@ -139,7 +173,33 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
             {t.taskCount>0&&<Bg color={t.taskDone===t.taskCount?T.gn:T.or} bg={(t.taskDone===t.taskCount?T.gn:T.or)+"10"}>{t.taskDone}/{t.taskCount} tasks</Bg>}
             {t.kits.length>0&&<div style={{display:"flex",gap:2,alignItems:"center",marginLeft:4}}>
               {t.kits.slice(0,5).map(k=><div key={k.id} style={{width:14,height:14,borderRadius:7,background:CM[k.color]||"#888",border:"1px solid rgba(0,0,0,.2)"}} title={k.color}/>)}
-              {t.kits.length>5&&<span style={{fontSize:8,color:T.dm}}>+{t.kits.length-5}</span>}</div>}</div></div>)})}</div>
+              {t.kits.length>5&&<span style={{fontSize:8,color:T.dm}}>+{t.kits.length-5}</span>}</div>}</div></div>)})}</div></div>}
+
+    {/* ── TEMPLATES LIST ── */}
+    {listTab==="templates"&&<div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(340px,100%),1fr))",gap:12}}>
+        {templates.length===0&&<div style={{padding:30,textAlign:"center",color:T.dm,fontFamily:T.m,fontSize:11,gridColumn:"1/-1"}}>No trip templates yet. Save a template from an existing trip's detail view.</div>}
+        {templates.map(tpl=>{const taskCount=(tpl.tasks||[]).length;const commsCount=(tpl.commsEntries||[]).length;
+          const packCount=(tpl.packingItems||[]).length;const roleCount=(tpl.personnelRoles||[]).length;const kitCount=(tpl.kitTypeRequirements||[]).length;
+          return(<div key={tpl.id} style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.ind+"22",transition:"all .15s"}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=T.ind+"44"} onMouseLeave={e=>e.currentTarget.style.borderColor=T.ind+"22"}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:15,fontWeight:700,fontFamily:T.u,color:T.tx}}>{tpl.name}</div>
+                {tpl.description&&<div style={{fontSize:10,color:T.dm,fontFamily:T.m,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tpl.description}</div>}
+                {tpl.location&&<div style={{fontSize:10,color:T.sub,fontFamily:T.m,marginTop:1}}>⌖ {tpl.location}</div>}</div>
+              <Bg color={T.ind} bg={T.ind+"18"}>Template</Bg></div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+              {roleCount>0&&<Bg color={T.tl} bg="rgba(45,212,191,.1)">{(tpl.personnelRoles||[]).reduce((s,r)=>s+r.count,0)} roles</Bg>}
+              {taskCount>0&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">{taskCount} tasks</Bg>}
+              {commsCount>0&&<Bg color={T.ind} bg="rgba(129,140,248,.1)">{commsCount} comms</Bg>}
+              {packCount>0&&<Bg color={T.am} bg="rgba(251,191,36,.1)">{packCount} packing</Bg>}
+              {kitCount>0&&<Bg color={T.pu} bg="rgba(168,85,247,.1)">{kitCount} kit types</Bg>}</div>
+            {tpl.createdBy&&<div style={{fontSize:8,color:T.dm,fontFamily:T.m,marginBottom:8}}>Created by {tpl.createdBy.name} · {fmtD(tpl.createdAt)}</div>}
+            <div style={{display:"flex",gap:6}}>
+              <Bt v="primary" sm onClick={()=>{setFromTplFm({name:"",startDate:"",endDate:"",location:tpl.location||"",leadId:""});setFromTplMd(tpl)}}>New Trip from Template</Bt>
+              <Bt sm onClick={()=>{setEditTplFm({name:tpl.name,description:tpl.description||"",location:tpl.location||"",objectives:tpl.objectives||""});setEditTplMd(tpl.id)}}>Edit</Bt>
+              <Bt v="danger" sm onClick={()=>setConfirmDelTpl(tpl.id)}>Delete</Bt></div></div>)})}</div></div>}
 
     {/* Create/Edit trip modal */}
     <ModalWrap open={!!md} onClose={()=>setMd(null)} title={md==="add"?"New Trip":"Edit Trip"} wide>
@@ -157,7 +217,47 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
         <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["developer","director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
           } value={fm.leadId} onChange={e=>setFm(p=>({...p,leadId:e.target.value}))}/></Fl>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setMd(null)}>Cancel</Bt>
-          <Bt v="primary" onClick={saveTrip} disabled={!fm.name.trim()||!fm.startDate||!fm.endDate}>{md==="add"?"Create Trip":"Save Changes"}</Bt></div></div></ModalWrap></div>);
+          <Bt v="primary" onClick={saveTrip} disabled={!fm.name.trim()||!fm.startDate||!fm.endDate}>{md==="add"?"Create Trip":"Save Changes"}</Bt></div></div></ModalWrap>
+
+    {/* New Trip from Template modal */}
+    <ModalWrap open={!!fromTplMd} onClose={()=>setFromTplMd(null)} title={"New Trip from Template"+(fromTplMd?" — "+fromTplMd.name:"")} wide>
+      {fromTplMd&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Fl label="Trip Name"><In value={fromTplFm.name} onChange={e=>setFromTplFm(p=>({...p,name:e.target.value}))} placeholder="e.g. Operation Sunrise Q2"/></Fl>
+          <Fl label="Location"><In value={fromTplFm.location} onChange={e=>setFromTplFm(p=>({...p,location:e.target.value}))} placeholder={fromTplMd.location||"Location..."}/></Fl></div>
+        <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+          <Fl label="Start Date"><In type="date" value={fromTplFm.startDate} onChange={e=>setFromTplFm(p=>({...p,startDate:e.target.value}))}/></Fl>
+          <Fl label="End Date"><In type="date" value={fromTplFm.endDate} onChange={e=>setFromTplFm(p=>({...p,endDate:e.target.value}))}/></Fl>
+          <Fl label="Trip Lead"><Sl options={[{v:"",l:"— Select Lead —"},...personnel.filter(p=>["developer","director","super","engineer","manager","admin","lead"].includes(p.role)).map(p=>({v:p.id,l:p.name+(p.title?" — "+p.title:"")}))]
+            } value={fromTplFm.leadId} onChange={e=>setFromTplFm(p=>({...p,leadId:e.target.value}))}/></Fl></div>
+        <div style={{padding:12,borderRadius:8,background:T.ind+"08",border:"1px solid "+T.ind+"22"}}>
+          <div style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m,marginBottom:6}}>Template will create:</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {(fromTplMd.tasks||[]).length>0&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">{(fromTplMd.tasks||[]).length} tasks</Bg>}
+            {(fromTplMd.commsEntries||[]).length>0&&<Bg color={T.ind} bg="rgba(129,140,248,.1)">{(fromTplMd.commsEntries||[]).length} comms entries</Bg>}
+            {(fromTplMd.packingItems||[]).length>0&&<Bg color={T.am} bg="rgba(251,191,36,.1)">{(fromTplMd.packingItems||[]).length} packing items</Bg>}</div>
+          {(fromTplMd.personnelRoles||[]).length>0&&<div style={{marginTop:6,fontSize:9,color:T.sub,fontFamily:T.m}}>
+            Recommended: {(fromTplMd.personnelRoles||[]).map(r=>r.count+"x "+roleLabels[r.role]||r.role).join(", ")}</div>}
+          {(fromTplMd.kitTypeRequirements||[]).length>0&&<div style={{fontSize:9,color:T.sub,fontFamily:T.m,marginTop:2}}>
+            Kit types: {(fromTplMd.kitTypeRequirements||[]).map(k=>k.quantity+"x "+k.typeName).join(", ")}</div>}
+          <div style={{fontSize:8,color:T.dm,fontFamily:T.m,marginTop:6}}>Personnel and equipment are not auto-assigned — add them during planning</div></div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setFromTplMd(null)}>Cancel</Bt>
+          <Bt v="primary" onClick={doApplyTemplate} disabled={!fromTplFm.name.trim()||!fromTplFm.startDate||!fromTplFm.endDate||applyingTpl}>{applyingTpl?"Creating...":"Create Trip"}</Bt></div></div>}</ModalWrap>
+
+    {/* Edit template modal */}
+    <ModalWrap open={!!editTplMd} onClose={()=>setEditTplMd(null)} title="Edit Template">
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <Fl label="Template Name"><In value={editTplFm.name} onChange={e=>setEditTplFm(p=>({...p,name:e.target.value}))} placeholder="Template name"/></Fl>
+        <Fl label="Description"><In value={editTplFm.description} onChange={e=>setEditTplFm(p=>({...p,description:e.target.value}))} placeholder="Brief description..."/></Fl>
+        <Fl label="Default Location"><In value={editTplFm.location} onChange={e=>setEditTplFm(p=>({...p,location:e.target.value}))} placeholder="Location..."/></Fl>
+        <Fl label="Objectives"><Ta value={editTplFm.objectives} onChange={e=>setEditTplFm(p=>({...p,objectives:e.target.value}))} placeholder="Default objectives..." rows={3}/></Fl>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setEditTplMd(null)}>Cancel</Bt>
+          <Bt v="primary" onClick={doUpdateTemplate} disabled={!editTplFm.name.trim()}>Save Changes</Bt></div></div></ModalWrap>
+
+    {/* Delete template confirmation */}
+    <ConfirmDialog open={!!confirmDelTpl} onClose={()=>setConfirmDelTpl(null)} onConfirm={doDeleteTemplate}
+      title="Delete Template?" message="This will permanently delete this trip template. This cannot be undone."
+      confirmLabel="Delete Template" confirmColor={T.rd}/></div>);
 
   /* ── Detail View (trip selected) ── */
   const at=activeTrip;if(!at)return null;
@@ -177,6 +277,8 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
       {isAdmin&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
         {at.status==="planning"&&<Bt v="success" sm onClick={()=>setShowReadiness(true)}>▸ Activate</Bt>}
         {at.status==="active"&&<Bt v="primary" sm onClick={()=>changeStatus("completed")}>✓ Complete</Bt>}
+        {(at.status==="active"||at.status==="completed")&&<Bt sm onClick={()=>{setCloneFm({name:at.name+" (Copy)",startDate:"",endDate:"",location:at.location||""});setCloneMd(true)}}>Clone</Bt>}
+        <Bt sm onClick={()=>{setTplName(at.name);setSaveTplMd(true)}}>Save as Template</Bt>
         <Bt sm onClick={()=>{setFm({name:at.name,description:at.description,location:at.location,objectives:at.objectives,
           leadId:at.leadId||"",startDate:at.startDate?new Date(at.startDate).toISOString().slice(0,10):"",endDate:at.endDate?new Date(at.endDate).toISOString().slice(0,10):"",status:at.status});setMd(at.id)}}>Edit</Bt>
         <Bt v="danger" sm onClick={()=>setConfirmDel(at.id)}>Delete</Bt></div>}</div>
@@ -575,6 +677,45 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
     {/* After-Action Report */}
     {showAAR&&<TripAAR tripId={at.id} tripName={at.name} onClose={()=>setShowAAR(false)}
       onAddNote={async(data)=>{await api.trips.addNote(at.id,data);await onRefreshTrips()}}/>}
+
+    {/* Clone Trip modal */}
+    <ModalWrap open={cloneMd} onClose={()=>setCloneMd(false)} title={"Clone Trip — "+at.name} wide>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Fl label="New Trip Name"><In value={cloneFm.name} onChange={e=>setCloneFm(p=>({...p,name:e.target.value}))} placeholder={at.name+" (Copy)"}/></Fl>
+          <Fl label="Location"><In value={cloneFm.location} onChange={e=>setCloneFm(p=>({...p,location:e.target.value}))} placeholder={at.location||""}/></Fl></div>
+        <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Fl label="Start Date"><In type="date" value={cloneFm.startDate} onChange={e=>setCloneFm(p=>({...p,startDate:e.target.value}))}/></Fl>
+          <Fl label="End Date"><In type="date" value={cloneFm.endDate} onChange={e=>setCloneFm(p=>({...p,endDate:e.target.value}))}/></Fl></div>
+        <div style={{padding:12,borderRadius:8,background:T.gn+"08",border:"1px solid "+T.gn+"22"}}>
+          <div style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m,marginBottom:6}}>What will be cloned:</div>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {tripPers.length>0&&<div style={{fontSize:10,color:T.gn,fontFamily:T.m}}>&#10003; {tripPers.length} personnel assignments</div>}
+            {(at.tasks||[]).length>0&&<div style={{fontSize:10,color:T.gn,fontFamily:T.m}}>&#10003; {(at.tasks||[]).length} tasks (reset to todo)</div>}
+            {at._count?.commsEntries>0&&<div style={{fontSize:10,color:T.gn,fontFamily:T.m}}>&#10003; {at._count.commsEntries} comms entries</div>}
+            <div style={{fontSize:10,color:T.gn,fontFamily:T.m}}>&#10003; Packing items</div>
+            <div style={{fontSize:10,color:T.dm,fontFamily:T.m,marginTop:4}}>&#10007; Kit assignments (assign new equipment during planning)</div>
+            <div style={{fontSize:10,color:T.dm,fontFamily:T.m}}>&#10007; Notes (operational records are not copied)</div>
+            <div style={{fontSize:10,color:T.dm,fontFamily:T.m}}>&#10007; Reservations</div></div></div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setCloneMd(false)}>Cancel</Bt>
+          <Bt v="primary" onClick={doClone} disabled={!cloneFm.startDate||!cloneFm.endDate||cloning}>{cloning?"Cloning...":"Clone Trip"}</Bt></div></div></ModalWrap>
+
+    {/* Save as Template modal */}
+    <ModalWrap open={saveTplMd} onClose={()=>setSaveTplMd(false)} title="Save Trip as Template">
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <Fl label="Template Name"><In value={tplName} onChange={e=>setTplName(e.target.value)} placeholder="Template name..."/></Fl>
+        <div style={{padding:12,borderRadius:8,background:T.ind+"08",border:"1px solid "+T.ind+"22"}}>
+          <div style={{fontSize:10,fontWeight:600,color:T.tx,fontFamily:T.m,marginBottom:6}}>What will be saved:</div>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {tripPers.length>0&&<div style={{fontSize:10,color:T.sub,fontFamily:T.m}}>Personnel requirements: {Object.entries(tripPers.reduce((a,p)=>{a[p.tripRole]=(a[p.tripRole]||0)+1;return a},{}))
+              .map(([r,c])=>c+"x "+(roleLabels[r]||r)).join(", ")}</div>}
+            {tripKits.length>0&&<div style={{fontSize:10,color:T.sub,fontFamily:T.m}}>Kit requirements: {Object.entries(tripKits.reduce((a,k)=>{const tn=types.find(t=>t.id===k.typeId)?.name||"Unknown";a[tn]=(a[tn]||0)+1;return a},{}))
+              .map(([n,c])=>c+"x "+n).join(", ")}</div>}
+            {(at.tasks||[]).length>0&&<div style={{fontSize:10,color:T.sub,fontFamily:T.m}}>Tasks: {(at.tasks||[]).length} tasks across {new Set((at.tasks||[]).map(t=>t.phase)).size} phases</div>}
+            {at._count?.commsEntries>0&&<div style={{fontSize:10,color:T.sub,fontFamily:T.m}}>Comms: {at._count.commsEntries} entries</div>}
+            <div style={{fontSize:10,color:T.sub,fontFamily:T.m}}>Packing items: trip-specific items</div></div></div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Bt onClick={()=>setSaveTplMd(false)}>Cancel</Bt>
+          <Bt v="primary" onClick={doSaveAsTemplate} disabled={!tplName.trim()||savingTpl}>{savingTpl?"Saving...":"Save Template"}</Bt></div></div></ModalWrap>
   </div>);}
 
 export default TripsPage;

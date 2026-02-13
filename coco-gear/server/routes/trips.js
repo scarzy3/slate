@@ -223,6 +223,126 @@ router.delete('/:id', requirePerm('trips'), async (req, res) => {
   }
 });
 
+// ─── Clone Trip ───
+
+// POST /:id/clone - clone an existing trip
+router.post('/:id/clone', requirePerm('trips'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, startDate, endDate, location } = req.body;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate and endDate are required' });
+    }
+    if (new Date(startDate) > new Date(endDate)) {
+      return res.status(400).json({ error: 'Start date must be before or equal to end date' });
+    }
+
+    // Load source trip with all relations
+    const source = await prisma.trip.findUnique({
+      where: { id },
+      include: {
+        personnel: true,
+        tasks: true,
+        commsEntries: true,
+        packingItems: true,
+      },
+    });
+    if (!source) return res.status(404).json({ error: 'Trip not found' });
+
+    // Create new trip
+    const newTrip = await prisma.trip.create({
+      data: {
+        name: name || `${source.name} (Copy)`,
+        description: source.description,
+        location: location !== undefined ? location : source.location,
+        objectives: source.objectives,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        status: 'planning',
+      },
+    });
+
+    // Clone personnel — skip users that no longer exist
+    const clonedUserIds = new Set();
+    for (const p of source.personnel) {
+      try {
+        const userExists = await prisma.user.findUnique({ where: { id: p.userId }, select: { id: true } });
+        if (!userExists) continue;
+        await prisma.tripPersonnel.create({
+          data: { tripId: newTrip.id, userId: p.userId, role: p.role, notes: p.notes },
+        });
+        clonedUserIds.add(p.userId);
+      } catch { /* skip duplicates or missing users */ }
+    }
+
+    // Clone tasks — reset status, preserve assignee if in cloned personnel
+    for (const t of source.tasks) {
+      await prisma.tripTask.create({
+        data: {
+          tripId: newTrip.id,
+          title: t.title,
+          description: t.description,
+          assignedToId: t.assignedToId && clonedUserIds.has(t.assignedToId) ? t.assignedToId : null,
+          phase: t.phase,
+          priority: t.priority,
+          status: 'todo',
+          dueDate: null,
+          sortOrder: t.sortOrder,
+        },
+      });
+    }
+
+    // Clone comms entries — preserve assignee if in cloned personnel
+    for (const c of source.commsEntries) {
+      await prisma.tripCommsEntry.create({
+        data: {
+          tripId: newTrip.id,
+          type: c.type,
+          label: c.label,
+          value: c.value,
+          assignedToId: c.assignedToId && clonedUserIds.has(c.assignedToId) ? c.assignedToId : null,
+          notes: c.notes,
+          sortOrder: c.sortOrder,
+        },
+      });
+    }
+
+    // Clone packing items
+    for (const item of source.packingItems) {
+      await prisma.tripPackingItem.create({
+        data: {
+          tripId: newTrip.id,
+          tier: item.tier,
+          scope: item.scope,
+          category: item.category,
+          name: item.name,
+          quantity: item.quantity,
+          notes: item.notes,
+          required: item.required,
+          sortOrder: item.sortOrder,
+        },
+      });
+    }
+
+    // Return new trip with full includes
+    const result = await prisma.trip.findUnique({
+      where: { id: newTrip.id },
+      include: tripIncludes,
+    });
+
+    await auditLog('trip_clone', 'trip', newTrip.id, req.user.id, {
+      sourceId: id, sourceName: source.name, name: result.name,
+      personnel: source.personnel.length, tasks: source.tasks.length,
+      comms: source.commsEntries.length, packingItems: source.packingItems.length,
+    });
+    return res.status(201).json(result);
+  } catch (err) {
+    console.error('Clone trip error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── Kit Assignment ───
 
 // POST /:id/kits - assign kits to trip
