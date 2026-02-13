@@ -216,11 +216,12 @@ export default function App(){
     if(result.pending)return result;await refreshKits();return result}catch(e){alert(e.message);throw e}};
   const apiReturn=async(kitId,serials,notes)=>{
     try{await api.kits.return({kitId,serials,notes});await refreshKits()}catch(e){alert(e.message);throw e}};
-  const apiInspect=async(kitId,inspector,notes,results)=>{
+  const apiInspect=async(kitId,inspector,notes,results,photos=[])=>{
     try{const resultsMap={};for(const[key,status]of Object.entries(results)){
       const{componentId,slotIndex}=parseCompKeyForApi(key);
       resultsMap[key]={componentId,slotIndex,status}};
-    await api.kits.inspect({kitId,inspector,notes,results:resultsMap});await refreshKits()}catch(e){console.error("Inspect API error:",e)}};
+    const photoRefs=photos.map(p=>({filename:p.filename,originalName:p.originalName}));
+    await api.kits.inspect({kitId,inspector,notes,results:resultsMap,photos:photoRefs});await refreshKits()}catch(e){console.error("Inspect API error:",e)}};
   const apiSendMaint=async(kitId,type,reason,notes)=>{
     try{await api.maintenance.send({kitId,type,reason,notes});await refreshKits()}catch(e){alert(e.message);throw e}};
   const apiReturnMaint=async(kitId,notes)=>{
@@ -413,7 +414,7 @@ export default function App(){
           {navContent}</nav></>}
 
       {/* Desktop sidebar */}
-      {!isMobile&&<nav style={{width:200,flexShrink:0,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",display:"flex",flexDirection:"column",overflowY:"auto",overflowX:"hidden"}}>
+      {!isMobile&&<nav style={{width:200,flexShrink:0,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",display:"flex",flexDirection:"column",overflowY:"auto",overflowX:"hidden",position:"sticky",top:0,height:"100vh"}}>
         {navContent}</nav>}
 
       <main style={{flex:1,padding:isMobile?"14px 12px":"20px 26px",overflowY:"auto",overflowX:"hidden"}}>
@@ -428,7 +429,7 @@ export default function App(){
           isAdmin={isAdmin} isSuper={isSuper} userRole={effectiveRole} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests}
           accessRequests={accessRequests} setAccessRequests={setAccessRequests} addLog={addLog}
           reservations={reservations} onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}} trips={trips}
-          apiCheckout={apiCheckout} apiReturn={apiReturn} onRefreshKits={refreshKits} onRefreshRequests={refreshCheckoutRequests} apiSendMaint={apiSendMaint} apiResolveDegraded={apiResolveDegraded}/>}
+          apiCheckout={apiCheckout} apiReturn={apiReturn} apiInspect={apiInspect} onRefreshKits={refreshKits} onRefreshRequests={refreshCheckoutRequests} apiSendMaint={apiSendMaint} apiResolveDegraded={apiResolveDegraded}/>}
         {pg==="analytics"&&canAccess({access:"admin",perm:"analytics"})&&<AnalyticsPage analytics={analytics} kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs}/>}
         {pg==="reports"&&canAccess({access:"admin",perm:"reports"})&&<ReportsPage kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs} logs={logs} analytics={analytics}/>}
         {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests}

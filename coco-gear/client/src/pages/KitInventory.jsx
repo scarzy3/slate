@@ -34,7 +34,10 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
     if(onRefreshKits)await onRefreshKits()}catch(e){alert(e.message)}
     setMd(null);setKf(null)};
   const doneInsp=async data=>{const kid=String(md).split(":")[1];
-    try{await apiInspect(kid,"",data.notes,data.results)}catch(e){/* apiInspect logs error */}
+    try{let photoRefs=[];
+      if(data.photos?.length){const files=data.photos.map(p=>p.file).filter(Boolean);
+        if(files.length){const uploaded=await api.upload.photos(files);photoRefs=uploaded.files||[]}}
+      await apiInspect(kid,"",data.notes,data.results,photoRefs)}catch(e){/* apiInspect logs error */}
     setMd(null)};
 
   const getDegradedComps=kit=>{const ty=types.find(t=>t.id===kit.typeId);const critIds=ty?.criticalCompIds||[];
@@ -292,7 +295,11 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
                         <span style={{fontSize:9,fontWeight:700,color:s?s.fg:T.dm,width:16}}>{s?s.ic:"--"}</span>
                         <span style={{fontSize:9,color:st!=="GOOD"?T.tx:T.mu,fontFamily:T.m,flex:1}}>{lbl}</span>
                         {e.serials&&e.serials[ce.key]&&<span style={{fontSize:8,color:T.am,fontFamily:T.m}}>SN: {e.serials[ce.key]}</span>}</div>})}</div></div>}
-                {e.photos&&e.photos.length>0&&<div style={{marginTop:8,fontSize:9,color:T.ind,fontFamily:T.m}}>{e.photos.length} photo{e.photos.length>1?"s":""} attached</div>}</div>}
+                {e.photos&&e.photos.length>0&&<div style={{marginTop:8}}>
+                  <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.dm,fontFamily:T.m,marginBottom:6}}>Photos ({e.photos.length})</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{e.photos.map(ph=><a key={ph.id} href={"/uploads/"+ph.filename} target="_blank" rel="noopener noreferrer"
+                    style={{width:56,height:56,borderRadius:6,background:`url(/uploads/${ph.filename}) center/cover`,border:"1px solid "+T.bd,display:"block"}}
+                    title={ph.originalName}/></a>)}</div></div>}</div>}
               {e._et==="checkout"&&<div style={{paddingTop:10,display:"flex",flexDirection:"column",gap:8}}>
                 <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   <div style={{padding:"8px 10px",borderRadius:6,background:"rgba(96,165,250,.04)",border:"1px solid rgba(96,165,250,.08)"}}>
