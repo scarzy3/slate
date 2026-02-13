@@ -34,7 +34,7 @@ const KIT_INCLUDE = {
   },
   reservations: true,
   photos: true,
-  trip: { select: { id: true, name: true, status: true, startDate: true, endDate: true } },
+  trip: { select: { id: true, name: true, status: true, startDate: true, endDate: true, restricted: true, leadId: true, classification: true, personnel: { select: { userId: true } } } },
 };
 
 function compKey(componentId, slotIndex, quantity) {
@@ -181,6 +181,27 @@ function serializeKit(kit) {
   };
 }
 
+const PRIVILEGED_ROLES = ['developer', 'director', 'super', 'admin', 'engineer'];
+
+/**
+ * Redact trip info on a serialized kit if the user cannot access the restricted trip.
+ * The kit still shows as unavailable, but trip details are hidden.
+ */
+function redactKitTrip(serialized, userId, userRole) {
+  if (!serialized._trip || !serialized._trip.restricted) return serialized;
+  const trip = serialized._trip;
+  if (PRIVILEGED_ROLES.includes(userRole)) return serialized;
+  if (trip.leadId === userId) return serialized;
+  if (trip.personnel?.some(p => p.userId === userId)) return serialized;
+  // Redact trip info — kit shows as assigned but trip details hidden
+  return {
+    ...serialized,
+    _trip: { id: null, name: 'Assigned — Restricted', status: trip.status, startDate: null, endDate: null, restricted: true },
+    tripId: serialized.tripId, // keep tripId so frontend knows it's assigned
+    _tripRestricted: true,
+  };
+}
+
 router.use(authMiddleware);
 
 // GET / - list kits
@@ -205,7 +226,9 @@ router.get('/', async (req, res) => {
     }
 
     const kits = await prisma.kit.findMany({ where, include: KIT_INCLUDE, orderBy: { createdAt: 'asc' } });
-    res.json(kits.map(serializeKit));
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    res.json(kits.map(k => redactKitTrip(serializeKit(k), userId, userRole)));
   } catch (err) {
     console.error('List kits error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -256,7 +279,7 @@ router.post('/', requireRole('admin'), validate(kitSchema), async (req, res) => 
     });
 
     await auditLog('kit_create', 'kit', kit.id, req.user.id, { color, typeId });
-    res.status(201).json(serializeKit(kit));
+    res.status(201).json(redactKitTrip(serializeKit(kit), req.user.id, req.user.role));
   } catch (err) {
     console.error('Create kit error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -287,7 +310,7 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
 
     const kit = await prisma.kit.findUnique({ where: { id: req.params.id }, include: KIT_INCLUDE });
     await auditLog('kit_update', 'kit', req.params.id, req.user.id, { color, locId });
-    res.json(serializeKit(kit));
+    res.json(redactKitTrip(serializeKit(kit), req.user.id, req.user.role));
   } catch (err) {
     console.error('Update kit error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -592,7 +615,7 @@ router.get('/:id', async (req, res) => {
   try {
     const kit = await prisma.kit.findUnique({ where: { id: req.params.id }, include: KIT_INCLUDE });
     if (!kit) return res.status(404).json({ error: 'Kit not found' });
-    res.json(serializeKit(kit));
+    res.json(redactKitTrip(serializeKit(kit), req.user.id, req.user.role));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -706,7 +729,7 @@ router.post('/checkout', validate(checkoutSchema), async (req, res) => {
     });
 
     await auditLog('checkout', 'kit', kitId, req.user.id, { kitColor: kit.color, recipientId });
-    res.json(serializeKit(updated));
+    res.json(redactKitTrip(serializeKit(updated), req.user.id, req.user.role));
   } catch (err) {
     console.error('Checkout error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -768,7 +791,7 @@ router.post('/return', validate(returnSchema), async (req, res) => {
     }
 
     await auditLog('return', 'kit', kitId, req.user.id, { kitColor: kit.color });
-    res.json(serializeKit(updated));
+    res.json(redactKitTrip(serializeKit(updated), req.user.id, req.user.role));
   } catch (err) {
     console.error('Return error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -821,7 +844,7 @@ router.post('/inspect', validate(inspectionSchema), async (req, res) => {
     });
 
     await auditLog('inspect', 'kit', kitId, req.user.id, { kitColor: kit.color });
-    res.json(serializeKit(updated));
+    res.json(redactKitTrip(serializeKit(updated), req.user.id, req.user.role));
   } catch (err) {
     console.error('Inspect error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -848,7 +871,7 @@ router.put('/:id/serials', requireRole('admin'), validate(kitSerialUpdateSchema)
 
     const updated = await prisma.kit.findUnique({ where: { id: req.params.id }, include: KIT_INCLUDE });
     await auditLog('serial_update', 'kit', req.params.id, req.user.id, { kitColor: kit.color, serialCount: Object.keys(serials).length });
-    res.json(serializeKit(updated));
+    res.json(redactKitTrip(serializeKit(updated), req.user.id, req.user.role));
   } catch (err) {
     console.error('Update serials error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -894,7 +917,7 @@ router.post('/:id/resolve-degraded', authMiddleware, requireRole('lead'), async 
 
     const updated = await prisma.kit.findUnique({ where: { id: kit.id }, include: KIT_INCLUDE });
     await auditLog('resolve_degraded', 'kit', kit.id, req.user.id, { kitColor: kit.color, resolved: degradedStatuses.length + missingRecords.length });
-    res.json(serializeKit(updated));
+    res.json(redactKitTrip(serializeKit(updated), req.user.id, req.user.role));
   } catch (err) {
     console.error('Resolve degraded error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -925,7 +948,7 @@ router.put('/:id/location', async (req, res) => {
     });
 
     await auditLog('location_change', 'kit', req.params.id, req.user.id, { from: prevLoc, to: locId, kitColor: kit.color });
-    res.json(serializeKit(updated));
+    res.json(redactKitTrip(serializeKit(updated), req.user.id, req.user.role));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }

@@ -108,7 +108,8 @@ export default function App(){
     kitTypeIds:(d.kitTypes||[]).map(kt=>kt.kitTypeId||kt.kitType?.id).filter(Boolean)});
   const xformTrip=t=>({id:t.id,name:t.name,description:t.description||"",location:t.location||"",objectives:t.objectives||"",
     leadId:t.leadId||null,leadName:t.lead?.name||null,startDate:(t.startDate||"").slice(0,10),endDate:(t.endDate||"").slice(0,10),
-    status:t.status,kits:(t.kits||[]).map(k=>({id:k.id,color:k.color,typeId:k.typeId,deptId:k.deptId,issuedToId:k.issuedToId,
+    status:t.status,restricted:t.restricted||false,classification:t.classification||null,
+    kits:(t.kits||[]).map(k=>({id:k.id,color:k.color,typeId:k.typeId,deptId:k.deptId,issuedToId:k.issuedToId,
       typeName:k.type?.name,deptName:k.department?.name,deptColor:k.department?.color,holderName:k.issuedTo?.name})),
     personnel:(t.personnel||[]).map(p=>({id:p.id,userId:p.user?.id,name:p.user?.name,title:p.user?.title,sysRole:p.user?.role,
       deptId:p.user?.deptId,tripRole:p.role,notes:p.notes||""})),
@@ -129,10 +130,10 @@ export default function App(){
     fields:k.fields||{},lastChecked:k.lastChecked,comps:k.comps||{},serials:k.serials||{},calibrationDates:k.calibrationDates||{},
     inspections:k.inspections||[],issuedTo:k.issuedTo,issueHistory:k.issueHistory||[],degraded:k.degraded||false,
     maintenanceStatus:k.maintenanceStatus,maintenanceHistory:k.maintenanceHistory||[],photos:k.photos||[],reservations:k.reservations||[],
-    _type:k._type,_location:k._location,_department:k._department,_issuedTo:k._issuedTo,_trip:k._trip||null,
+    _type:k._type,_location:k._location,_department:k._department,_issuedTo:k._issuedTo,_trip:k._trip||null,_tripRestricted:k._tripRestricted||false,
   });
   const xformLog=l=>({id:l.id,action:l.action,target:l.target,targetId:l.targetId,by:l.userId,date:l.date,details:l.details||{}});
-  const xformReservation=r=>({id:r.id,kitId:r.kitId,personId:r.personId,tripId:r.tripId||null,tripName:r.trip?.name||null,startDate:(r.startDate||"").slice(0,10),endDate:(r.endDate||"").slice(0,10),purpose:r.purpose||"",status:r.status,createdDate:r.createdAt});
+  const xformReservation=r=>({id:r.id,kitId:r.kitId,personId:r.personId,tripId:r.tripId||null,tripName:r.trip?.name||null,tripRestricted:r._tripRestricted||r.trip?.restricted||false,startDate:(r.startDate||"").slice(0,10),endDate:(r.endDate||"").slice(0,10),purpose:r.purpose||"",status:r.status,createdDate:r.createdAt,person:r.person||null});
   const xformConsumable=c=>({id:c.id,name:c.name,sku:c.sku||"",category:c.category,qty:c.qty,minQty:c.minQty,unit:c.unit||"ea"});
   const xformAsset=a=>({id:a.id,name:a.name,serial:a.serial,category:a.category,locId:a.locId,issuedTo:a.issuedToId||null,
     issueHistory:(a.issueHistory||[]).map(h=>({id:h.id,personId:h.personId,issuedDate:h.issuedDate,returnedDate:h.returnedDate,issuedBy:h.issuedById})),
@@ -534,8 +535,8 @@ export default function App(){
                 {pReservations.map(r=>{const k=kits.find(x=>x.id===r.kitId);
                   return(<div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:7,background:"rgba(96,165,250,.03)",border:"1px solid rgba(96,165,250,.12)"}}>
                     {k&&<Sw color={k.color} size={18}/>}
-                    <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k?"Kit "+k.color:"Kit"}{r.tripName?" for "+r.tripName:""}</div>
-                      <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{r.startDate} to {r.endDate}{r.purpose?" | "+r.purpose:""}</div></div>
+                    <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k?"Kit "+k.color:"Kit"}{r.tripRestricted?" for \u{1F512} Restricted":r.tripName?" for "+r.tripName:""}</div>
+                      <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{r.startDate} to {r.endDate}{!r.tripRestricted&&r.purpose?" | "+r.purpose:""}</div></div>
                     <Bg color={r.status==="approved"?T.gn:r.status==="pending"?T.am:T.mu} bg={(r.status==="approved"?T.gn:r.status==="pending"?T.am:T.mu)+"18"}>{r.status}</Bg></div>)})}</div></div>}
 
             {/* Recent Checkout History */}

@@ -6,6 +6,33 @@ import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
 
+const PRIVILEGED_ROLES = ['developer', 'director', 'super', 'admin', 'engineer'];
+
+function canAccessTrip(trip, userId, userRole) {
+  if (!trip.restricted) return true;
+  if (PRIVILEGED_ROLES.includes(userRole)) return true;
+  if (trip.leadId === userId) return true;
+  if (trip.personnel?.some(p => p.userId === userId)) return true;
+  return false;
+}
+
+async function requireTripAccess(req, res, next) {
+  try {
+    const tripId = req.params.tripId || req.params.id;
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { personnel: { select: { userId: true } } },
+    });
+    if (!trip || !canAccessTrip(trip, req.user.id, req.user.role)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    req.trip = trip;
+    next();
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 const commsInclude = {
   assignedTo: { select: { id: true, name: true, title: true } },
 };
@@ -15,7 +42,7 @@ export const commsRouter = Router();
 commsRouter.use(authMiddleware);
 
 // GET /api/trips/:tripId/comms - list all comms entries for a trip
-commsRouter.get('/:tripId/comms', async (req, res) => {
+commsRouter.get('/:tripId/comms', requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
 
@@ -36,7 +63,7 @@ commsRouter.get('/:tripId/comms', async (req, res) => {
 });
 
 // POST /api/trips/:tripId/comms - create a comms entry
-commsRouter.post('/:tripId/comms', requirePerm('trips'), async (req, res) => {
+commsRouter.post('/:tripId/comms', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
     const { type, label, value, assignedToId, notes, sortOrder } = req.body;
@@ -73,7 +100,7 @@ commsRouter.post('/:tripId/comms', requirePerm('trips'), async (req, res) => {
 });
 
 // PUT /api/trips/:tripId/comms/:id - update a comms entry
-commsRouter.put('/:tripId/comms/:id', requirePerm('trips'), async (req, res) => {
+commsRouter.put('/:tripId/comms/:id', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId, id } = req.params;
     const { type, label, value, assignedToId, notes, sortOrder } = req.body;
@@ -106,7 +133,7 @@ commsRouter.put('/:tripId/comms/:id', requirePerm('trips'), async (req, res) => 
 });
 
 // DELETE /api/trips/:tripId/comms/:id - delete a comms entry
-commsRouter.delete('/:tripId/comms/:id', requirePerm('trips'), async (req, res) => {
+commsRouter.delete('/:tripId/comms/:id', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId, id } = req.params;
 
@@ -125,7 +152,7 @@ commsRouter.delete('/:tripId/comms/:id', requirePerm('trips'), async (req, res) 
 });
 
 // POST /api/trips/:tripId/comms/reorder - reorder comms entries
-commsRouter.post('/:tripId/comms/reorder', requirePerm('trips'), async (req, res) => {
+commsRouter.post('/:tripId/comms/reorder', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
     const { entryIds } = req.body;

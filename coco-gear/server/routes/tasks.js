@@ -6,6 +6,33 @@ import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
 
+const PRIVILEGED_ROLES = ['developer', 'director', 'super', 'admin', 'engineer'];
+
+function canAccessTrip(trip, userId, userRole) {
+  if (!trip.restricted) return true;
+  if (PRIVILEGED_ROLES.includes(userRole)) return true;
+  if (trip.leadId === userId) return true;
+  if (trip.personnel?.some(p => p.userId === userId)) return true;
+  return false;
+}
+
+async function requireTripAccess(req, res, next) {
+  try {
+    const tripId = req.params.tripId || req.params.id;
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { personnel: { select: { userId: true } } },
+    });
+    if (!trip || !canAccessTrip(trip, req.user.id, req.user.role)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    req.trip = trip;
+    next();
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 const taskSelect = {
   id: true,
   tripId: true,
@@ -30,7 +57,7 @@ export const taskRouter = Router();
 taskRouter.use(authMiddleware);
 
 // GET /api/trips/:tripId/tasks - list all tasks for a trip, grouped by phase
-taskRouter.get('/:tripId/tasks', async (req, res) => {
+taskRouter.get('/:tripId/tasks', requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
 
@@ -57,7 +84,7 @@ taskRouter.get('/:tripId/tasks', async (req, res) => {
 });
 
 // POST /api/trips/:tripId/tasks - create a task
-taskRouter.post('/:tripId/tasks', requirePerm('trips'), async (req, res) => {
+taskRouter.post('/:tripId/tasks', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
     const { title, description, assignedToId, phase, priority, dueDate, sortOrder } = req.body;
@@ -96,7 +123,7 @@ taskRouter.post('/:tripId/tasks', requirePerm('trips'), async (req, res) => {
 });
 
 // PUT /api/trips/:tripId/tasks/:taskId - update a task
-taskRouter.put('/:tripId/tasks/:taskId', async (req, res) => {
+taskRouter.put('/:tripId/tasks/:taskId', requireTripAccess, async (req, res) => {
   try {
     const { tripId, taskId } = req.params;
     const { title, description, assignedToId, phase, priority, status, dueDate, sortOrder } = req.body;
@@ -142,7 +169,7 @@ taskRouter.put('/:tripId/tasks/:taskId', async (req, res) => {
 });
 
 // DELETE /api/trips/:tripId/tasks/:taskId - delete a task
-taskRouter.delete('/:tripId/tasks/:taskId', requirePerm('trips'), async (req, res) => {
+taskRouter.delete('/:tripId/tasks/:taskId', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId, taskId } = req.params;
 
@@ -161,7 +188,7 @@ taskRouter.delete('/:tripId/tasks/:taskId', requirePerm('trips'), async (req, re
 });
 
 // POST /api/trips/:tripId/tasks/reorder - reorder tasks within a phase
-taskRouter.post('/:tripId/tasks/reorder', requirePerm('trips'), async (req, res) => {
+taskRouter.post('/:tripId/tasks/reorder', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
     const { taskIds } = req.body;
@@ -185,7 +212,7 @@ taskRouter.post('/:tripId/tasks/reorder', requirePerm('trips'), async (req, res)
 });
 
 // POST /api/trips/:tripId/tasks/from-template - create tasks from a template
-taskRouter.post('/:tripId/tasks/from-template', requirePerm('trips'), async (req, res) => {
+taskRouter.post('/:tripId/tasks/from-template', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId } = req.params;
     const { templateId } = req.body;

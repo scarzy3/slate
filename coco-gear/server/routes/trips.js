@@ -10,6 +10,46 @@ const router = Router();
 
 router.use(authMiddleware);
 
+// ─── Trip Access Control (OPSEC) ───
+
+const PRIVILEGED_ROLES = ['developer', 'director', 'super', 'admin', 'engineer'];
+
+/**
+ * Check if a user can access a restricted trip.
+ * Unrestricted trips are visible to everyone.
+ * Restricted trips are only visible to admins, the trip lead, and assigned personnel.
+ */
+function canAccessTrip(trip, userId, userRole) {
+  if (!trip.restricted) return true;
+  if (PRIVILEGED_ROLES.includes(userRole)) return true;
+  if (trip.leadId === userId) return true;
+  if (trip.personnel?.some(p => (p.userId || p.user?.id) === userId)) return true;
+  return false;
+}
+
+/**
+ * Middleware: load trip by :id param, check restricted access, attach to req.trip.
+ * Returns 404 for both missing and unauthorized trips (don't reveal existence).
+ */
+async function requireTripAccess(req, res, next) {
+  try {
+    const tripId = req.params.id || req.params.tripId;
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { personnel: { select: { userId: true } } },
+    });
+    if (!trip) return res.status(404).json({ error: 'Not found' });
+    if (!canAccessTrip(trip, req.user.id, req.user.role)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    req.trip = trip;
+    next();
+  } catch (err) {
+    console.error('Trip access check error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 const tripIncludes = {
   lead: { select: { id: true, name: true, title: true } },
   kits: {
@@ -59,12 +99,23 @@ const tripIncludes = {
   _count: { select: { reservations: true, personnel: true, boats: true, tasks: true, commsEntries: true } },
 };
 
-// GET / - list all trips with kit counts
+// GET / - list all trips with kit counts (filters restricted trips for unauthorized users)
 router.get('/', async (req, res) => {
   try {
     const { status } = req.query;
     const where = {};
     if (status) where.status = status;
+
+    // For non-privileged users, filter restricted trips at the database level
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    if (!PRIVILEGED_ROLES.includes(userRole)) {
+      where.OR = [
+        { restricted: false },
+        { leadId: userId },
+        { personnel: { some: { userId } } },
+      ];
+    }
 
     const trips = await prisma.trip.findMany({
       where,
@@ -171,7 +222,10 @@ router.get('/:id', async (req, res) => {
         },
       },
     });
-    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    if (!trip) return res.status(404).json({ error: 'Not found' });
+    if (!canAccessTrip(trip, req.user.id, req.user.role)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
     return res.json(trip);
   } catch (err) {
     console.error('Get trip error:', err);
@@ -182,7 +236,8 @@ router.get('/:id', async (req, res) => {
 // POST / - create trip (admin+)
 router.post('/', requirePerm('trips'), validate(tripSchema), async (req, res) => {
   try {
-    const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus } = req.validated;
+    const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus,
+      restricted, classification } = req.validated;
 
     if (new Date(startDate) > new Date(endDate)) {
       return res.status(400).json({ error: 'Start date must be before or equal to end date' });
@@ -198,6 +253,8 @@ router.post('/', requirePerm('trips'), validate(tripSchema), async (req, res) =>
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         status: tripStatus || 'planning',
+        restricted: restricted || false,
+        classification: restricted ? (classification || null) : null,
       },
       include: tripIncludes,
     });
@@ -223,10 +280,17 @@ router.post('/', requirePerm('trips'), validate(tripSchema), async (req, res) =>
 router.put('/:id', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus } = req.body;
+    const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus,
+      restricted, classification } = req.body;
 
-    const existing = await prisma.trip.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: 'Trip not found' });
+    const existing = await prisma.trip.findUnique({
+      where: { id },
+      include: { personnel: { select: { userId: true } } },
+    });
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    if (!canAccessTrip(existing, req.user.id, req.user.role)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
 
     const data = {};
     if (name !== undefined) data.name = name;
@@ -237,6 +301,8 @@ router.put('/:id', requirePerm('trips'), async (req, res) => {
     if (startDate !== undefined) data.startDate = new Date(startDate);
     if (endDate !== undefined) data.endDate = new Date(endDate);
     if (tripStatus !== undefined) data.status = tripStatus;
+    if (restricted !== undefined) data.restricted = restricted;
+    if (classification !== undefined) data.classification = restricted === false ? null : (classification || null);
 
     // If completing/cancelling a trip, unassign all kits
     if (tripStatus === 'completed' || tripStatus === 'cancelled') {
@@ -264,8 +330,14 @@ router.put('/:id', requirePerm('trips'), async (req, res) => {
 router.delete('/:id', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
-    const trip = await prisma.trip.findUnique({ where: { id } });
-    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    const trip = await prisma.trip.findUnique({
+      where: { id },
+      include: { personnel: { select: { userId: true } } },
+    });
+    if (!trip) return res.status(404).json({ error: 'Not found' });
+    if (!canAccessTrip(trip, req.user.id, req.user.role)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
 
     // Unassign kits first
     await prisma.kit.updateMany({
@@ -285,7 +357,7 @@ router.delete('/:id', requirePerm('trips'), async (req, res) => {
 // ─── Clone Trip ───
 
 // POST /:id/clone - clone an existing trip
-router.post('/:id/clone', requirePerm('trips'), async (req, res) => {
+router.post('/:id/clone', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, startDate, endDate, location } = req.body;
@@ -307,7 +379,7 @@ router.post('/:id/clone', requirePerm('trips'), async (req, res) => {
         packingItems: true,
       },
     });
-    if (!source) return res.status(404).json({ error: 'Trip not found' });
+    if (!source) return res.status(404).json({ error: 'Not found' });
 
     // Create new trip
     const newTrip = await prisma.trip.create({
@@ -405,7 +477,7 @@ router.post('/:id/clone', requirePerm('trips'), async (req, res) => {
 // ─── Kit Assignment ───
 
 // POST /:id/kits - assign kits to trip
-router.post('/:id/kits', requirePerm('trips'), async (req, res) => {
+router.post('/:id/kits', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const { kitIds, autoReserve } = req.body;
@@ -488,7 +560,7 @@ router.post('/:id/kits', requirePerm('trips'), async (req, res) => {
 });
 
 // DELETE /:id/kits/:kitId - remove kit from trip
-router.delete('/:id/kits/:kitId', requirePerm('trips'), async (req, res) => {
+router.delete('/:id/kits/:kitId', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { id, kitId } = req.params;
 
@@ -513,7 +585,7 @@ router.delete('/:id/kits/:kitId', requirePerm('trips'), async (req, res) => {
 // ─── Personnel Assignment ───
 
 // POST /:id/personnel - add person to trip
-router.post('/:id/personnel', requirePerm('trips'), validate(tripPersonnelSchema), async (req, res) => {
+router.post('/:id/personnel', requirePerm('trips'), requireTripAccess, validate(tripPersonnelSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { userId, role, notes } = req.validated;
@@ -543,7 +615,7 @@ router.post('/:id/personnel', requirePerm('trips'), validate(tripPersonnelSchema
 });
 
 // PUT /:id/personnel/:personnelId - update person's trip role
-router.put('/:id/personnel/:personnelId', requirePerm('trips'), async (req, res) => {
+router.put('/:id/personnel/:personnelId', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { personnelId } = req.params;
     const { role, notes } = req.body;
@@ -568,7 +640,7 @@ router.put('/:id/personnel/:personnelId', requirePerm('trips'), async (req, res)
 });
 
 // DELETE /:id/personnel/:personnelId - remove person from trip
-router.delete('/:id/personnel/:personnelId', requirePerm('trips'), async (req, res) => {
+router.delete('/:id/personnel/:personnelId', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { id, personnelId } = req.params;
 
@@ -582,7 +654,7 @@ router.delete('/:id/personnel/:personnelId', requirePerm('trips'), async (req, r
 });
 
 // POST /:id/personnel/bulk - add multiple people at once
-router.post('/:id/personnel/bulk', requirePerm('trips'), async (req, res) => {
+router.post('/:id/personnel/bulk', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const { userIds, role = 'specialist' } = req.body;
@@ -618,7 +690,7 @@ router.post('/:id/personnel/bulk', requirePerm('trips'), async (req, res) => {
 // ─── Trip Notes ───
 
 // POST /:id/notes - add a note
-router.post('/:id/notes', validate(tripNoteSchema), async (req, res) => {
+router.post('/:id/notes', requireTripAccess, validate(tripNoteSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { content, category } = req.validated;
@@ -641,7 +713,7 @@ router.post('/:id/notes', validate(tripNoteSchema), async (req, res) => {
 });
 
 // DELETE /:id/notes/:noteId - delete a note (author or admin)
-router.delete('/:id/notes/:noteId', async (req, res) => {
+router.delete('/:id/notes/:noteId', requireTripAccess, async (req, res) => {
   try {
     const { noteId } = req.params;
 
@@ -664,7 +736,7 @@ router.delete('/:id/notes/:noteId', async (req, res) => {
 // ─── Boat Assignment ───
 
 // POST /:id/boats - assign boats to trip
-router.post('/:id/boats', requirePerm('trips'), async (req, res) => {
+router.post('/:id/boats', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const { boatIds, role = 'primary', autoReserve } = req.body;
@@ -700,7 +772,7 @@ router.post('/:id/boats', requirePerm('trips'), async (req, res) => {
 });
 
 // PUT /:id/boats/:tripBoatId - update boat role on trip
-router.put('/:id/boats/:tripBoatId', requirePerm('trips'), async (req, res) => {
+router.put('/:id/boats/:tripBoatId', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripBoatId } = req.params;
     const { role, notes } = req.body;
@@ -723,7 +795,7 @@ router.put('/:id/boats/:tripBoatId', requirePerm('trips'), async (req, res) => {
 });
 
 // DELETE /:id/boats/:tripBoatId - remove boat from trip
-router.delete('/:id/boats/:tripBoatId', requirePerm('trips'), async (req, res) => {
+router.delete('/:id/boats/:tripBoatId', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { id, tripBoatId } = req.params;
 
@@ -739,7 +811,7 @@ router.delete('/:id/boats/:tripBoatId', requirePerm('trips'), async (req, res) =
 // ─── Trip Manifest ───
 
 // GET /:id/manifest - get a full manifest of the trip
-router.get('/:id/manifest', async (req, res) => {
+router.get('/:id/manifest', requireTripAccess, async (req, res) => {
   try {
     const trip = await prisma.trip.findUnique({
       where: { id: req.params.id },
@@ -801,7 +873,7 @@ router.get('/:id/manifest', async (req, res) => {
 // ─── After-Action Report ───
 
 // GET /:id/aar - compile comprehensive after-action report data
-router.get('/:id/aar', async (req, res) => {
+router.get('/:id/aar', requireTripAccess, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1206,7 +1278,7 @@ function overlapDays(s1, e1, s2, e2) {
 }
 
 // GET /:id/conflicts - compute all scheduling conflicts for a trip
-router.get('/:id/conflicts', async (req, res) => {
+router.get('/:id/conflicts', requireTripAccess, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1356,7 +1428,7 @@ router.get('/:id/conflicts', async (req, res) => {
 // ─── Trip Readiness ───
 
 // GET /:id/readiness - compile readiness data for deployment gate
-router.get('/:id/readiness', async (req, res) => {
+router.get('/:id/readiness', requireTripAccess, async (req, res) => {
   try {
     const { id } = req.params;
 
