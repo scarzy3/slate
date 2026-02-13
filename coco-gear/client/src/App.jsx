@@ -76,7 +76,7 @@ export default function App(){
   const[reservations,setReservations]=useState([]);const[trips,setTrips]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[boats,setBoats]=useState([]);const[favorites,setFavorites]=useState([]);
   const[searchMd,setSearchMd]=useState(false);const[scanMd,setScanMd]=useState(null);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);const[navAction,setNavAction]=useState(null);const[navPersonId,setNavPersonId]=useState(null);
-  const[collapsedSections,setCollapsedSections]=useState({});
+  const[collapsedSections,setCollapsedSections]=useState({insights:true,config:true});
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
   const[loginUsers,setLoginUsers]=useState([]);
   const[showSignup,setShowSignup]=useState(false);const[signupDomain,setSignupDomain]=useState("");
@@ -393,7 +393,7 @@ export default function App(){
       `}</style>
 
       {/* Mobile top bar */}
-      {isMobile&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",background:T.panel,borderBottom:"1px solid "+T.bd,zIndex:50}}>
+      {isMobile&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",background:T.panel,borderBottom:"1px solid "+T.bd,position:"sticky",top:0,zIndex:50}}>
         <button onClick={()=>setMobileNav(v=>!v)} style={{all:"unset",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
           width:36,height:36,borderRadius:8,background:T.card,border:"1px solid "+T.bd,fontSize:18,color:T.tx}}>☰</button>
         <div style={{flex:1}}><div style={{fontSize:14,fontWeight:800,fontFamily:T.u,letterSpacing:-.3}}>Slate</div>
@@ -415,10 +415,10 @@ export default function App(){
           {navContent}</nav></>}
 
       {/* Desktop sidebar */}
-      {!isMobile&&<nav style={{width:200,flexShrink:0,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",display:"flex",flexDirection:"column",overflowY:"auto",overflowX:"hidden",height:"100vh"}}>
+      {!isMobile&&<nav style={{width:200,flexShrink:0,background:T.panel,borderRight:"1px solid "+T.bd,padding:"14px 0",display:"flex",flexDirection:"column",overflowY:"auto",overflowX:"hidden",position:"sticky",top:0,height:"100vh"}}>
         {navContent}</nav>}
 
-      <main style={{flex:1,padding:isMobile?"14px 12px":"20px 26px",overflowY:"auto",overflowX:"hidden"}}>
+      <main style={{flex:1,padding:isMobile?"14px 12px":"20px 26px",overflowX:"hidden"}}>
         {pg==="dashboard"&&<Dash kits={kits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts} trips={trips} requests={requests}
           analytics={analytics} logs={logs} settings={settings} curUserId={curUser} userRole={effectiveRole} favorites={favorites} setFavorites={setFavorites} onNavigate={handleNavigate} onAction={handleQuickAction} onFilterKits={handleFilterKits}/>}
         {pg==="kits"&&<KitInv kits={kits} setKits={setKits} types={types} locs={locs} comps={comps} personnel={personnel} depts={depts}
