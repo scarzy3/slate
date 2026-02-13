@@ -66,6 +66,58 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /:id/availability - check a person's availability for a date range
+router.get('/:id/availability', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { start, end } = req.query;
+
+    if (!start || !end) {
+      return res.status(400).json({ error: 'start and end query params required (ISO dates)' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, name: true },
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    const overlapping = await prisma.tripPersonnel.findMany({
+      where: {
+        userId: id,
+        trip: {
+          status: { in: ['planning', 'active'] },
+          startDate: { lt: endDate },
+          endDate: { gt: startDate },
+        },
+      },
+      include: {
+        trip: { select: { id: true, name: true, status: true, startDate: true, endDate: true } },
+      },
+    });
+
+    return res.json({
+      userId: user.id,
+      userName: user.name,
+      available: overlapping.length === 0,
+      trips: overlapping.map(o => ({
+        tripId: o.trip.id,
+        tripName: o.trip.name,
+        tripStatus: o.trip.status,
+        startDate: o.trip.startDate,
+        endDate: o.trip.endDate,
+        role: o.role,
+      })),
+    });
+  } catch (err) {
+    console.error('Check personnel availability error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST / - create user (admin+, perm: personnel)
 router.post('/', authMiddleware, requireAdminPerm('personnel'), validate(personnelSchema), async (req, res) => {
   try {

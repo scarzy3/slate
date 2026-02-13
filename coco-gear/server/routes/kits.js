@@ -931,4 +931,81 @@ router.put('/:id/location', async (req, res) => {
   }
 });
 
+// GET /:id/availability - check a kit's availability for a date range
+router.get('/:id/availability', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { start, end } = req.query;
+
+    if (!start || !end) {
+      return res.status(400).json({ error: 'start and end query params required (ISO dates)' });
+    }
+
+    const kit = await prisma.kit.findUnique({
+      where: { id },
+      select: { id: true, color: true, type: { select: { name: true } } },
+    });
+    if (!kit) return res.status(404).json({ error: 'Kit not found' });
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    // Check if kit is assigned to a trip with overlapping dates
+    const tripConflicts = await prisma.kit.findMany({
+      where: {
+        id,
+        tripId: { not: null },
+        trip: {
+          status: { in: ['planning', 'active'] },
+          startDate: { lt: endDate },
+          endDate: { gt: startDate },
+        },
+      },
+      select: {
+        trip: { select: { id: true, name: true, startDate: true, endDate: true } },
+      },
+    });
+
+    // Check overlapping reservations
+    const resConflicts = await prisma.reservation.findMany({
+      where: {
+        kitId: id,
+        status: { in: ['pending', 'confirmed'] },
+        startDate: { lt: endDate },
+        endDate: { gt: startDate },
+      },
+      include: {
+        person: { select: { name: true } },
+      },
+    });
+
+    const trips = tripConflicts.filter(t => t.trip).map(t => ({
+      tripId: t.trip.id,
+      tripName: t.trip.name,
+      startDate: t.trip.startDate,
+      endDate: t.trip.endDate,
+    }));
+
+    const reservations = resConflicts.map(r => ({
+      reservationId: r.id,
+      purpose: r.purpose || '',
+      personName: r.person?.name || 'Unknown',
+      startDate: r.startDate,
+      endDate: r.endDate,
+      status: r.status,
+    }));
+
+    return res.json({
+      kitId: kit.id,
+      kitColor: kit.color,
+      available: trips.length === 0 && reservations.length === 0,
+      trips,
+      reservations,
+    });
+  } catch (err) {
+    console.error('Check kit availability error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

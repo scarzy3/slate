@@ -176,6 +176,7 @@ export const kits = {
   requestAccess: (data) => request('/kits/request-access', { method: 'POST', body: data }),
   approveAccess: (id) => request(`/kits/access-requests/${id}/approve`, { method: 'PUT' }),
   denyAccess: (id) => request(`/kits/access-requests/${id}/deny`, { method: 'PUT' }),
+  availability: (id, start, end) => request(`/kits/${id}/availability?start=${start}&end=${end}`),
   // Checkout requests (department approval workflow)
   checkoutRequests: () => request('/kits/checkout-requests'),
   myCheckoutRequests: () => request('/kits/checkout-requests/mine'),
@@ -225,6 +226,7 @@ export const personnel = {
   update: (id, data) => request(`/personnel/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/personnel/${id}`, { method: 'DELETE' }),
   import: (members) => request('/personnel/import', { method: 'POST', body: { members } }),
+  availability: (id, start, end) => request(`/personnel/${id}/availability?start=${start}&end=${end}`),
 };
 
 // ─── Consumables ───
@@ -283,6 +285,7 @@ export const trips = {
   readiness: (id) => request(`/trips/${id}/readiness`),
   aar: (id) => request(`/trips/${id}/aar`),
   clone: (id, data) => request(`/trips/${id}/clone`, { method: 'POST', body: data }),
+  conflicts: (id) => request(`/trips/${id}/conflicts`),
 };
 
 // ─── Trip Comms ───
