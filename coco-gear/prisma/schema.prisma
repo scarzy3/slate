@@ -247,10 +247,46 @@ model Trip {
   packingItems  TripPackingItem[]
   packingChecks TripPackingCheck[]
   commsEntries  TripCommsEntry[]
+  phases        TripPhase[]
+  milestones    TripMilestone[]
 
   @@index([status])
   @@index([startDate, endDate])
   @@index([leadId])
+}
+
+// ─── Trip Phases (timeline blocks) ───
+model TripPhase {
+  id        String   @id @default(uuid())
+  tripId    String
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  color     String?
+  notes     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+}
+
+// ─── Trip Milestones (timeline markers) ───
+model TripMilestone {
+  id          String    @id @default(uuid())
+  tripId      String
+  name        String
+  date        DateTime
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  notes       String?
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 // ─── Trip Personnel (who is assigned to a trip) ───
@@ -709,6 +745,8 @@ model TripTemplate {
   tasks               Json?   // array of { title: string, description?: string, phase: string, priority: string, sortOrder: number }
   commsEntries        Json?   // array of { type: string, label: string, value?: string, notes?: string, sortOrder: number }
   packingItems        Json?   // array of { tier: string, scope: string, category: string, name: string, quantity: number, notes?: string, required: boolean, sortOrder: number }
+  phases              Json?   // array of { name: string, startDayOffset: number, endDayOffset: number, color?: string, notes?: string, sortOrder: number }
+  milestones          Json?   // array of { name: string, dayOffset: number, notes?: string, sortOrder: number }
 
   createdById String?
   createdAt   DateTime @default(now())

@@ -9,6 +9,7 @@ import TripComms from './TripComms.jsx';
 import ReadinessReview from './ReadinessReview.jsx';
 import ActiveTripDashboard from './ActiveTripDashboard.jsx';
 import TripAAR from './TripAAR.jsx';
+import TripTimeline from './TripTimeline.jsx';
 
 function ReadinessCard({tripId,onOpen,readinessData,setReadinessData}){
   const[loading,setLoading]=useState(false);
@@ -182,6 +183,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
             {t.boatCount>0&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">{t.boatCount} USV{t.boatCount!==1?"s":""}</Bg>}
             {t.reservationCount>0&&<Bg color={T.pu} bg="rgba(168,85,247,.1)">{t.reservationCount} reservations</Bg>}
             {t.taskCount>0&&<Bg color={t.taskDone===t.taskCount?T.gn:T.or} bg={(t.taskDone===t.taskCount?T.gn:T.or)+"10"}>{t.taskDone}/{t.taskCount} tasks</Bg>}
+            {(t._count?.phases||t.phases?.length||0)>0&&<Bg color={T.pu} bg={T.pu+"10"}>{t._count?.phases||t.phases?.length} phases</Bg>}
             {t.conflictCount>0&&<Bg color={T.am} bg={T.am+"18"}>&#9888; {t.conflictCount} conflict{t.conflictCount!==1?"s":""}</Bg>}
             {t.kits.length>0&&<div style={{display:"flex",gap:2,alignItems:"center",marginLeft:4}}>
               {t.kits.slice(0,5).map(k=><div key={k.id} style={{width:14,height:14,borderRadius:7,background:CM[k.color]||"#888",border:"1px solid rgba(0,0,0,.2)"}} title={k.color}/>)}
@@ -327,7 +329,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
     {/* Tabs */}
     <Tabs tabs={[{id:"overview",l:"Overview"},{id:"personnel",l:"Personnel ("+tripPers.length+")"},{id:"equipment",l:"Equipment ("+tripKits.length+")"},
       {id:"tasks",l:"Tasks"+(taskTotal>0?" ("+taskDone+"/"+taskTotal+")":"")},{id:"packing",l:"Packing"+(packTotal>0?" ("+packDone+"/"+packTotal+")":"")},
-      {id:"comms",l:"Comms"+(commsCount>0?" ("+commsCount+")":"")},{id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
+      {id:"comms",l:"Comms"+(commsCount>0?" ("+commsCount+")":"")},{id:"timeline",l:"Timeline"+((at.phases?.length||0)+(at.milestones?.length||0)>0?" ("+(at.phases?.length||0)+"/"+(at.milestones?.length||0)+")":"")},{id:"boats",l:"USVs ("+tripBoats.length+")"},{id:"notes",l:"Notes ("+tripNotes.length+")"}]} active={detailTab} onChange={setDetailTab}/>
 
     {/* ── OVERVIEW TAB ── */}
     {detailTab==="overview"&&(at.status==="active"?
@@ -426,6 +428,24 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
           onMouseEnter={e=>e.currentTarget.style.background="rgba(96,165,250,.12)"}
           onMouseLeave={e=>e.currentTarget.style.background="rgba(96,165,250,.06)"}>
           Generate interim report &#8594;</button></div>}
+
+      {/* Timeline summary card */}
+      {((at.phases?.length||0)>0||(at.milestones?.length||0)>0)&&<div style={{padding:"14px 18px",borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.tx,fontFamily:T.u}}>Timeline</div>
+          <Bt v="ghost" sm onClick={()=>setDetailTab("timeline")}>View Timeline →</Bt></div>
+        {(at.phases?.length||0)>0&&<div style={{height:20,display:"flex",borderRadius:4,overflow:"hidden",marginBottom:8}}>
+          {at.phases.map((p,i)=>{const dur=Math.max(1,Math.ceil((new Date(p.endDate)-new Date(p.startDate))/864e5));
+            const totalDur=Math.max(1,Math.ceil((new Date(at.endDate)-new Date(at.startDate))/864e5));
+            const w=Math.max(2,(dur/totalDur)*100);
+            const c=p.color||[T.bl,T.gn,T.am,T.pu,T.tl,T.ind,T.or,T.rd][i%8];
+            return(<div key={p.id} style={{flex:w,background:c+"33",borderRight:i<at.phases.length-1?"1px solid "+T.bg:"none"}} title={p.name+" ("+dur+"d)"}/>)})}</div>}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <span style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{at.phases?.length||0} phases, {at.milestones?.length||0} milestones</span>
+          {(()=>{const now=Date.now();const next=(at.milestones||[]).filter(m=>!m.completed).sort((a,b)=>new Date(a.date)-new Date(b.date))[0];
+            if(!next)return null;const daysTo=Math.ceil((new Date(next.date)-now)/864e5);
+            return daysTo>0?<span style={{fontSize:9,color:T.am,fontFamily:T.m}}>Next: {next.name} in {daysTo}d</span>
+              :<span style={{fontSize:9,color:T.gn,fontFamily:T.m}}>{next.name} - completed</span>})()}</div></div>}
 
       {(at.description||at.objectives)&&<div style={{padding:16,borderRadius:10,background:T.card,border:"1px solid "+T.bd}}>
         {at.description&&<div style={{marginBottom:at.objectives?12:0}}>
@@ -617,6 +637,9 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
     {detailTab==="comms"&&<TripComms tripId={at.id} tripName={at.name} tripLocation={at.location} tripStart={at.startDate} tripEnd={at.endDate}
       tripPersonnel={tripPers} isAdmin={isAdmin} editable={editable}
       onCommsCountChange={(count)=>{setCommsCount(count)}}/>}
+
+    {/* ── TIMELINE TAB ── */}
+    {detailTab==="timeline"&&<TripTimeline trip={at} isAdmin={isAdmin} editable={editable} onRefresh={onRefreshTrips}/>}
 
     {/* ── USVs TAB ── */}
     {detailTab==="boats"&&<div>

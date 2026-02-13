@@ -286,6 +286,19 @@ export const trips = {
   aar: (id) => request(`/trips/${id}/aar`),
   clone: (id, data) => request(`/trips/${id}/clone`, { method: 'POST', body: data }),
   conflicts: (id) => request(`/trips/${id}/conflicts`),
+  phases: {
+    list: (tripId) => request(`/trips/${tripId}/phases`),
+    create: (tripId, data) => request(`/trips/${tripId}/phases`, { method: 'POST', body: data }),
+    update: (tripId, id, data) => request(`/trips/${tripId}/phases/${id}`, { method: 'PUT', body: data }),
+    delete: (tripId, id) => request(`/trips/${tripId}/phases/${id}`, { method: 'DELETE' }),
+    reorder: (tripId, phaseIds) => request(`/trips/${tripId}/phases/reorder`, { method: 'POST', body: { phaseIds } }),
+  },
+  milestones: {
+    list: (tripId) => request(`/trips/${tripId}/milestones`),
+    create: (tripId, data) => request(`/trips/${tripId}/milestones`, { method: 'POST', body: data }),
+    update: (tripId, id, data) => request(`/trips/${tripId}/milestones/${id}`, { method: 'PUT', body: data }),
+    delete: (tripId, id) => request(`/trips/${tripId}/milestones/${id}`, { method: 'DELETE' }),
+  },
 };
 
 // ─── Trip Comms ───

@@ -96,7 +96,13 @@ const tripIncludes = {
     },
     orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
   },
-  _count: { select: { reservations: true, personnel: true, boats: true, tasks: true, commsEntries: true } },
+  phases: {
+    orderBy: [{ sortOrder: 'asc' }, { startDate: 'asc' }],
+  },
+  milestones: {
+    orderBy: [{ date: 'asc' }, { sortOrder: 'asc' }],
+  },
+  _count: { select: { reservations: true, personnel: true, boats: true, tasks: true, commsEntries: true, phases: true, milestones: true } },
 };
 
 // GET / - list all trips with kit counts (filters restricted trips for unauthorized users)
@@ -377,6 +383,8 @@ router.post('/:id/clone', requirePerm('trips'), requireTripAccess, async (req, r
         tasks: true,
         commsEntries: true,
         packingItems: true,
+        phases: true,
+        milestones: true,
       },
     });
     if (!source) return res.status(404).json({ error: 'Not found' });
@@ -456,6 +464,44 @@ router.post('/:id/clone', requirePerm('trips'), requireTripAccess, async (req, r
       });
     }
 
+    // Clone phases — offset dates proportionally to the new trip date range
+    const sourceStart = new Date(source.startDate).getTime();
+    const sourceDuration = new Date(source.endDate).getTime() - sourceStart;
+    const newStart = new Date(startDate).getTime();
+    const newDuration = new Date(endDate).getTime() - newStart;
+
+    for (const phase of (source.phases || [])) {
+      const phaseStartOffset = sourceDuration > 0 ? (new Date(phase.startDate).getTime() - sourceStart) / sourceDuration : 0;
+      const phaseEndOffset = sourceDuration > 0 ? (new Date(phase.endDate).getTime() - sourceStart) / sourceDuration : 1;
+      await prisma.tripPhase.create({
+        data: {
+          tripId: newTrip.id,
+          name: phase.name,
+          startDate: new Date(newStart + phaseStartOffset * newDuration),
+          endDate: new Date(newStart + phaseEndOffset * newDuration),
+          color: phase.color,
+          notes: phase.notes,
+          sortOrder: phase.sortOrder,
+        },
+      });
+    }
+
+    // Clone milestones — offset dates proportionally, reset completion
+    for (const ms of (source.milestones || [])) {
+      const msOffset = sourceDuration > 0 ? (new Date(ms.date).getTime() - sourceStart) / sourceDuration : 0;
+      await prisma.tripMilestone.create({
+        data: {
+          tripId: newTrip.id,
+          name: ms.name,
+          date: new Date(newStart + msOffset * newDuration),
+          completed: false,
+          completedAt: null,
+          notes: ms.notes,
+          sortOrder: ms.sortOrder,
+        },
+      });
+    }
+
     // Return new trip with full includes
     const result = await prisma.trip.findUnique({
       where: { id: newTrip.id },
@@ -466,6 +512,7 @@ router.post('/:id/clone', requirePerm('trips'), requireTripAccess, async (req, r
       sourceId: id, sourceName: source.name, name: result.name,
       personnel: source.personnel.length, tasks: source.tasks.length,
       comms: source.commsEntries.length, packingItems: source.packingItems.length,
+      phases: (source.phases || []).length, milestones: (source.milestones || []).length,
     });
     return res.status(201).json(result);
   } catch (err) {
@@ -859,6 +906,12 @@ router.get('/:id/manifest', requireTripAccess, async (req, res) => {
           include: { assignedTo: { select: { id: true, name: true, title: true } } },
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         },
+        phases: {
+          orderBy: [{ sortOrder: 'asc' }, { startDate: 'asc' }],
+        },
+        milestones: {
+          orderBy: [{ date: 'asc' }, { sortOrder: 'asc' }],
+        },
       },
     });
 
@@ -920,6 +973,12 @@ router.get('/:id/aar', requireTripAccess, async (req, res) => {
               include: { component: { select: { id: true, key: true, label: true } } },
             },
           },
+        },
+        phases: {
+          orderBy: [{ sortOrder: 'asc' }, { startDate: 'asc' }],
+        },
+        milestones: {
+          orderBy: [{ date: 'asc' }, { sortOrder: 'asc' }],
         },
       },
     });
@@ -1232,6 +1291,22 @@ router.get('/:id/aar', requireTripAccess, async (req, res) => {
           notes,
         })),
         afterAction: afterActionNotes,
+      },
+
+      timeline: {
+        phases: (trip.phases || []).map(p => ({
+          name: p.name,
+          startDate: p.startDate,
+          endDate: p.endDate,
+          color: p.color,
+          durationDays: Math.max(1, Math.ceil((new Date(p.endDate).getTime() - new Date(p.startDate).getTime()) / DAY_MS)),
+        })),
+        milestones: (trip.milestones || []).map(m => ({
+          name: m.name,
+          date: m.date,
+          completed: m.completed,
+          completedAt: m.completedAt,
+        })),
       },
 
       equipmentIssues: {
