@@ -37,6 +37,13 @@ function TripComms({ tripId, tripName, tripLocation, tripStart, tripEnd, tripPer
   useEffect(() => { loadEntries(); }, [tripId]);
   useEffect(() => { if (onCommsCountChange) onCommsCountChange(entries.length); }, [entries.length]);
 
+  // Clear printing state after print completes
+  useEffect(() => {
+    const onAfterPrint = () => setPrinting(false);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => window.removeEventListener('afterprint', onAfterPrint);
+  }, []);
+
   const loadEntries = async () => {
     try {
       const data = await api.comms.list(tripId);
@@ -115,7 +122,7 @@ function TripComms({ tripId, tripName, tripLocation, tripStart, tripEnd, tripPer
 
   const handlePrint = () => {
     setPrinting(true);
-    setTimeout(() => { window.print(); setPrinting(false); }, 100);
+    setTimeout(() => window.print(), 100);
   };
 
   const grouped = TYPE_GROUPS.map(type => ({
@@ -135,52 +142,53 @@ function TripComms({ tripId, tripName, tripLocation, tripStart, tripEnd, tripPer
             .comms-print-card, .comms-print-card * { visibility: visible !important; }
             .comms-print-card {
               position: fixed !important; left: 0; top: 0; width: 100%; background: #fff !important;
-              color: #000 !important; padding: 12mm 10mm !important; font-family: 'IBM Plex Mono', monospace !important;
+              color: #000 !important; padding: 10mm 12mm !important; font-family: 'IBM Plex Mono', monospace !important;
               font-size: 10pt !important; z-index: 999999;
             }
             .comms-print-card table { border-collapse: collapse; width: 100%; }
-            .comms-print-card th, .comms-print-card td { border: 1px solid #333; padding: 4px 6px; text-align: left; }
-            .comms-print-card th { background: #e5e5e5 !important; font-weight: 700; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
-            .comms-print-card td { font-size: 9pt; }
-            .comms-print-card .val-col { font-weight: 700; font-size: 10pt; }
-            .comms-print-card .group-hdr { background: #f0f0f0 !important; font-weight: 700; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
-            .comms-print-card .footer { margin-top: 8px; font-size: 8pt; color: #666; border-top: 1px solid #999; padding-top: 4px; }
+            .comms-print-card th, .comms-print-card td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; }
+            .comms-print-card th { background: #eeeef4 !important; font-weight: 700; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.8px; color: #0f0f23; }
+            .comms-print-card td { font-size: 9pt; color: #1a1a2e; }
+            .comms-print-card .val-col { font-weight: 700; font-size: 10pt; color: #0f0f23; }
+            .comms-print-card .group-hdr { background: #f8f8fc !important; font-weight: 700; font-size: 8pt; text-transform: uppercase; letter-spacing: 1px; color: #2563eb; border-top: 2px solid #2563eb; }
+            .comms-print-card .footer { margin-top: 12px; font-size: 7pt; color: #7a7a9a; border-top: 1px solid #d4d4de; padding-top: 6px; text-align: center; }
+            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
           }
           @media screen { .comms-print-card { display: none; } }
         `}</style>
-        <div style={{ textAlign: 'center', marginBottom: 8 }}>
-          <div style={{ fontSize: '14pt', fontWeight: 800, letterSpacing: 2 }}>COMMS CARD</div>
-          <div style={{ fontSize: '11pt', fontWeight: 600, marginTop: 2 }}>{tripName}</div>
-          <div style={{ fontSize: '9pt', marginTop: 2 }}>
+        <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '2px solid #2563eb' }}>
+          <div style={{ fontSize: '9pt', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 4 }}>Communications Card</div>
+          <div style={{ fontSize: '14pt', fontWeight: 800, letterSpacing: 1, color: '#0f0f23' }}>{tripName}</div>
+          <div style={{ fontSize: '9pt', marginTop: 4, color: '#4a4a6a' }}>
             {fmtD(tripStart)} — {fmtD(tripEnd)}{tripLocation ? ' | ' + tripLocation : ''}
           </div>
         </div>
         <table>
           <thead><tr>
-            <th style={{ width: '14%' }}>Type</th>
+            <th style={{ width: '12%' }}>Type</th>
             <th style={{ width: '20%' }}>Label</th>
-            <th style={{ width: '30%' }}>Value</th>
-            <th style={{ width: '16%' }}>Monitor</th>
-            <th style={{ width: '20%' }}>Notes</th>
+            <th style={{ width: '28%' }}>Value / Frequency</th>
+            <th style={{ width: '18%' }}>Monitor</th>
+            <th style={{ width: '22%' }}>Notes</th>
           </tr></thead>
           <tbody>
             {grouped.map(g => (
               <>{/* eslint-disable-next-line react/jsx-key */}
-                <tr key={'gh-' + g.type}><td colSpan={5} className="group-hdr">{TYPE_ICONS[g.type]} {TYPE_LABELS[g.type]}s</td></tr>
+                <tr key={'gh-' + g.type}><td colSpan={5} className="group-hdr">{TYPE_ICONS[g.type]} {TYPE_LABELS[g.type]}s ({g.entries.length})</td></tr>
                 {g.entries.map(e => (
                   <tr key={e.id}>
                     <td>{TYPE_ICONS[e.type]}</td>
-                    <td>{e.label}</td>
+                    <td style={{ fontWeight: 600 }}>{e.label}</td>
                     <td className="val-col">{e.value}</td>
-                    <td>{e.assignedTo?.name || ''}</td>
-                    <td>{e.notes || ''}</td>
+                    <td>{e.assignedTo?.name || '—'}</td>
+                    <td style={{ fontSize: '8pt', color: '#4a4a6a' }}>{e.notes || ''}</td>
                   </tr>
                 ))}
               </>
             ))}
           </tbody>
         </table>
-        <div className="footer">Generated {new Date().toLocaleDateString()} — {tripName}</div>
+        <div className="footer">Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} | {entries.length} entries | COCO Gear</div>
       </div>}
 
       {/* Header */}
