@@ -82,7 +82,7 @@ router.get('/:id', async (req, res) => {
 // POST / - create a template from scratch
 router.post('/', requirePerm('trips'), async (req, res) => {
   try {
-    const { name, description, location, objectives, personnelRoles, kitTypeRequirements, tasks, commsEntries, packingItems } = req.body;
+    const { name, description, location, objectives, personnelRoles, kitTypeRequirements, tasks, commsEntries, packingItems, phases, milestones } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Name is required' });
@@ -99,6 +99,8 @@ router.post('/', requirePerm('trips'), async (req, res) => {
         tasks: tasks || null,
         commsEntries: commsEntries || null,
         packingItems: packingItems || null,
+        phases: phases || null,
+        milestones: milestones || null,
         createdById: req.user.id,
       },
       include: templateIncludes,
@@ -130,6 +132,8 @@ router.post('/from-trip/:tripId', requirePerm('trips'), async (req, res) => {
         commsEntries: true,
         packingItems: true,
         kits: { include: { type: { select: { id: true, name: true } } } },
+        phases: true,
+        milestones: true,
       },
     });
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
@@ -182,6 +186,27 @@ router.post('/from-trip/:tripId', requirePerm('trips'), async (req, res) => {
       sortOrder: item.sortOrder,
     }));
 
+    // Extract phases as day offsets relative to trip start
+    const DAY_MS = 86400000;
+    const tripStartMs = new Date(trip.startDate).getTime();
+    const tripDuration = Math.max(1, Math.ceil((new Date(trip.endDate).getTime() - tripStartMs) / DAY_MS));
+    const phaseTemplates = (trip.phases || []).map(p => ({
+      name: p.name,
+      startDayOffset: Math.round((new Date(p.startDate).getTime() - tripStartMs) / DAY_MS),
+      endDayOffset: Math.round((new Date(p.endDate).getTime() - tripStartMs) / DAY_MS),
+      color: p.color || undefined,
+      notes: p.notes || undefined,
+      sortOrder: p.sortOrder,
+    }));
+
+    // Extract milestones as day offsets
+    const milestoneTemplates = (trip.milestones || []).map(m => ({
+      name: m.name,
+      dayOffset: Math.round((new Date(m.date).getTime() - tripStartMs) / DAY_MS),
+      notes: m.notes || undefined,
+      sortOrder: m.sortOrder,
+    }));
+
     const template = await prisma.tripTemplate.create({
       data: {
         name: name.trim(),
@@ -193,6 +218,8 @@ router.post('/from-trip/:tripId', requirePerm('trips'), async (req, res) => {
         tasks: tasks.length > 0 ? tasks : null,
         commsEntries: commsEntries.length > 0 ? commsEntries : null,
         packingItems: packingItems.length > 0 ? packingItems : null,
+        phases: phaseTemplates.length > 0 ? phaseTemplates : null,
+        milestones: milestoneTemplates.length > 0 ? milestoneTemplates : null,
         createdById: req.user.id,
       },
       include: templateIncludes,
@@ -212,7 +239,7 @@ router.post('/from-trip/:tripId', requirePerm('trips'), async (req, res) => {
 router.put('/:id', requirePerm('trips'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, location, objectives, personnelRoles, kitTypeRequirements, tasks, commsEntries, packingItems } = req.body;
+    const { name, description, location, objectives, personnelRoles, kitTypeRequirements, tasks, commsEntries, packingItems, phases, milestones } = req.body;
 
     const existing = await prisma.tripTemplate.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Template not found' });
@@ -227,6 +254,8 @@ router.put('/:id', requirePerm('trips'), async (req, res) => {
     if (tasks !== undefined) data.tasks = tasks;
     if (commsEntries !== undefined) data.commsEntries = commsEntries;
     if (packingItems !== undefined) data.packingItems = packingItems;
+    if (phases !== undefined) data.phases = phases;
+    if (milestones !== undefined) data.milestones = milestones;
 
     const template = await prisma.tripTemplate.update({
       where: { id },
@@ -348,6 +377,38 @@ router.post('/:id/apply', requirePerm('trips'), async (req, res) => {
       });
     }
 
+    // Create phases from template (day offsets -> absolute dates)
+    const DAY_MS = 86400000;
+    const newStartMs = new Date(startDate).getTime();
+    const templatePhases = template.phases || [];
+    for (const p of templatePhases) {
+      await prisma.tripPhase.create({
+        data: {
+          tripId: newTrip.id,
+          name: p.name,
+          startDate: new Date(newStartMs + (p.startDayOffset || 0) * DAY_MS),
+          endDate: new Date(newStartMs + (p.endDayOffset || 1) * DAY_MS),
+          color: p.color || null,
+          notes: p.notes || null,
+          sortOrder: p.sortOrder ?? 0,
+        },
+      });
+    }
+
+    // Create milestones from template (day offsets -> absolute dates)
+    const templateMilestones = template.milestones || [];
+    for (const m of templateMilestones) {
+      await prisma.tripMilestone.create({
+        data: {
+          tripId: newTrip.id,
+          name: m.name,
+          date: new Date(newStartMs + (m.dayOffset || 0) * DAY_MS),
+          notes: m.notes || null,
+          sortOrder: m.sortOrder ?? 0,
+        },
+      });
+    }
+
     // Return new trip with full includes
     const result = await prisma.trip.findUnique({
       where: { id: newTrip.id },
@@ -357,6 +418,7 @@ router.post('/:id/apply', requirePerm('trips'), async (req, res) => {
     await auditLog('trip_from_template', 'trip', newTrip.id, req.user.id, {
       templateId: id, templateName: template.name, name: result.name,
       tasks: templateTasks.length, comms: templateComms.length, packingItems: templatePacking.length,
+      phases: templatePhases.length, milestones: templateMilestones.length,
     });
     return res.status(201).json(result);
   } catch (err) {
