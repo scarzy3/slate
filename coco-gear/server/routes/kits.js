@@ -744,7 +744,11 @@ router.post('/return', validate(returnSchema), async (req, res) => {
     if (!kit) return res.status(404).json({ error: 'Kit not found' });
     if (!kit.issuedToId) return res.status(409).json({ error: 'Kit not issued' });
 
-    // Any authenticated user can return a kit (operators are primary users for returns)
+    // Only the kit holder or a lead+ user can return a kit
+    const leadAndAbove = ['lead', 'manager', 'admin', 'director', 'super', 'developer', 'engineer'];
+    if (kit.issuedToId !== req.user.id && !leadAndAbove.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only the kit holder or a lead or above can return this kit' });
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.kit.update({ where: { id: kitId }, data: { issuedToId: null } });
