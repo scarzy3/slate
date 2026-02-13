@@ -299,7 +299,7 @@ function KitInv({kits,setKits,types,locs,comps:allC,personnel,depts,isAdmin,isSu
                   <div style={{fontSize:8,textTransform:"uppercase",letterSpacing:1,color:T.dm,fontFamily:T.m,marginBottom:6}}>Photos ({e.photos.length})</div>
                   <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{e.photos.map(ph=><a key={ph.id} href={"/uploads/"+ph.filename} target="_blank" rel="noopener noreferrer"
                     style={{width:56,height:56,borderRadius:6,background:`url(/uploads/${ph.filename}) center/cover`,border:"1px solid "+T.bd,display:"block"}}
-                    title={ph.originalName}/></a>)}</div></div>}</div>}
+                    title={ph.originalName}></a>)}</div></div>}</div>}
               {e._et==="checkout"&&<div style={{paddingTop:10,display:"flex",flexDirection:"column",gap:8}}>
                 <div className="slate-resp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   <div style={{padding:"8px 10px",borderRadius:6,background:"rgba(96,165,250,.04)",border:"1px solid rgba(96,165,250,.08)"}}>
