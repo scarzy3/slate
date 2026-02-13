@@ -112,7 +112,7 @@ function ApprovalsPage({requests,setRequests,accessRequests,setAccessRequests,ki
     <Tabs tabs={tabList} active={tab} onChange={setTab} style={{marginBottom:12}}/>
 
     {/* Checkout Requests Tab */}
-    {(tab==="checkout"||!showTabs)&&<div>
+    {tab==="checkout"&&<div>
       {!pending.length&&<div style={{padding:30,textAlign:"center",color:T.dm,fontFamily:T.m}}>No pending checkout requests</div>}
       {pending.map(req=>{const kit=kits.find(k=>k.id===req.kitId);const person=personnel.find(p=>p.id===req.personId)||req._person;const dept=depts.find(d=>d.id===req.deptId)||req._kit?.department;
         const ty=kit?types.find(t=>t.id===kit.typeId):null;
