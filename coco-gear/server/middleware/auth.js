@@ -5,7 +5,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // SEC-001 fix: No hardcoded fallback secret.
-let JWT_SECRET = process.env.JWT_SECRET;
+export let JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   if (process.env.NODE_ENV === 'production') {
     console.error('FATAL: JWT_SECRET environment variable is not set. Refusing to start in production.');
