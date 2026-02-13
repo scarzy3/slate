@@ -1,8 +1,19 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+
+// SEC-001 fix: No hardcoded fallback secret.
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL: JWT_SECRET environment variable is not set. Refusing to start in production.');
+    process.exit(1);
+  }
+  JWT_SECRET = crypto.randomBytes(32).toString('hex');
+  console.warn('[security] JWT_SECRET not set — using random per-session secret (tokens will not survive restart)');
+}
 
 export function generateToken(user) {
   return jwt.sign(
@@ -28,7 +39,7 @@ export async function authMiddleware(req, res, next) {
       if (err.name === 'TokenExpiredError' && req.path === '/refresh') {
         decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
         const expiredAt = decoded.exp * 1000;
-        const gracePeriod = 7 * 24 * 60 * 60 * 1000; // 7 days
+        const gracePeriod = 1 * 60 * 60 * 1000; // SEC-007 fix: 1 hour (was 7 days)
         if (Date.now() - expiredAt > gracePeriod) {
           return res.status(401).json({ error: 'Token expired beyond refresh window' });
         }

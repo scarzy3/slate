@@ -1,5 +1,10 @@
 version: '3.8'
 
+# SEC-003 fix: Use environment variable interpolation for secrets.
+# Override these in a .env file (not committed to version control):
+#   POSTGRES_PASSWORD=<strong-random-password>
+#   JWT_SECRET=<strong-random-secret>
+
 services:
   db:
     image: postgres:16-alpine
@@ -7,9 +12,10 @@ services:
     environment:
       POSTGRES_DB: cocogear
       POSTGRES_USER: coco
-      POSTGRES_PASSWORD: coco_secret
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-coco_secret}
+    # SEC-010 fix: Bind to localhost only; remove entirely in production
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -27,16 +33,17 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://coco:coco_secret@db:5432/cocogear?schema=public
-      JWT_SECRET: change-this-to-a-strong-random-secret
+      DATABASE_URL: postgresql://coco:${POSTGRES_PASSWORD:-coco_secret}@db:5432/cocogear?schema=public
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-strong-random-secret}
       JWT_EXPIRES_IN: 24h
       PORT: 3000
       NODE_ENV: production
       UPLOAD_DIR: /app/uploads
     volumes:
       - uploads:/app/uploads
+    # SEC-017 fix: Removed --accept-data-loss flag
     command: >
-      sh -c "npx prisma db push --skip-generate --accept-data-loss &&
+      sh -c "npx prisma db push --skip-generate &&
              node prisma/seed.js &&
              node server/index.js"
 

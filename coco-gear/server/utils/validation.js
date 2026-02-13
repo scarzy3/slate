@@ -44,6 +44,17 @@ export const componentSchema = z.object({
   calibrationIntervalDays: z.number().int().positive().nullable().optional(),
 });
 
+// SEC-008 fix: Update schema for components PUT endpoint
+export const componentUpdateSchema = z.object({
+  key: z.string().min(1).max(100).optional(),
+  label: z.string().min(1).max(200).optional(),
+  category: z.enum(['Comms', 'Power', 'Cables', 'Cases', 'Optics', 'Other']).optional(),
+  serialized: z.boolean().optional(),
+  qrScannable: z.boolean().optional(),
+  calibrationRequired: z.boolean().optional(),
+  calibrationIntervalDays: z.number().int().positive().nullable().optional(),
+});
+
 // ─── Kit Type ───
 export const kitTypeSchema = z.object({
   name: z.string().min(1).max(200),
@@ -59,6 +70,23 @@ export const kitTypeSchema = z.object({
     type: z.enum(['text', 'number', 'toggle']).default('text'),
   })).optional().default([]),
   deptIds: z.array(z.string().uuid()).optional().default([]),
+});
+
+// SEC-008 fix: Update schema for kit types PUT endpoint
+export const kitTypeUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  desc: z.string().max(500).optional(),
+  components: z.array(z.object({
+    componentId: z.string().uuid(),
+    quantity: z.number().int().min(1).default(1),
+    critical: z.boolean().optional().default(false),
+  })).optional(),
+  fields: z.array(z.object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    type: z.enum(['text', 'number', 'toggle']).default('text'),
+  })).optional(),
+  deptIds: z.array(z.string().uuid()).optional(),
 });
 
 // ─── Kit ───
@@ -84,6 +112,12 @@ export const locationSchema = z.object({
   shortCode: z.string().min(1).max(20),
 });
 
+// SEC-008 fix: Update schema for locations PUT endpoint
+export const locationUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  shortCode: z.string().min(1).max(20).optional(),
+});
+
 // ─── Department ───
 export const departmentSchema = z.object({
   name: z.string().min(1).max(200),
@@ -91,6 +125,15 @@ export const departmentSchema = z.object({
   site: z.string().max(200).nullable().optional(),
   managerIds: z.array(z.string().uuid()).optional().default([]),
   leadIds: z.array(z.string().uuid()).optional().default([]),
+});
+
+// SEC-008 fix: Update schema for departments PUT endpoint
+export const departmentUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  color: z.string().max(20).optional(),
+  site: z.string().max(200).nullable().optional(),
+  managerIds: z.array(z.string().uuid()).optional(),
+  leadIds: z.array(z.string().uuid()).optional(),
 });
 
 // ─── Personnel ───
@@ -154,6 +197,16 @@ export const consumableSchema = z.object({
   unit: z.string().max(20).optional().default('ea'),
 });
 
+// SEC-008 fix: Update schema for consumables PUT endpoint
+export const consumableUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  sku: z.string().max(50).optional(),
+  category: z.string().max(50).optional(),
+  qty: z.number().int().min(0).optional(),
+  minQty: z.number().int().min(0).optional(),
+  unit: z.string().max(20).optional(),
+});
+
 export const consumableAdjustSchema = z.object({
   delta: z.number().int(),
   reason: z.string().max(500).optional().default(''),
@@ -180,6 +233,20 @@ export const tripSchema = z.object({
   status: z.enum(['planning', 'active', 'completed', 'cancelled']).optional().default('planning'),
   restricted: z.boolean().optional().default(false),
   classification: z.string().max(100).nullable().optional().default(null),
+});
+
+// SEC-008 fix: Update schema for trips PUT endpoint
+export const tripUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(1000).optional(),
+  location: z.string().max(200).optional(),
+  objectives: z.string().max(2000).optional(),
+  leadId: z.string().uuid().nullable().optional(),
+  startDate: z.string().refine(d => !isNaN(Date.parse(d))).optional(),
+  endDate: z.string().refine(d => !isNaN(Date.parse(d))).optional(),
+  status: z.enum(['planning', 'active', 'completed', 'cancelled']).optional(),
+  restricted: z.boolean().optional(),
+  classification: z.string().max(100).nullable().optional(),
 });
 
 export const tripPersonnelSchema = z.object({

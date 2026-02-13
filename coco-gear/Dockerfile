@@ -29,6 +29,10 @@ COPY --from=builder /app/client/dist ./client/dist
 # Create uploads directory
 RUN mkdir -p /app/uploads
 
+# SEC-009 fix: Run as non-root user
+RUN chown -R node:node /app
+USER node
+
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV UPLOAD_DIR=/app/uploads

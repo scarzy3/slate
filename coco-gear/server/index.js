@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'crypto';
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -47,6 +48,20 @@ initSocket(httpServer);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
 
 // ─── Middleware ───
+
+// SEC-006 fix: Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -58,8 +73,8 @@ if (process.env.NODE_ENV !== 'production') {
   }));
 }
 
-// Serve uploaded files
-app.use('/uploads', express.static(UPLOAD_DIR));
+// SEC-005 fix: Serve uploaded files with authentication
+app.use('/uploads', authMiddleware, express.static(UPLOAD_DIR));
 
 // ─── File upload setup ───
 const storage = multer.diskStorage({
@@ -178,22 +193,25 @@ async function ensureDefaultUser() {
   try {
     const userCount = await prisma.user.count();
     if (userCount === 0) {
-      const pin = await bcrypt.hash('password', 10);
+      // SEC-002 fix: Generate a random password instead of using 'password'
+      const randomPassword = crypto.randomBytes(16).toString('base64url');
+      const pin = await bcrypt.hash(randomPassword, 10);
       const user = await prisma.user.create({
         data: {
           name: 'Admin',
           title: 'System Administrator',
           role: 'super',
           pin,
+          mustChangePassword: true,
         },
       });
       console.log('');
       console.log('══════════════════════════════════════════════');
       console.log('  No users found — created default admin user');
       console.log('  Name:     Admin');
-      console.log('  Password: password');
+      console.log(`  Password: ${randomPassword}`);
       console.log('  Role:     super');
-      console.log('  ** Change this password after first login **');
+      console.log('  ** This password is shown once. Change it after first login. **');
       console.log('══════════════════════════════════════════════');
       console.log('');
     }

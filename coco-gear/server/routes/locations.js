@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireAdminPerm } from '../middleware/rbac.js';
-import { validate, locationSchema } from '../utils/validation.js';
+import { validate, locationSchema, locationUpdateSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -41,10 +41,10 @@ router.post('/', authMiddleware, requireAdminPerm('locations'), validate(locatio
 });
 
 // PUT /:id - update location (admin+, perm: locations)
-router.put('/:id', authMiddleware, requireAdminPerm('locations'), async (req, res) => {
+router.put('/:id', authMiddleware, requireAdminPerm('locations'), validate(locationUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, shortCode } = req.body;
+    const { name, shortCode } = req.validated;
 
     const existing = await prisma.location.findUnique({ where: { id } });
     if (!existing) {
