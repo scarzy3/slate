@@ -30,6 +30,8 @@ model User {
   assetIssuedBy   AssetIssueHistory[] @relation("AssetIssuedBy")
   checkoutRequests CheckoutRequest[] @relation("Requester")
   resolvedRequests CheckoutRequest[] @relation("Resolver")
+  accessRequests   KitAccessRequest[] @relation("AccessRequester")
+  resolvedAccessRequests KitAccessRequest[] @relation("AccessResolver")
   reservations    Reservation[]
   maintenanceStarted MaintenanceHistory[] @relation("MaintStartedBy")
   maintenanceCompleted MaintenanceHistory[] @relation("MaintCompletedBy")
@@ -206,6 +208,7 @@ model Kit {
   issueHistory      IssueHistory[]
   maintenanceHistory MaintenanceHistory[]
   checkoutRequests  CheckoutRequest[]
+  accessRequests    KitAccessRequest[]
   reservations      Reservation[]
   photos            KitPhoto[]
 
@@ -458,6 +461,26 @@ model CheckoutRequest {
   department Department? @relation(fields: [deptId], references: [id], onDelete: SetNull)
   resolvedBy User?       @relation("Resolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
+  @@index([status])
+}
+
+// ─── Kit Access Requests (per-kit access gating) ───
+model KitAccessRequest {
+  id           String    @id @default(uuid())
+  kitId        String
+  personId     String
+  status       String    @default("pending") // pending | approved | denied
+  notes        String?
+  resolvedById String?
+  resolvedDate DateTime?
+  createdAt    DateTime  @default(now())
+
+  kit        Kit   @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  person     User  @relation("AccessRequester", fields: [personId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("AccessResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([kitId])
+  @@index([personId])
   @@index([status])
 }
 

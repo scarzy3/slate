@@ -6,10 +6,11 @@ import InspWF from '../forms/InspWF.jsx';
 import IssueToPicker from '../forms/IssueToPicker.jsx';
 import api from '../api.js';
 
-function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,userRole,curUserId,settings,requests,setRequests,addLog,onNavigateToKit,reservations,apiCheckout,apiReturn,onRefreshKits,apiSendMaint,apiResolveDegraded}){
+function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,userRole,curUserId,settings,requests,setRequests,accessRequests,setAccessRequests,addLog,onNavigateToKit,reservations,apiCheckout,apiReturn,onRefreshKits,apiSendMaint,apiResolveDegraded}){
   const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
   const hasDept=!!userDeptId;const defaultView=hasDept&&!isSuper?"dept":"all";
   const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[view,setView]=useState(defaultView);
+  const[accessNotes,setAccessNotes]=useState("");
   const filt=useMemo(()=>{let list=kits;
     if(view==="dept"&&userDeptId)list=list.filter(k=>k.deptId===userDeptId);
     if(view==="issued")list=list.filter(k=>k.issuedTo);if(view==="available")list=list.filter(k=>!k.issuedTo&&!k.maintenanceStatus&&!k.degraded);
@@ -29,6 +30,28 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     const minRole=settings.deptApprovalMinRole||"lead";
     if((rl[userRole]||0)>=(rl[minRole]||1))return false;
     return true};
+
+  // Access request helpers
+  const directorRoles=["developer","director","super","engineer"];
+  const isDirectorUser=directorRoles.includes(userRole);
+  const getAccessStatus=(kitId)=>{
+    if(!settings.requireAccessRequest||isDirectorUser)return "granted";
+    const reqs=(accessRequests||[]).filter(r=>r.kitId===kitId&&r.personId===curUserId);
+    const approved=reqs.find(r=>r.status==="approved");
+    if(approved)return "approved";
+    const pending=reqs.find(r=>r.status==="pending");
+    if(pending)return "pending";
+    return "none";
+  };
+
+  const doRequestAccess=async(kitId)=>{
+    try{
+      const result=await api.kits.requestAccess({kitId,notes:accessNotes});
+      if(setAccessRequests)setAccessRequests(p=>[result,...p]);
+      setMd(null);setAccessNotes("");
+    }catch(e){alert(e.message)}
+  };
+
   const doCheckout=async(kitId,data)=>{const kit=kits.find(k=>k.id===kitId);
     try{await apiCheckout(kitId,curUserId,data.serials,data.notes)}catch(e){/* apiCheckout shows alert */}
     setMd(null)};
@@ -36,7 +59,10 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     try{await apiCheckout(kitId,personId,data.serials,data.notes)}catch(e){/* apiCheckout shows alert */}
     setMd(null)};
   const doReturn=async(kitId,data)=>{
-    try{await apiReturn(kitId,data.serials,data.notes)}catch(e){/* apiReturn shows alert */}
+    try{await apiReturn(kitId,data.serials,data.notes);
+    // After return, remove approved access for this user/kit so UI reflects revocation
+    if(setAccessRequests)setAccessRequests(p=>p.map(r=>r.kitId===kitId&&r.personId===curUserId&&r.status==="approved"?{...r,status:"used"}:r));
+    }catch(e){/* apiReturn shows alert */}
     setMd(null)};
   const canFix=(rl[userRole]||0)>=(rl["lead"]||1);
   const getDegradedComps=kit=>{const ty=types.find(t=>t.id===kit.typeId);const critIds=ty?.criticalCompIds||[];
@@ -58,6 +84,9 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
       {filt.map(kit=>{const person=kit.issuedTo?personnel.find(p=>p.id===kit.issuedTo):null;const lo=locs.find(l=>l.id===kit.locId);const ty=types.find(t=>t.id===kit.typeId);
         const st=stMeta(kit.lastChecked);const isMine=kit.issuedTo===curUserId;const dept=kit.deptId?depts.find(d=>d.id===kit.deptId):null;const na=needsApproval(kit);const inMaint=kit.maintenanceStatus;
         const upcoming=(reservations||[]).filter(r=>r.kitId===kit.id&&(r.status==="confirmed"||r.status==="pending")&&new Date(r.endDate)>=new Date());
+        const accessSt=getAccessStatus(kit.id);
+        const needsAccess=settings.requireAccessRequest&&accessSt==="none"&&!isDirectorUser;
+        const pendingAccess=settings.requireAccessRequest&&accessSt==="pending"&&!isDirectorUser;
         return(<div key={kit.id} style={{padding:14,borderRadius:8,background:isMine?"rgba(244,114,182,.02)":T.card,border:isMine?"1px solid rgba(244,114,182,.15)":"1px solid "+T.bd}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
             <Sw color={kit.color} size={28}/>
@@ -82,6 +111,12 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
           :person?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:isMine?"rgba(244,114,182,.06)":"rgba(244,114,182,.03)",border:"1px solid rgba(244,114,182,.12)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.pk}}/><span style={{fontSize:10,fontWeight:600,color:T.pk,fontFamily:T.m,flex:1}}>{isMine?"YOU":person.name}</span>
             <Bt v="warn" sm onClick={()=>setMd("return:"+kit.id)}>Return</Bt></div>
+          :pendingAccess?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(251,191,36,.03)",border:"1px solid rgba(251,191,36,.12)"}}>
+            <div style={{width:5,height:5,borderRadius:"50%",background:T.am}}/><span style={{fontSize:10,color:T.am,fontFamily:T.m,flex:1}}>Access Pending</span>
+            <Bg color={T.am} bg="rgba(251,191,36,.1)">AWAITING APPROVAL</Bg></div>
+          :needsAccess?<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(168,85,247,.03)",border:"1px solid rgba(168,85,247,.12)"}}>
+            <div style={{width:5,height:5,borderRadius:"50%",background:T.pu||"#a855f7"}}/><span style={{fontSize:10,color:T.pu||"#a855f7",fontFamily:T.m,flex:1}}>Access Required</span>
+            <Bt v="orange" sm onClick={()=>{setAccessNotes("");setMd("requestAccess:"+kit.id)}}>Request Access</Bt></div>
           :<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:7,background:"rgba(34,197,94,.03)",border:"1px solid rgba(34,197,94,.1)"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:T.gn}}/><span style={{fontSize:10,color:T.gn,fontFamily:T.m,flex:1}}>Available</span>
             <Bt v={na?"orange":"primary"} sm onClick={()=>setMd("checkout:"+kit.id)}>{na?"Request":"Checkout"}</Bt></div>}
@@ -101,6 +136,23 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
         if(!k||!ty)return null;return <InspWF kit={k} type={ty} allC={allC} mode="return" onDone={data=>doReturn(kid,data)} onCancel={()=>setMd(null)} settings={settings}/>})()}</ModalWrap>
     <ModalWrap open={md==="issueTo"} onClose={()=>setMd(null)} title="Issue Kit To..." wide>
       {md==="issueTo"&&<IssueToPicker kits={kits} types={types} locs={locs} personnel={personnel} allC={allC} settings={settings} onIssue={(kid,pid,data)=>doIssueTo(kid,pid,data)} onCancel={()=>setMd(null)}/>}</ModalWrap>
+    <ModalWrap open={String(md).startsWith("requestAccess:")} onClose={()=>setMd(null)} title="Request Kit Access">
+      {String(md).startsWith("requestAccess:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);const ty=k?types.find(t=>t.id===k.typeId):null;
+        if(!k)return null;
+        return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <Sw color={k.color} size={28}/>
+            <div><div style={{fontSize:14,fontWeight:700,color:T.tx,fontFamily:T.u}}>{k.color}</div>
+              <div style={{fontSize:9,color:T.mu,fontFamily:T.m}}>{ty?.name}</div></div></div>
+          <div style={{padding:"10px 14px",borderRadius:7,background:"rgba(168,85,247,.04)",border:"1px solid rgba(168,85,247,.12)"}}>
+            <div style={{fontSize:10,color:T.pu||"#a855f7",fontFamily:T.m}}>You need approval before you can check out this kit. Submit a request and an approver will review it.</div></div>
+          <div>
+            <label style={{fontSize:9,color:T.mu,fontFamily:T.m,display:"block",marginBottom:4}}>Notes (optional)</label>
+            <textarea value={accessNotes} onChange={e=>setAccessNotes(e.target.value)} placeholder="Why do you need access to this kit?"
+              style={{width:"100%",minHeight:60,padding:8,borderRadius:6,border:"1px solid "+T.bd,background:T.card,color:T.tx,fontFamily:T.m,fontSize:11,resize:"vertical"}}/></div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <Bt sm onClick={()=>setMd(null)}>Cancel</Bt>
+            <Bt v="primary" sm onClick={()=>doRequestAccess(kid)}>Submit Request</Bt></div></div>})()}</ModalWrap>
     <ModalWrap open={String(md).startsWith("degraded:")} onClose={()=>setMd(null)} title="Degraded Kit Details">
       {String(md).startsWith("degraded:")&&(()=>{const kid=md.split(":")[1];const k=kits.find(x=>x.id===kid);if(!k)return null;const badComps=getDegradedComps(k);const ty=types.find(t=>t.id===k.typeId);
         return <div style={{display:"flex",flexDirection:"column",gap:14}}>
