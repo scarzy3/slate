@@ -5,6 +5,9 @@ import { broadcast } from '../socket.js';
  * Order matters — more specific prefixes should come first.
  */
 const ENTITY_MAP = [
+  ['/api/kits/checkout-requests', 'requests'],
+  ['/api/kits/access-requests', 'requests'],
+  ['/api/kits/request-access', 'requests'],
   ['/api/kits/checkout', 'kits'],
   ['/api/kits/return', 'kits'],
   ['/api/kits/inspect', 'kits'],

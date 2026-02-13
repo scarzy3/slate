@@ -212,17 +212,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /:id - single kit
-router.get('/:id', async (req, res) => {
-  try {
-    const kit = await prisma.kit.findUnique({ where: { id: req.params.id }, include: KIT_INCLUDE });
-    if (!kit) return res.status(404).json({ error: 'Kit not found' });
-    res.json(serializeKit(kit));
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 // POST / - create kit (admin+)
 router.post('/', requireRole('admin'), validate(kitSchema), async (req, res) => {
   try {
@@ -593,6 +582,18 @@ router.put('/checkout-requests/:id/deny', requireRole('lead'), validate(checkout
     });
   } catch (err) {
     console.error('Deny checkout request error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /:id - single kit (must be after all specific-path GET routes to avoid
+// catching paths like /checkout-requests and /access-requests as kit IDs)
+router.get('/:id', async (req, res) => {
+  try {
+    const kit = await prisma.kit.findUnique({ where: { id: req.params.id }, include: KIT_INCLUDE });
+    if (!kit) return res.status(404).json({ error: 'Kit not found' });
+    res.json(serializeKit(kit));
+  } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });

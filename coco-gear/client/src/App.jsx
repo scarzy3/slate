@@ -192,7 +192,7 @@ export default function App(){
     types:refreshTypes,components:refreshComps,locations:refreshLocs,
     departments:refreshDepts,reservations:refreshReservations,
     consumables:refreshConsumables,assets:refreshAssets,boats:refreshBoats,
-    settings:refreshSettings,
+    settings:refreshSettings,requests:()=>{refreshCheckoutRequests();refreshAccessRequests()},
   }),[]);
   const{connected:socketConnected,lastEvent:socketLastEvent}=useSocket(authCtx.token,socketRefreshCallbacks,curUser||authCtx.user?.id);
 
