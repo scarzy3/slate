@@ -232,6 +232,18 @@ export const kitAccessRequestSchema = z.object({
   notes: z.string().max(1000).optional().default(''),
 });
 
+// ─── Checkout Request (submit a request for department approval) ───
+export const checkoutRequestSchema = z.object({
+  kitId: z.string().uuid(),
+  purpose: z.string().min(1, 'Purpose is required').max(1000),
+  notes: z.string().max(1000).optional().default(''),
+});
+
+// ─── Checkout Request Resolution (approve/deny) ───
+export const checkoutRequestResolveSchema = z.object({
+  resolverNotes: z.string().max(1000).optional().default(''),
+});
+
 // ─── Checkout / Return ───
 export const checkoutSchema = z.object({
   kitId: z.string().uuid(),
