@@ -226,6 +226,12 @@ export const kitSerialUpdateSchema = z.object({
   serials: z.record(z.string(), z.string()),
 });
 
+// ─── Kit Access Request ───
+export const kitAccessRequestSchema = z.object({
+  kitId: z.string().uuid(),
+  notes: z.string().max(1000).optional().default(''),
+});
+
 // ─── Checkout / Return ───
 export const checkoutSchema = z.object({
   kitId: z.string().uuid(),
@@ -301,6 +307,8 @@ export const settingsSchema = z.object({
     notes: z.boolean().optional(),
   }).optional(),
   autoReserveOnTrip: z.boolean().optional(),
+  requireAccessRequest: z.boolean().optional(),
+  accessRequestMinApprovalRole: z.enum(['lead','manager','director']).optional(),
   enableSelfSignup: z.boolean().optional(),
   allowedEmailDomain: z.string().max(200).optional(),
   adminPerms: z.object({

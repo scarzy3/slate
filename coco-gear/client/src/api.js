@@ -172,6 +172,10 @@ export const kits = {
   updateSerials: (id, serials) => request(`/kits/${id}/serials`, { method: 'PUT', body: { serials } }),
   updateLocation: (id, locId) => request(`/kits/${id}/location`, { method: 'PUT', body: { locId } }),
   resolveDegraded: (id) => request(`/kits/${id}/resolve-degraded`, { method: 'POST' }),
+  accessRequests: () => request('/kits/access-requests'),
+  requestAccess: (data) => request('/kits/request-access', { method: 'POST', body: data }),
+  approveAccess: (id) => request(`/kits/access-requests/${id}/approve`, { method: 'PUT' }),
+  denyAccess: (id) => request(`/kits/access-requests/${id}/deny`, { method: 'PUT' }),
 };
 
 // ─── Kit Types ───

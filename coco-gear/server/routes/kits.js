@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
-import { validate, kitSchema, kitUpdateSchema, checkoutSchema, returnSchema, inspectionSchema, kitSerialUpdateSchema } from '../utils/validation.js';
+import { validate, kitSchema, kitUpdateSchema, checkoutSchema, returnSchema, inspectionSchema, kitSerialUpdateSchema, kitAccessRequestSchema } from '../utils/validation.js';
 import auditLog from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -318,6 +318,125 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
   }
 });
 
+// ─── Kit Access Requests ───
+
+// GET /access-requests - list all access requests
+router.get('/access-requests', async (req, res) => {
+  try {
+    const requests = await prisma.kitAccessRequest.findMany({
+      include: {
+        kit: { select: { id: true, color: true, typeId: true, deptId: true } },
+        person: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+        resolvedBy: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(requests.map(r => ({
+      id: r.id, kitId: r.kitId, personId: r.personId, status: r.status,
+      notes: r.notes, resolvedById: r.resolvedById, resolvedDate: r.resolvedDate,
+      createdAt: r.createdAt,
+      _kit: r.kit, _person: r.person, _resolvedBy: r.resolvedBy,
+    })));
+  } catch (err) {
+    console.error('List access requests error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /request-access - request access to a kit
+router.post('/request-access', validate(kitAccessRequestSchema), async (req, res) => {
+  try {
+    const { kitId, notes } = req.validated;
+    const kit = await prisma.kit.findUnique({ where: { id: kitId } });
+    if (!kit) return res.status(404).json({ error: 'Kit not found' });
+
+    // Check if user already has a pending or approved request for this kit
+    const existing = await prisma.kitAccessRequest.findFirst({
+      where: { kitId, personId: req.user.id, status: { in: ['pending', 'approved'] } },
+    });
+    if (existing) {
+      if (existing.status === 'pending') return res.status(409).json({ error: 'You already have a pending access request for this kit' });
+      if (existing.status === 'approved') return res.status(409).json({ error: 'You already have access to this kit' });
+    }
+
+    const request = await prisma.kitAccessRequest.create({
+      data: { kitId, personId: req.user.id, status: 'pending', notes },
+      include: {
+        kit: { select: { id: true, color: true, typeId: true, deptId: true } },
+        person: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+      },
+    });
+
+    await auditLog('access_request', 'kit', kitId, req.user.id, { kitColor: kit.color });
+    res.status(201).json({
+      id: request.id, kitId: request.kitId, personId: request.personId, status: request.status,
+      notes: request.notes, resolvedById: null, resolvedDate: null, createdAt: request.createdAt,
+      _kit: request.kit, _person: request.person, _resolvedBy: null,
+    });
+  } catch (err) {
+    console.error('Request access error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /access-requests/:id/approve - approve an access request
+router.put('/access-requests/:id/approve', requireRole('lead'), async (req, res) => {
+  try {
+    const request = await prisma.kitAccessRequest.findUnique({ where: { id: req.params.id }, include: { kit: true } });
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'pending') return res.status(409).json({ error: 'Request already resolved' });
+
+    const updated = await prisma.kitAccessRequest.update({
+      where: { id: req.params.id },
+      data: { status: 'approved', resolvedById: req.user.id, resolvedDate: new Date() },
+      include: {
+        kit: { select: { id: true, color: true, typeId: true, deptId: true } },
+        person: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+        resolvedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    await auditLog('access_approved', 'kit', request.kitId, req.user.id, { kitColor: request.kit.color, personId: request.personId });
+    res.json({
+      id: updated.id, kitId: updated.kitId, personId: updated.personId, status: updated.status,
+      notes: updated.notes, resolvedById: updated.resolvedById, resolvedDate: updated.resolvedDate,
+      createdAt: updated.createdAt, _kit: updated.kit, _person: updated.person, _resolvedBy: updated.resolvedBy,
+    });
+  } catch (err) {
+    console.error('Approve access error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /access-requests/:id/deny - deny an access request
+router.put('/access-requests/:id/deny', requireRole('lead'), async (req, res) => {
+  try {
+    const request = await prisma.kitAccessRequest.findUnique({ where: { id: req.params.id }, include: { kit: true } });
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'pending') return res.status(409).json({ error: 'Request already resolved' });
+
+    const updated = await prisma.kitAccessRequest.update({
+      where: { id: req.params.id },
+      data: { status: 'denied', resolvedById: req.user.id, resolvedDate: new Date() },
+      include: {
+        kit: { select: { id: true, color: true, typeId: true, deptId: true } },
+        person: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+        resolvedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    await auditLog('access_denied', 'kit', request.kitId, req.user.id, { kitColor: request.kit.color, personId: request.personId });
+    res.json({
+      id: updated.id, kitId: updated.kitId, personId: updated.personId, status: updated.status,
+      notes: updated.notes, resolvedById: updated.resolvedById, resolvedDate: updated.resolvedDate,
+      createdAt: updated.createdAt, _kit: updated.kit, _person: updated.person, _resolvedBy: updated.resolvedBy,
+    });
+  } catch (err) {
+    console.error('Deny access error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /checkout - checkout kit
 router.post('/checkout', validate(checkoutSchema), async (req, res) => {
   try {
@@ -346,6 +465,23 @@ router.post('/checkout', validate(checkoutSchema), async (req, res) => {
     const recipientId = personId || req.user.id;
     const directorRoles = ['developer','director','super','engineer'];
     const roleLevel = { user: 0, lead: 1, manager: 2, admin: 2, director: 3, super: 3, developer: 3, engineer: 3 };
+
+    // Check if kit access request is required
+    {
+      const allSettings = await prisma.systemSetting.findMany();
+      const requireAccess = allSettings.find(s => s.key === 'requireAccessRequest')?.value ?? false;
+      if (requireAccess) {
+        const isDirector = directorRoles.includes(req.user.role);
+        if (!isDirector) {
+          const approvedAccess = await prisma.kitAccessRequest.findFirst({
+            where: { kitId, personId: recipientId, status: 'approved' },
+          });
+          if (!approvedAccess) {
+            return res.status(403).json({ error: 'Access request required — you must request and be approved for access to this kit before checkout' });
+          }
+        }
+      }
+    }
 
     // Check if approval needed for cross-dept kits
     if (kit.deptId) {
@@ -439,6 +575,15 @@ router.post('/return', validate(returnSchema), async (req, res) => {
       }
       return tx.kit.findUnique({ where: { id: kitId }, include: KIT_INCLUDE });
     });
+
+    // Revoke any approved access requests for the person who had this kit
+    // so they must request access again for future checkouts
+    if (kit.issuedToId) {
+      await prisma.kitAccessRequest.updateMany({
+        where: { kitId, personId: kit.issuedToId, status: 'approved' },
+        data: { status: 'used' },
+      });
+    }
 
     await auditLog('return', 'kit', kitId, req.user.id, { kitColor: kit.color });
     res.json(serializeKit(updated));

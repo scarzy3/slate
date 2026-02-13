@@ -72,7 +72,7 @@ export default function App(){
   const[depts,setDepts]=useState([]);const[personnel,setPersonnel]=useState([]);
   const[kits,setKits]=useState([]);
   const[curUser,setCurUser]=useState(null);const[mustChangePw,setMustChangePw]=useState(false);const[settings,setSettings]=useState(DEF_SETTINGS);
-  const[requests,setRequests]=useState([]);const[logs,setLogs]=useState([]);
+  const[requests,setRequests]=useState([]);const[accessRequests,setAccessRequests]=useState([]);const[logs,setLogs]=useState([]);
   const[reservations,setReservations]=useState([]);const[trips,setTrips]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[boats,setBoats]=useState([]);const[favorites,setFavorites]=useState([]);
   const[searchMd,setSearchMd]=useState(false);const[scanMd,setScanMd]=useState(null);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);const[navAction,setNavAction]=useState(null);const[navPersonId,setNavPersonId]=useState(null);
@@ -152,6 +152,7 @@ export default function App(){
       setTrips((tripsD||[]).map(xformTrip));setBoats((boatsD||[]).map(xformBoat));
       try{const logsD=await api.audit.list({limit:500});setLogs((logsD.logs||[]).map(xformLog))}catch(e){}
       try{const sett=await api.settings.get();setSettings(s=>({...s,...sett}))}catch(e){}
+      try{const accessD=await api.kits.accessRequests();setAccessRequests(accessD||[])}catch(e){}
       setDataLoaded(true);setLoadError("");
     }catch(e){setLoadError(e.message||"Failed to load data");console.error("Load error:",e)}
   },[]);
@@ -179,6 +180,7 @@ export default function App(){
   const refreshLocs=async()=>{try{const d=await api.locations.list();setLocs(d.map(xformLoc))}catch(e){}};
   const refreshDepts=async()=>{try{const d=await api.departments.list();setDepts(d.map(xformDept))}catch(e){}};
   const refreshLogs=async()=>{try{const d=await api.audit.list({limit:500});setLogs((d.logs||[]).map(xformLog))}catch(e){}};
+  const refreshAccessRequests=async()=>{try{const d=await api.kits.accessRequests();setAccessRequests(d||[])}catch(e){}};
   const saveSettings=async(s)=>{try{await api.settings.update(s)}catch(e){console.error("Settings save error:",e)}};
   const refreshSettings=async()=>{try{const s=await api.settings.get();setSettings(prev=>({...prev,...s}))}catch(e){}};
 
@@ -261,7 +263,7 @@ export default function App(){
   const currentItem=allItems.find(i=>i.id===pg);
   if(currentItem&&!canAccess(currentItem))setPg("dashboard");
 
-  const pendCt=requests.filter(r=>r.status==="pending"&&(isLead||headOf.includes(r.deptId))).length;
+  const pendCt=requests.filter(r=>r.status==="pending"&&(isLead||headOf.includes(r.deptId))).length+accessRequests.filter(r=>r.status==="pending"&&isLead).length;
   const lowStock=consumables.filter(c=>c.qty<=c.minQty).length;
   const getBadge=(id)=>id==="approvals"?pendCt:id==="consumables"?lowStock:0;
 
@@ -421,12 +423,15 @@ export default function App(){
           initialSelectedKit={navKitId} onClearSelectedKit={()=>setNavKitId(null)} initialAction={navAction} onClearAction={()=>setNavAction(null)} apiInspect={apiInspect} isMobile={isMobile}
           apiSendMaint={apiSendMaint} apiResolveDegraded={apiResolveDegraded}/>}
         {pg==="issuance"&&<KitIssuance kits={kits} setKits={setKits} types={types} locs={locs} personnel={personnel} allC={comps} depts={depts}
-          isAdmin={isAdmin} isSuper={isSuper} userRole={effectiveRole} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests} addLog={addLog}
+          isAdmin={isAdmin} isSuper={isSuper} userRole={effectiveRole} curUserId={curUser} settings={settings} requests={requests} setRequests={setRequests}
+          accessRequests={accessRequests} setAccessRequests={setAccessRequests} addLog={addLog}
           reservations={reservations} onNavigateToKit={kitId=>{setNavKitId(kitId);setPg("kits")}}
           apiCheckout={apiCheckout} apiReturn={apiReturn} onRefreshKits={refreshKits} apiSendMaint={apiSendMaint} apiResolveDegraded={apiResolveDegraded}/>}
         {pg==="analytics"&&canAccess({access:"admin",perm:"analytics"})&&<AnalyticsPage analytics={analytics} kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs}/>}
         {pg==="reports"&&canAccess({access:"admin",perm:"reports"})&&<ReportsPage kits={kits} personnel={personnel} depts={depts} comps={comps} types={types} locs={locs} logs={logs} analytics={analytics}/>}
-        {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests} kits={kits} setKits={setKits}
+        {pg==="approvals"&&isApprover&&<ApprovalsPage requests={requests} setRequests={setRequests}
+          accessRequests={accessRequests} setAccessRequests={setAccessRequests}
+          kits={kits} setKits={setKits}
           personnel={personnel} depts={depts} allC={comps} types={types} curUserId={curUser} userRole={effectiveRole} settings={settings} addLog={addLog} onRefreshKits={refreshKits}/>}
         {pg==="trips"&&<TripsPage trips={trips} kits={kits} types={types} depts={depts} personnel={personnel} reservations={reservations} boats={boats}
           isAdmin={canManageTrips} isSuper={isSuper} curUserId={curUser} settings={settings} onRefreshTrips={refreshTrips} onRefreshKits={refreshKits} onRefreshPersonnel={refreshPersonnel} onRefreshBoats={refreshBoats} onRefreshReservations={refreshReservations}/>}
