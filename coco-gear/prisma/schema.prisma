@@ -17,6 +17,7 @@ model User {
   pin       String   // bcrypt hashed
   mustChangePassword Boolean @default(true)
   deptId    String?
+  dashboardConfig Json?    // { widgets: [{ id, visible, order }], columns?: number }
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
