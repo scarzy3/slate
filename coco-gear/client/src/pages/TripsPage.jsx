@@ -55,6 +55,9 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
   const[fromTplMd,setFromTplMd]=useState(null);const[fromTplFm,setFromTplFm]=useState({name:"",startDate:"",endDate:"",location:"",leadId:""});const[applyingTpl,setApplyingTpl]=useState(false);
   const[editTplMd,setEditTplMd]=useState(null);const[editTplFm,setEditTplFm]=useState({name:"",description:"",location:"",objectives:""});
   const[confirmDelTpl,setConfirmDelTpl]=useState(null);
+  // Conflict detection state
+  const[conflictData,setConflictData]=useState(null);const[conflictLoading,setConflictLoading]=useState(false);
+  const[conflictExpanded,setConflictExpanded]=useState(false);const[conflictSection,setConflictSection]=useState("personnel");
   const fmtD=d=>d?new Date(d).toLocaleDateString("default",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}):"";
   const fmtDT=d=>d?new Date(d).toLocaleString("default",{month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const statusColors={planning:T.bl,active:T.gn,completed:T.mu,cancelled:T.rd};
@@ -125,6 +128,11 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
       setEditTplMd(null);refreshTemplates()}catch(e){alert(e.message)}};
   const doDeleteTemplate=async()=>{if(!confirmDelTpl)return;try{await api.tripTemplates.delete(confirmDelTpl);refreshTemplates()}catch(e){alert(e.message)}setConfirmDelTpl(null)};
 
+  // Fetch conflict data when viewing a planning/active trip
+  useEffect(()=>{if(!selTrip)return;const trip=trips.find(t=>t.id===selTrip);
+    if(!trip||!['planning','active'].includes(trip.status)){setConflictData(null);return}
+    setConflictLoading(true);api.trips.conflicts(selTrip).then(d=>{setConflictData(d);setConflictLoading(false)}).catch(()=>{setConflictData(null);setConflictLoading(false)})},[selTrip,trips]);
+
   const daysUntilStart=activeTrip?Math.ceil((new Date(activeTrip.startDate)-Date.now())/864e5):0;
   const daysUntilEnd=activeTrip?Math.ceil((new Date(activeTrip.endDate)-Date.now())/864e5):0;
   const duration=activeTrip?Math.ceil((new Date(activeTrip.endDate)-new Date(activeTrip.startDate))/864e5):0;
@@ -171,6 +179,7 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
             {t.boatCount>0&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">{t.boatCount} USV{t.boatCount!==1?"s":""}</Bg>}
             {t.reservationCount>0&&<Bg color={T.pu} bg="rgba(168,85,247,.1)">{t.reservationCount} reservations</Bg>}
             {t.taskCount>0&&<Bg color={t.taskDone===t.taskCount?T.gn:T.or} bg={(t.taskDone===t.taskCount?T.gn:T.or)+"10"}>{t.taskDone}/{t.taskCount} tasks</Bg>}
+            {t.conflictCount>0&&<Bg color={T.am} bg={T.am+"18"}>&#9888; {t.conflictCount} conflict{t.conflictCount!==1?"s":""}</Bg>}
             {t.kits.length>0&&<div style={{display:"flex",gap:2,alignItems:"center",marginLeft:4}}>
               {t.kits.slice(0,5).map(k=><div key={k.id} style={{width:14,height:14,borderRadius:7,background:CM[k.color]||"#888",border:"1px solid rgba(0,0,0,.2)"}} title={k.color}/>)}
               {t.kits.length>5&&<span style={{fontSize:8,color:T.dm}}>+{t.kits.length-5}</span>}</div>}</div></div>)})}</div></div>}
@@ -308,6 +317,65 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
         setDetailTab={setDetailTab} fmtDT={fmtDT}/>:
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {at.status==="planning"&&<ReadinessCard tripId={at.id} onOpen={()=>setShowReadiness(true)} readinessData={readinessData} setReadinessData={setReadinessData}/>}
+
+      {/* Conflicts card for planning/active trips */}
+      {conflictData&&conflictData.hasConflicts&&<div style={{padding:"14px 18px",borderRadius:10,
+        background:T.am+"08",border:"1px solid "+T.am+"28",borderLeft:"3px solid "+T.am}}>
+        <div onClick={()=>setConflictExpanded(!conflictExpanded)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:22,height:22,borderRadius:11,background:T.am+"22",display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:11,fontWeight:700,color:T.am}}>&#9888;</div>
+            <span style={{fontSize:12,fontWeight:700,color:T.tx,fontFamily:T.u}}>Scheduling Conflicts</span>
+            <span style={{fontSize:10,color:T.am,fontFamily:T.m}}>
+              {conflictData.summary.affectedPersonnel>0&&conflictData.summary.totalPersonnelConflicts+" personnel conflict"+(conflictData.summary.totalPersonnelConflicts!==1?"s":"")}
+              {conflictData.summary.affectedPersonnel>0&&conflictData.summary.affectedKits>0&&" · "}
+              {conflictData.summary.affectedKits>0&&conflictData.summary.totalEquipmentConflicts+" equipment conflict"+(conflictData.summary.totalEquipmentConflicts!==1?"s":"")}</span></div>
+          <span style={{fontSize:9,color:T.dm,fontFamily:T.m,transition:"transform .15s",transform:conflictExpanded?"rotate(90deg)":"none"}}>&#9654;</span></div>
+
+        {conflictExpanded&&<div style={{marginTop:12}}>
+          {/* Section toggle */}
+          <div style={{display:"flex",gap:4,marginBottom:10}}>
+            {conflictData.summary.affectedPersonnel>0&&<button onClick={()=>setConflictSection("personnel")}
+              style={{all:"unset",cursor:"pointer",padding:"4px 12px",borderRadius:5,fontSize:9,fontFamily:T.m,fontWeight:600,
+                background:conflictSection==="personnel"?T.am+"18":"transparent",border:"1px solid "+(conflictSection==="personnel"?T.am+"44":T.bd),
+                color:conflictSection==="personnel"?T.am:T.mu}}>Personnel ({conflictData.summary.affectedPersonnel})</button>}
+            {conflictData.summary.affectedKits>0&&<button onClick={()=>setConflictSection("equipment")}
+              style={{all:"unset",cursor:"pointer",padding:"4px 12px",borderRadius:5,fontSize:9,fontFamily:T.m,fontWeight:600,
+                background:conflictSection==="equipment"?T.am+"18":"transparent",border:"1px solid "+(conflictSection==="equipment"?T.am+"44":T.bd),
+                color:conflictSection==="equipment"?T.am:T.mu}}>Equipment ({conflictData.summary.affectedKits})</button>}</div>
+
+          {/* Personnel conflicts */}
+          {conflictSection==="personnel"&&conflictData.personnelConflicts.map(pc=>
+            <div key={pc.userId} style={{marginBottom:8,padding:"8px 12px",borderRadius:6,background:"rgba(255,255,255,.02)",border:"1px solid "+T.bd}}>
+              <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m,marginBottom:4}}>{pc.userName}
+                <span style={{fontSize:9,color:T.mu,fontWeight:400,marginLeft:6}}>({roleLabels[pc.tripRole]||pc.tripRole})</span></div>
+              {pc.conflictingTrips.map(ct=>
+                <div key={ct.tripId} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",flexWrap:"wrap"}}>
+                  <span onClick={()=>{setSelTrip(ct.tripId);setDetailTab("overview")}} style={{fontSize:10,color:T.bl,fontFamily:T.m,cursor:"pointer",textDecoration:"underline"}}>{ct.tripName}</span>
+                  <span style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{fmtD(ct.startDate)} → {fmtD(ct.endDate)}</span>
+                  <Bg color={T.am} bg={T.am+"18"}>{ct.overlapDays}d overlap</Bg>
+                  <Bg color={statusColors[ct.tripStatus]} bg={statusColors[ct.tripStatus]+"18"}>{statusLabels[ct.tripStatus]}</Bg>
+                  {isAdmin&&editable&&<button onClick={async()=>{const tp=tripPers.find(p=>p.userId===pc.userId);if(!tp)return;
+                    try{await api.trips.removePersonnel(at.id,tp.id);await onRefreshTrips()}catch(e){alert(e.message)}}}
+                    style={{all:"unset",cursor:"pointer",fontSize:8,color:T.rd,fontFamily:T.m,padding:"2px 6px",borderRadius:3,border:"1px solid "+T.rd+"33",background:T.rd+"08"}}>Remove from this trip</button>}</div>)}</div>)}
+
+          {/* Equipment conflicts */}
+          {conflictSection==="equipment"&&conflictData.equipmentConflicts.map(ec=>
+            <div key={ec.kitId} style={{marginBottom:8,padding:"8px 12px",borderRadius:6,background:"rgba(255,255,255,.02)",border:"1px solid "+T.bd}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <Sw color={ec.kitColor} size={14}/>
+                <span style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{ec.kitColor}</span>
+                <span style={{fontSize:9,color:T.dm,fontFamily:T.m}}>({ec.kitType})</span></div>
+              {ec.conflicts.map((c,i)=>
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",flexWrap:"wrap"}}>
+                  {c.type==="trip"?<span onClick={()=>{setSelTrip(c.id);setDetailTab("overview")}} style={{fontSize:10,color:T.bl,fontFamily:T.m,cursor:"pointer",textDecoration:"underline"}}>{c.name}</span>
+                    :<span style={{fontSize:10,color:T.sub,fontFamily:T.m}}>{c.name}</span>}
+                  <Bg color={c.type==="trip"?T.ind:T.pu} bg={(c.type==="trip"?T.ind:T.pu)+"18"}>{c.type}</Bg>
+                  <span style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{fmtD(c.startDate)} → {fmtD(c.endDate)}</span>
+                  <Bg color={T.am} bg={T.am+"18"}>{c.overlapDays}d overlap</Bg>
+                  {isAdmin&&editable&&<button onClick={async()=>{try{await api.trips.removeKit(at.id,ec.kitId);await onRefreshTrips();await onRefreshKits()}catch(e){alert(e.message)}}}
+                    style={{all:"unset",cursor:"pointer",fontSize:8,color:T.rd,fontFamily:T.m,padding:"2px 6px",borderRadius:3,border:"1px solid "+T.rd+"33",background:T.rd+"08"}}>Unassign from this trip</button>}</div>)}</div>)}
+        </div>}</div>}
 
       {/* AAR card for completed trips */}
       {at.status==="completed"&&<div onClick={()=>setShowAAR(true)} style={{padding:"16px 20px",borderRadius:10,
@@ -603,17 +671,34 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Select kits to assign to <b>{at.name}</b></div>
         <div style={{maxHeight:400,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
-          {availableForAssign.map(k=>{const ty=types.find(t=>t.id===k.typeId);const isChecked=assignKits.includes(k.id);return(
+          {(()=>{
+            // Check each kit for conflicts: on other overlapping trips or has overlapping reservations
+            return availableForAssign.map(k=>{const ty=types.find(t=>t.id===k.typeId);const isChecked=assignKits.includes(k.id);
+              // Check for trip conflicts: kit assigned to another overlapping trip
+              const kitTripConflict=k.tripId&&k.tripId!==at.id?trips.find(t=>t.id===k.tripId&&['planning','active'].includes(t.status)
+                &&new Date(t.startDate)<new Date(at.endDate)&&new Date(t.endDate)>new Date(at.startDate)):null;
+              // Check for reservation conflicts from global reservations
+              const kitResConflicts=reservations.filter(r=>r.kitId===k.id&&['pending','confirmed'].includes(r.status)
+                &&(!r.tripId||r.tripId!==at.id)
+                &&new Date(r.startDate)<new Date(at.endDate)&&new Date(r.endDate)>new Date(at.startDate));
+              const hasConflict=!!kitTripConflict||kitResConflicts.length>0;
+              return(
             <div key={k.id} onClick={()=>setAssignKits(p=>isChecked?p.filter(x=>x!==k.id):[...p,k.id])}
               style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,cursor:"pointer",
-                background:isChecked?"rgba(129,140,248,.06)":"rgba(255,255,255,.02)",border:"1px solid "+(isChecked?"rgba(129,140,248,.25)":T.bd)}}>
+                background:isChecked?"rgba(129,140,248,.06)":hasConflict?"rgba(251,191,36,.04)":"rgba(255,255,255,.02)",
+                border:"1px solid "+(isChecked?"rgba(129,140,248,.25)":hasConflict?T.am+"22":T.bd)}}>
               <div style={{width:18,height:18,borderRadius:4,border:"1.5px solid "+(isChecked?T.ind:T.bd),background:isChecked?T.ind:"transparent",
                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:700}}>{isChecked?"✓":""}</div>
               <Sw color={k.color} size={18}/><div style={{flex:1}}>
-                <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k.color}</div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{k.color}</span>
+                  {kitTripConflict&&<span style={{fontSize:8,fontWeight:600,color:T.am,fontFamily:T.m,padding:"1px 5px",borderRadius:3,
+                    background:T.am+"18",border:"1px solid "+T.am+"33"}}>&#9888; On trip: {kitTripConflict.name} ({fmtD(kitTripConflict.startDate)} → {fmtD(kitTripConflict.endDate)})</span>}
+                  {kitResConflicts.length>0&&!kitTripConflict&&<span style={{fontSize:8,fontWeight:600,color:T.am,fontFamily:T.m,padding:"1px 5px",borderRadius:3,
+                    background:T.am+"18",border:"1px solid "+T.am+"33"}}>&#9888; Reserved: {fmtD(kitResConflicts[0].startDate)} → {fmtD(kitResConflicts[0].endDate)}{kitResConflicts[0].person?" by "+kitResConflicts[0].person.name:""}</span>}</div>
                 <div style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{ty?.name}</div></div>
-              {k.tripId&&k.tripId!==at.id&&<Bg color={T.am} bg="rgba(251,191,36,.1)">On other trip</Bg>}
-              {k.issuedTo&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">Issued</Bg>}</div>)})}</div>
+              {k.tripId&&k.tripId!==at.id&&!kitTripConflict&&<Bg color={T.am} bg="rgba(251,191,36,.1)">On other trip</Bg>}
+              {k.issuedTo&&<Bg color={T.bl} bg="rgba(96,165,250,.1)">Issued</Bg>}</div>)})})()}</div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <Bt onClick={()=>setAssignMd(false)}>Cancel</Bt>
           <Bt v="primary" onClick={doAssign}>{assignKits.length} kits — Assign</Bt></div></div></ModalWrap>
@@ -626,18 +711,43 @@ function TripsPage({trips,kits,types,depts,personnel,reservations,boats,isAdmin,
             onChange={e=>setAddPersonRole(e.target.value)} style={{minWidth:120}}/></Fl></div>
         <div style={{fontSize:10,color:T.mu,fontFamily:T.m}}>Select people to add ({addPersonIds.length} selected)</div>
         <div style={{maxHeight:400,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
-          {availablePersonnel.map(p=>{const isChecked=addPersonIds.includes(p.id);const dept=depts.find(d=>d.id===p.deptId);return(
+          {(()=>{
+            // Sort personnel: those without conflicts first
+            const pConflicts=conflictData?.personnelConflicts||[];
+            const conflictUserIds=new Set(pConflicts.map(pc=>pc.userId));
+            const sorted=[...availablePersonnel].sort((a,b)=>{
+              const aConf=conflictUserIds.has(a.id)?1:0;const bConf=conflictUserIds.has(b.id)?1:0;return aConf-bConf});
+            return sorted.map(p=>{const isChecked=addPersonIds.includes(p.id);const dept=depts.find(d=>d.id===p.deptId);
+              // Check if this person has conflicts with the current trip dates
+              const personConflicts=conflictData?[]:[];
+              // Use the trip's date range to find if this person is on other overlapping trips
+              // Cross-reference from all trip personnel data - check conflictData for people already on the trip
+              // For people NOT yet on this trip, we check if they appear on other overlapping trips via a simple lookup
+              // We batch-fetch conflicts for the trip, so we need to check broader data
+              // Since conflictData only covers people already on THIS trip, we check available personnel differently
+              // Use the allTrips data to find overlaps for available personnel
+              const personTrips=trips.filter(t=>t.id!==at.id&&['planning','active'].includes(t.status)
+                &&new Date(t.startDate)<new Date(at.endDate)&&new Date(t.endDate)>new Date(at.startDate)
+                &&t.personnel?.some(tp=>tp.userId===p.id));
+              return(
             <div key={p.id} onClick={()=>setAddPersonIds(prev=>isChecked?prev.filter(x=>x!==p.id):[...prev,p.id])}
               style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:6,cursor:"pointer",
-                background:isChecked?"rgba(45,212,191,.06)":"rgba(255,255,255,.02)",border:"1px solid "+(isChecked?"rgba(45,212,191,.25)":T.bd)}}>
+                background:isChecked?"rgba(45,212,191,.06)":personTrips.length>0?"rgba(251,191,36,.04)":"rgba(255,255,255,.02)",
+                border:"1px solid "+(isChecked?"rgba(45,212,191,.25)":personTrips.length>0?T.am+"22":T.bd)}}>
               <div style={{width:18,height:18,borderRadius:4,border:"1.5px solid "+(isChecked?T.tl:T.bd),background:isChecked?T.tl:"transparent",
                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:700}}>{isChecked?"✓":""}</div>
               <div style={{flex:1}}>
-                <div style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{p.name}</div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:11,fontWeight:600,color:T.tx,fontFamily:T.m}}>{p.name}</span>
+                  {personTrips.length>0&&<span style={{fontSize:8,fontWeight:600,color:T.am,fontFamily:T.m,padding:"1px 5px",borderRadius:3,
+                    background:T.am+"18",border:"1px solid "+T.am+"33"}}>
+                    {personTrips.length===1?"&#9888; On trip: "+personTrips[0].name:"&#9888; "+personTrips.length+" trip conflicts"}</span>}</div>
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   {p.title&&<span style={{fontSize:9,color:T.dm,fontFamily:T.m}}>{p.title}</span>}
-                  {dept&&<Bg color={dept.color||T.mu} bg={(dept.color||T.mu)+"18"}>{dept.name}</Bg>}</div></div>
-              <Bg color={sysRoleColor(p.role)} bg={sysRoleColor(p.role)+"18"}>{SYS_ROLE_LABELS[p.role]||p.role}</Bg></div>)})}</div>
+                  {dept&&<Bg color={dept.color||T.mu} bg={(dept.color||T.mu)+"18"}>{dept.name}</Bg>}</div>
+                {personTrips.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:2}}>
+                  {personTrips.slice(0,2).map(ct=><span key={ct.id} style={{fontSize:8,color:T.am,fontFamily:T.m}}>{ct.name} ({fmtD(ct.startDate)} → {fmtD(ct.endDate)})</span>)}</div>}</div>
+              <Bg color={sysRoleColor(p.role)} bg={sysRoleColor(p.role)+"18"}>{SYS_ROLE_LABELS[p.role]||p.role}</Bg></div>)})})()}</div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <Bt onClick={()=>setAddPersonMd(false)}>Cancel</Bt>
           <Bt v="primary" onClick={doAddPersonnel} disabled={!addPersonIds.length}>{addPersonIds.length} people — Add to Trip</Bt></div></div></ModalWrap>

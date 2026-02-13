@@ -71,7 +71,66 @@ router.get('/', async (req, res) => {
       include: tripIncludes,
       orderBy: { startDate: 'desc' },
     });
-    return res.json(trips);
+
+    // Compute lightweight conflict counts for planning/active trips
+    const tripsWithConflicts = await Promise.all(trips.map(async (trip) => {
+      if (trip.status !== 'planning' && trip.status !== 'active') {
+        return { ...trip, conflictCount: 0 };
+      }
+
+      let conflictCount = 0;
+
+      // Personnel conflicts: count personnel on overlapping trips
+      for (const tp of trip.personnel) {
+        const overlapping = await prisma.tripPersonnel.count({
+          where: {
+            userId: tp.userId,
+            tripId: { not: trip.id },
+            trip: {
+              status: { in: ['planning', 'active'] },
+              startDate: { lt: trip.endDate },
+              endDate: { gt: trip.startDate },
+            },
+          },
+        });
+        conflictCount += overlapping;
+      }
+
+      // Equipment conflicts: count kits assigned to overlapping trips or with overlapping reservations
+      for (const kit of trip.kits) {
+        const kitOnOtherTrip = await prisma.kit.count({
+          where: {
+            id: kit.id,
+            tripId: { not: null },
+            trip: {
+              id: { not: trip.id },
+              status: { in: ['planning', 'active'] },
+              startDate: { lt: trip.endDate },
+              endDate: { gt: trip.startDate },
+            },
+          },
+        });
+        conflictCount += kitOnOtherTrip;
+
+        const overlappingRes = await prisma.reservation.count({
+          where: {
+            kitId: kit.id,
+            status: { in: ['pending', 'confirmed'] },
+            startDate: { lt: trip.endDate },
+            endDate: { gt: trip.startDate },
+            OR: [
+              { tripId: null },
+              { tripId: { not: trip.id } },
+            ],
+          },
+        });
+        conflictCount += overlappingRes;
+      }
+
+      return { ...trip, conflictCount };
+    }));
+
+    return res.json(tripsWithConflicts);
   } catch (err) {
     console.error('List trips error:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -1132,6 +1191,164 @@ router.get('/:id/aar', async (req, res) => {
     return res.json(response);
   } catch (err) {
     console.error('Get trip AAR error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Trip Conflicts ───
+
+// Helper: calculate overlap days between two date ranges
+function overlapDays(s1, e1, s2, e2) {
+  const start = Math.max(new Date(s1).getTime(), new Date(s2).getTime());
+  const end = Math.min(new Date(e1).getTime(), new Date(e2).getTime());
+  if (end <= start) return 0;
+  return Math.ceil((end - start) / 86400000);
+}
+
+// GET /:id/conflicts - compute all scheduling conflicts for a trip
+router.get('/:id/conflicts', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const trip = await prisma.trip.findUnique({
+      where: { id },
+      include: {
+        personnel: {
+          include: { user: { select: { id: true, name: true } } },
+        },
+        kits: {
+          select: { id: true, color: true, type: { select: { name: true } } },
+        },
+      },
+    });
+    if (!trip) return res.status(404).json({ error: 'Trip not found' });
+
+    const personnelConflicts = [];
+    const equipmentConflicts = [];
+
+    // Check each person for overlapping trips
+    for (const tp of trip.personnel) {
+      const overlapping = await prisma.tripPersonnel.findMany({
+        where: {
+          userId: tp.userId,
+          tripId: { not: id },
+          trip: {
+            status: { in: ['planning', 'active'] },
+            startDate: { lt: trip.endDate },
+            endDate: { gt: trip.startDate },
+          },
+        },
+        include: {
+          trip: { select: { id: true, name: true, status: true, startDate: true, endDate: true } },
+        },
+      });
+
+      if (overlapping.length > 0) {
+        personnelConflicts.push({
+          userId: tp.userId,
+          userName: tp.user?.name || 'Unknown',
+          tripRole: tp.role,
+          conflictingTrips: overlapping.map(o => ({
+            tripId: o.trip.id,
+            tripName: o.trip.name,
+            tripStatus: o.trip.status,
+            startDate: o.trip.startDate,
+            endDate: o.trip.endDate,
+            role: o.role,
+            overlapDays: overlapDays(trip.startDate, trip.endDate, o.trip.startDate, o.trip.endDate),
+          })),
+        });
+      }
+    }
+
+    // Check each kit for overlapping trips and reservations
+    for (const kit of trip.kits) {
+      const conflicts = [];
+
+      // Other trips with this kit assigned
+      const otherTripKits = await prisma.kit.findMany({
+        where: {
+          id: kit.id,
+          tripId: { not: null },
+          trip: {
+            id: { not: id },
+            status: { in: ['planning', 'active'] },
+            startDate: { lt: trip.endDate },
+            endDate: { gt: trip.startDate },
+          },
+        },
+        select: {
+          trip: { select: { id: true, name: true, status: true, startDate: true, endDate: true } },
+        },
+      });
+
+      for (const otk of otherTripKits) {
+        if (otk.trip) {
+          conflicts.push({
+            type: 'trip',
+            id: otk.trip.id,
+            name: otk.trip.name,
+            startDate: otk.trip.startDate,
+            endDate: otk.trip.endDate,
+            overlapDays: overlapDays(trip.startDate, trip.endDate, otk.trip.startDate, otk.trip.endDate),
+          });
+        }
+      }
+
+      // Overlapping reservations (not for this trip)
+      const overlappingRes = await prisma.reservation.findMany({
+        where: {
+          kitId: kit.id,
+          status: { in: ['pending', 'confirmed'] },
+          startDate: { lt: trip.endDate },
+          endDate: { gt: trip.startDate },
+          OR: [
+            { tripId: null },
+            { tripId: { not: id } },
+          ],
+        },
+        include: {
+          person: { select: { name: true } },
+        },
+      });
+
+      for (const r of overlappingRes) {
+        conflicts.push({
+          type: 'reservation',
+          id: r.id,
+          name: r.purpose || ('Reserved by ' + (r.person?.name || 'Unknown')),
+          startDate: r.startDate,
+          endDate: r.endDate,
+          overlapDays: overlapDays(trip.startDate, trip.endDate, r.startDate, r.endDate),
+        });
+      }
+
+      if (conflicts.length > 0) {
+        equipmentConflicts.push({
+          kitId: kit.id,
+          kitColor: kit.color,
+          kitType: kit.type?.name || 'Unknown',
+          conflicts,
+        });
+      }
+    }
+
+    const totalPersonnelConflicts = personnelConflicts.reduce((s, p) => s + p.conflictingTrips.length, 0);
+    const totalEquipmentConflicts = equipmentConflicts.reduce((s, e) => s + e.conflicts.length, 0);
+
+    return res.json({
+      hasConflicts: totalPersonnelConflicts + totalEquipmentConflicts > 0,
+      personnelConflicts,
+      equipmentConflicts,
+      summary: {
+        totalPersonnelConflicts,
+        totalEquipmentConflicts,
+        affectedPersonnel: personnelConflicts.length,
+        affectedKits: equipmentConflicts.length,
+      },
+    });
+  } catch (err) {
+    console.error('Get trip conflicts error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
