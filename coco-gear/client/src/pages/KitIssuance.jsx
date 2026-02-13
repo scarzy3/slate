@@ -6,7 +6,7 @@ import InspWF from '../forms/InspWF.jsx';
 import IssueToPicker from '../forms/IssueToPicker.jsx';
 import api from '../api.js';
 
-function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,userRole,curUserId,settings,requests,setRequests,accessRequests,setAccessRequests,addLog,onNavigateToKit,reservations,apiCheckout,apiReturn,onRefreshKits,onRefreshRequests,apiSendMaint,apiResolveDegraded,trips}){
+function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSuper,userRole,curUserId,settings,requests,setRequests,accessRequests,setAccessRequests,addLog,onNavigateToKit,reservations,apiCheckout,apiReturn,apiInspect,onRefreshKits,onRefreshRequests,apiSendMaint,apiResolveDegraded,trips}){
   const userPerson=personnel.find(p=>p.id===curUserId);const userDeptId=userPerson?.deptId;
   const hasDept=!!userDeptId;const defaultView=hasDept&&!isSuper?"dept":"all";
   const[md,setMd]=useState(null);const[search,setSearch]=useState("");const[view,setView]=useState(defaultView);
@@ -95,15 +95,30 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
 
   const doCheckout=async(kitId,data)=>{
     try{await apiCheckout(kitId,curUserId,data.serials,data.notes);
+    // Create inspection record for the checkout
+    let photoRefs=[];
+    if(data.photos?.length){const files=data.photos.map(p=>p.file).filter(Boolean);
+      if(files.length){const uploaded=await api.upload.photos(files);photoRefs=uploaded.files||[]}}
+    await apiInspect(kitId,"",data.notes,data.results,photoRefs);
     // After successful checkout, refresh requests so the approved request gets marked used on return
     if(onRefreshRequests)onRefreshRequests();
     }catch(e){/* apiCheckout shows alert */}
     setMd(null)};
   const doIssueTo=async(kitId,personId,data)=>{
-    try{await apiCheckout(kitId,personId,data.serials,data.notes)}catch(e){/* apiCheckout shows alert */}
+    try{await apiCheckout(kitId,personId,data.serials,data.notes);
+    let photoRefs=[];
+    if(data.photos?.length){const files=data.photos.map(p=>p.file).filter(Boolean);
+      if(files.length){const uploaded=await api.upload.photos(files);photoRefs=uploaded.files||[]}}
+    await apiInspect(kitId,"",data.notes,data.results,photoRefs);
+    }catch(e){/* apiCheckout shows alert */}
     setMd(null)};
   const doReturn=async(kitId,data)=>{
     try{await apiReturn(kitId,data.serials,data.notes);
+    // Create inspection record for the return
+    let photoRefs=[];
+    if(data.photos?.length){const files=data.photos.map(p=>p.file).filter(Boolean);
+      if(files.length){const uploaded=await api.upload.photos(files);photoRefs=uploaded.files||[]}}
+    await apiInspect(kitId,"",data.notes,data.results,photoRefs);
     // After return, remove approved access for this user/kit so UI reflects revocation
     if(setAccessRequests)setAccessRequests(p=>p.map(r=>r.kitId===kitId&&r.personId===curUserId&&r.status==="approved"?{...r,status:"used"}:r));
     // After return, revoke approved checkout requests so user must re-request

@@ -269,6 +269,10 @@ export const inspectionSchema = z.object({
     status: z.enum(['GOOD', 'MISSING', 'DAMAGED']),
     serial: z.string().optional(),
   })),
+  photos: z.array(z.object({
+    filename: z.string().max(500),
+    originalName: z.string().max(500),
+  })).optional().default([]),
 });
 
 // ─── Maintenance ───

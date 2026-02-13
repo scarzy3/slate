@@ -778,7 +778,7 @@ router.post('/return', validate(returnSchema), async (req, res) => {
 // POST /inspect - submit inspection results
 router.post('/inspect', validate(inspectionSchema), async (req, res) => {
   try {
-    const { kitId, inspector, notes, results } = req.validated;
+    const { kitId, inspector, notes, results, photos } = req.validated;
     const kit = await prisma.kit.findUnique({ where: { id: kitId } });
     if (!kit) return res.status(404).json({ error: 'Kit not found' });
 
@@ -803,6 +803,15 @@ router.post('/inspect', validate(inspectionSchema), async (req, res) => {
             where: { kitId_componentId_slotIndex: { kitId, componentId, slotIndex: idx } },
             create: { kitId, componentId, slotIndex: idx, serial },
             update: { serial },
+          });
+        }
+      }
+
+      // Save inspection photos
+      if (photos && photos.length > 0) {
+        for (const photo of photos) {
+          await tx.inspectionPhoto.create({
+            data: { inspectionId: inspection.id, filename: photo.filename, originalName: photo.originalName },
           });
         }
       }

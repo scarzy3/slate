@@ -20,7 +20,7 @@ function InspWF({kit,type,allC,onDone,onCancel,settings,onPhotoAdd,mode="inspect
   const counts=useMemo(()=>{const c={GOOD:0,MISSING:0,DAMAGED:0};cs.forEach(comp=>{c[res[comp._key]||"GOOD"]++});return c},[res,cs]);
   const allSerFilled=serComps.length===0||serComps.every(c=>res[c._key]==="MISSING"||serials[c._key]?.trim());
   const handlePhoto=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();
-    reader.onload=ev=>{setPhotos(p=>[...p,{id:uid(),data:ev.target.result,name:file.name,date:td()}])};reader.readAsDataURL(file)};
+    reader.onload=ev=>{setPhotos(p=>[...p,{id:uid(),data:ev.target.result,name:file.name,date:td(),file}])};reader.readAsDataURL(file)};
   const instLabel=c=>c._qty>1?c.label+" ("+(c._idx+1)+" of "+c._qty+")":c.label;
   if(tot===0)return <div style={{padding:20,textAlign:"center",color:T.mu}}>No components.</div>;
   if(isRev){const iss=cs.filter(c=>res[c._key]!=="GOOD");return(
