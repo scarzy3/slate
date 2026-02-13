@@ -176,6 +176,12 @@ export const kits = {
   requestAccess: (data) => request('/kits/request-access', { method: 'POST', body: data }),
   approveAccess: (id) => request(`/kits/access-requests/${id}/approve`, { method: 'PUT' }),
   denyAccess: (id) => request(`/kits/access-requests/${id}/deny`, { method: 'PUT' }),
+  // Checkout requests (department approval workflow)
+  checkoutRequests: () => request('/kits/checkout-requests'),
+  myCheckoutRequests: () => request('/kits/checkout-requests/mine'),
+  submitCheckoutRequest: (data) => request('/kits/checkout-requests', { method: 'POST', body: data }),
+  approveCheckoutRequest: (id, data) => request(`/kits/checkout-requests/${id}/approve`, { method: 'PUT', body: data || {} }),
+  denyCheckoutRequest: (id, data) => request(`/kits/checkout-requests/${id}/deny`, { method: 'PUT', body: data || {} }),
 };
 
 // ─── Kit Types ───

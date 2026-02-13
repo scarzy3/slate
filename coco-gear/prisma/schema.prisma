@@ -450,11 +450,13 @@ model CheckoutRequest {
   kitId        String
   personId     String?
   deptId       String?
-  status       String    @default("pending") // pending | approved | denied
+  status       String    @default("pending") // pending | approved | denied | used
   serials      Json?
   notes        String?
+  purpose      String?   // requester's stated purpose for needing the kit
   resolvedById String?
   resolvedDate DateTime?
+  resolverNotes String?  // denial reason or approval conditions
   createdAt    DateTime  @default(now())
 
   kit        Kit         @relation(fields: [kitId], references: [id], onDelete: Cascade)

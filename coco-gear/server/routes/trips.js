@@ -380,6 +380,17 @@ router.post('/:id/kits', requirePerm('trips'), async (req, res) => {
 
     // Auto-create reservations for the trip date range (only for newly assigned kits)
     if (autoReserve && newKitIds.length > 0) {
+      // Check if a manager or director is on the trip — if not, reservations need approval
+      const tripPersonnel = await prisma.tripPersonnel.findMany({
+        where: { tripId: id },
+        include: { user: { select: { role: true } } },
+      });
+      const seniorRoles = ['director', 'manager', 'developer', 'engineer', 'super'];
+      const hasSeniorOnTrip = tripPersonnel.some(tp =>
+        seniorRoles.includes(tp.role) || seniorRoles.includes(tp.user?.role)
+      );
+      const reservationStatus = hasSeniorOnTrip ? 'confirmed' : 'pending';
+
       for (const kitId of newKitIds) {
         // Check for existing reservation to avoid duplicates
         const existing = await prisma.reservation.count({
@@ -394,8 +405,10 @@ router.post('/:id/kits', requirePerm('trips'), async (req, res) => {
               tripId: id,
               startDate: trip.startDate,
               endDate: trip.endDate,
-              purpose: `Auto-reserved for trip: ${trip.name}`,
-              status: 'confirmed',
+              purpose: hasSeniorOnTrip
+                ? `Auto-reserved for trip: ${trip.name}`
+                : `Pending approval — auto-reserved for trip: ${trip.name}`,
+              status: reservationStatus,
             },
           });
         } catch { /* skip if reservation already exists or conflicts */ }

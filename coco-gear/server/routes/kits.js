@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
-import { validate, kitSchema, kitUpdateSchema, checkoutSchema, returnSchema, inspectionSchema, kitSerialUpdateSchema, kitAccessRequestSchema } from '../utils/validation.js';
+import { validate, kitSchema, kitUpdateSchema, checkoutSchema, returnSchema, inspectionSchema, kitSerialUpdateSchema, kitAccessRequestSchema, checkoutRequestSchema, checkoutRequestResolveSchema } from '../utils/validation.js';
 import auditLog from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -437,6 +437,161 @@ router.put('/access-requests/:id/deny', requireRole('lead'), async (req, res) =>
   }
 });
 
+// ─── Checkout Requests (department approval workflow) ───
+
+// GET /checkout-requests - list all checkout requests (for approvers)
+router.get('/checkout-requests', async (req, res) => {
+  try {
+    const requests = await prisma.checkoutRequest.findMany({
+      include: {
+        kit: { select: { id: true, color: true, typeId: true, deptId: true, type: { select: { name: true } }, department: { select: { id: true, name: true, color: true } } } },
+        person: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+        resolvedBy: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(requests.map(r => ({
+      id: r.id, kitId: r.kitId, personId: r.personId, deptId: r.deptId, status: r.status,
+      serials: r.serials, notes: r.notes, purpose: r.purpose,
+      resolvedById: r.resolvedById, resolvedDate: r.resolvedDate, resolverNotes: r.resolverNotes,
+      createdAt: r.createdAt,
+      _kit: r.kit, _person: r.person, _resolvedBy: r.resolvedBy,
+    })));
+  } catch (err) {
+    console.error('List checkout requests error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /checkout-requests/mine - list current user's checkout requests (for notifications)
+router.get('/checkout-requests/mine', async (req, res) => {
+  try {
+    const requests = await prisma.checkoutRequest.findMany({
+      where: { personId: req.user.id },
+      include: {
+        kit: { select: { id: true, color: true, typeId: true, deptId: true, type: { select: { name: true } }, department: { select: { id: true, name: true, color: true } } } },
+        resolvedBy: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(requests.map(r => ({
+      id: r.id, kitId: r.kitId, personId: r.personId, deptId: r.deptId, status: r.status,
+      serials: r.serials, notes: r.notes, purpose: r.purpose,
+      resolvedById: r.resolvedById, resolvedDate: r.resolvedDate, resolverNotes: r.resolverNotes,
+      createdAt: r.createdAt,
+      _kit: r.kit, _resolvedBy: r.resolvedBy,
+    })));
+  } catch (err) {
+    console.error('List my checkout requests error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /checkout-requests - submit a checkout request for department approval
+router.post('/checkout-requests', validate(checkoutRequestSchema), async (req, res) => {
+  try {
+    const { kitId, purpose, notes } = req.validated;
+    const kit = await prisma.kit.findUnique({ where: { id: kitId }, include: { department: true } });
+    if (!kit) return res.status(404).json({ error: 'Kit not found' });
+    if (kit.issuedToId) return res.status(409).json({ error: 'Kit already issued' });
+    if (kit.maintenanceStatus) return res.status(409).json({ error: 'Kit in maintenance' });
+
+    // Check for existing pending request
+    const existing = await prisma.checkoutRequest.findFirst({
+      where: { kitId, personId: req.user.id, status: 'pending' },
+    });
+    if (existing) return res.status(409).json({ error: 'You already have a pending request for this kit' });
+
+    const request = await prisma.checkoutRequest.create({
+      data: { kitId, personId: req.user.id, deptId: kit.deptId, status: 'pending', purpose, notes },
+      include: {
+        kit: { select: { id: true, color: true, typeId: true, deptId: true, type: { select: { name: true } }, department: { select: { id: true, name: true, color: true } } } },
+        person: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+      },
+    });
+
+    await auditLog('checkout_request', 'kit', kitId, req.user.id, { kitColor: kit.color, purpose });
+    res.status(201).json({
+      id: request.id, kitId: request.kitId, personId: request.personId, deptId: request.deptId, status: request.status,
+      serials: null, notes: request.notes, purpose: request.purpose,
+      resolvedById: null, resolvedDate: null, resolverNotes: null,
+      createdAt: request.createdAt,
+      _kit: request.kit, _person: request.person, _resolvedBy: null,
+    });
+  } catch (err) {
+    console.error('Submit checkout request error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /checkout-requests/:id/approve - approve a checkout request (with optional conditions)
+router.put('/checkout-requests/:id/approve', requireRole('lead'), validate(checkoutRequestResolveSchema), async (req, res) => {
+  try {
+    const { resolverNotes } = req.validated;
+    const request = await prisma.checkoutRequest.findUnique({ where: { id: req.params.id }, include: { kit: true } });
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'pending') return res.status(409).json({ error: 'Request already resolved' });
+
+    const updated = await prisma.checkoutRequest.update({
+      where: { id: req.params.id },
+      data: { status: 'approved', resolvedById: req.user.id, resolvedDate: new Date(), resolverNotes: resolverNotes || null },
+      include: {
+        kit: { select: { id: true, color: true, typeId: true, deptId: true, type: { select: { name: true } }, department: { select: { id: true, name: true, color: true } } } },
+        person: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+        resolvedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    await auditLog('checkout_request_approved', 'kit', request.kitId, req.user.id, {
+      kitColor: request.kit.color, requesterId: request.personId, conditions: resolverNotes,
+    });
+    res.json({
+      id: updated.id, kitId: updated.kitId, personId: updated.personId, deptId: updated.deptId, status: updated.status,
+      serials: updated.serials, notes: updated.notes, purpose: updated.purpose,
+      resolvedById: updated.resolvedById, resolvedDate: updated.resolvedDate, resolverNotes: updated.resolverNotes,
+      createdAt: updated.createdAt,
+      _kit: updated.kit, _person: updated.person, _resolvedBy: updated.resolvedBy,
+    });
+  } catch (err) {
+    console.error('Approve checkout request error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /checkout-requests/:id/deny - deny a checkout request (with reason)
+router.put('/checkout-requests/:id/deny', requireRole('lead'), validate(checkoutRequestResolveSchema), async (req, res) => {
+  try {
+    const { resolverNotes } = req.validated;
+    const request = await prisma.checkoutRequest.findUnique({ where: { id: req.params.id }, include: { kit: true } });
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'pending') return res.status(409).json({ error: 'Request already resolved' });
+
+    const updated = await prisma.checkoutRequest.update({
+      where: { id: req.params.id },
+      data: { status: 'denied', resolvedById: req.user.id, resolvedDate: new Date(), resolverNotes: resolverNotes || null },
+      include: {
+        kit: { select: { id: true, color: true, typeId: true, deptId: true, type: { select: { name: true } }, department: { select: { id: true, name: true, color: true } } } },
+        person: { select: { id: true, name: true, title: true, role: true, deptId: true } },
+        resolvedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    await auditLog('checkout_request_denied', 'kit', request.kitId, req.user.id, {
+      kitColor: request.kit.color, requesterId: request.personId, reason: resolverNotes,
+    });
+    res.json({
+      id: updated.id, kitId: updated.kitId, personId: updated.personId, deptId: updated.deptId, status: updated.status,
+      serials: updated.serials, notes: updated.notes, purpose: updated.purpose,
+      resolvedById: updated.resolvedById, resolvedDate: updated.resolvedDate, resolverNotes: updated.resolverNotes,
+      createdAt: updated.createdAt,
+      _kit: updated.kit, _person: updated.person, _resolvedBy: updated.resolvedBy,
+    });
+  } catch (err) {
+    console.error('Deny checkout request error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /checkout - checkout kit
 router.post('/checkout', validate(checkoutSchema), async (req, res) => {
   try {
@@ -501,13 +656,25 @@ router.post('/checkout', validate(checkoutSchema), async (req, res) => {
           const userLevel = roleLevel[req.user.role] || 0;
           const minLevel = roleLevel[minRole] || 1;
           const hasMinRole = userLevel >= minLevel;
-          // Can bypass if: dept head, in same dept, or has min approval role
-          if (!isDeptHead && !isInSameDept && !hasMinRole) {
-            const request = await prisma.checkoutRequest.create({
-              data: { kitId, personId: req.user.id, deptId: kit.deptId, status: 'pending', serials: serials || {}, notes },
+
+          // Check if user is trip personnel for this kit's assigned trip (bypass approval)
+          let isTripPersonnel = false;
+          if (kit.tripId) {
+            const tripAssignment = await prisma.tripPersonnel.findFirst({
+              where: { tripId: kit.tripId, userId: recipientId },
             });
-            await auditLog('checkout_request', 'kit', kitId, req.user.id, { kitColor: kit.color });
-            return res.status(202).json({ pending: true, requestId: request.id });
+            isTripPersonnel = !!tripAssignment;
+          }
+
+          // Can bypass if: dept head, in same dept, has min approval role, or is trip personnel for this kit
+          if (!isDeptHead && !isInSameDept && !hasMinRole && !isTripPersonnel) {
+            // Must have an approved checkout request to proceed
+            const approvedRequest = await prisma.checkoutRequest.findFirst({
+              where: { kitId, personId: recipientId, status: 'approved' },
+            });
+            if (!approvedRequest) {
+              return res.status(403).json({ error: 'Checkout request required — submit a request and wait for department approval before checking out this kit' });
+            }
           }
         }
       }
@@ -580,6 +747,15 @@ router.post('/return', validate(returnSchema), async (req, res) => {
     // so they must request access again for future checkouts
     if (kit.issuedToId) {
       await prisma.kitAccessRequest.updateMany({
+        where: { kitId, personId: kit.issuedToId, status: 'approved' },
+        data: { status: 'used' },
+      });
+    }
+
+    // Revoke any approved checkout requests for the person who had this kit
+    // so they must submit a new request for future checkouts
+    if (kit.issuedToId) {
+      await prisma.checkoutRequest.updateMany({
         where: { kitId, personId: kit.issuedToId, status: 'approved' },
         data: { status: 'used' },
       });
