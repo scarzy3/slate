@@ -1,17 +1,7 @@
-import crypto from 'crypto';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
-
-// SEC-001 fix: No hardcoded fallback secret. Matches auth.js behavior.
-let JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('FATAL: JWT_SECRET environment variable is not set. Refusing to start in production.');
-    process.exit(1);
-  }
-  JWT_SECRET = crypto.randomBytes(32).toString('hex');
-  console.warn('[security][socket] JWT_SECRET not set — using random per-session secret');
-}
+// SEC-001 fix: Share the same JWT secret with auth middleware (single source of truth)
+import { JWT_SECRET } from './middleware/auth.js';
 
 let io = null;
 
