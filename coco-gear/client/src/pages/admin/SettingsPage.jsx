@@ -18,6 +18,7 @@ function SettingsPage({settings,setSettings,onSaveSettings}){
     {k:"requireDeptApproval",l:"Require dept approval for cross-dept kits",d:"Kits outside a user's department require approval"},
     {k:"directorBypassApproval",l:"Directors bypass approval",d:"Directors can take any kit without requesting"},
     {k:"requireAccessRequest",l:"Require access request before checkout",d:"Users must request and be approved for kit access before checkout. Access is revoked after return."},
+    {k:"restrictReturnToHolder",l:"Restrict kit returns to holder or lead+",d:"Only the kit holder or a lead or above can return a kit. When off, any user can return any kit."},
     {k:"allowUserLocationUpdate",l:"Allow user storage updates",d:"Users can change which storage area a kit is in"},
   ];
   const approvalRoleOpts=[{v:"lead",l:"Lead"},{v:"manager",l:"Manager"},{v:"director",l:"Director"}];

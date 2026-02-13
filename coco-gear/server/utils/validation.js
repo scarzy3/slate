@@ -325,6 +325,7 @@ export const settingsSchema = z.object({
     notes: z.boolean().optional(),
   }).optional(),
   autoReserveOnTrip: z.boolean().optional(),
+  restrictReturnToHolder: z.boolean().optional(),
   requireAccessRequest: z.boolean().optional(),
   accessRequestMinApprovalRole: z.enum(['lead','manager','director']).optional(),
   enableSelfSignup: z.boolean().optional(),

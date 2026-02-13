@@ -28,6 +28,7 @@ const DEF_SETTINGS={
   enableReservations:true,enableMaintenance:true,enableConsumables:true,enableQR:true,
   boatFields:{type:true,hullId:true,length:true,homePort:true,notes:true},
   autoReserveOnTrip:true,
+  restrictReturnToHolder:true,
   requireAccessRequest:false,accessRequestMinApprovalRole:"lead",
   /* Admin permissions - what admins can access (legacy, kept for compat) */
   adminPerms:{
