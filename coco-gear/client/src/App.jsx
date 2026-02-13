@@ -122,6 +122,8 @@ export default function App(){
     tasks:(t.tasks||[]).map(tk=>({id:tk.id,title:tk.title,phase:tk.phase,priority:tk.priority,status:tk.status,
       sortOrder:tk.sortOrder,dueDate:tk.dueDate,completedAt:tk.completedAt,
       assignedToId:tk.assignedToId||null,assignedTo:tk.assignedTo||null,completedBy:tk.completedBy||null})),
+    phases:(t.phases||[]).map(p=>({id:p.id,name:p.name,startDate:p.startDate,endDate:p.endDate,color:p.color||null,notes:p.notes||null,sortOrder:p.sortOrder||0})),
+    milestones:(t.milestones||[]).map(m=>({id:m.id,name:m.name,date:m.date,completed:m.completed||false,completedAt:m.completedAt||null,notes:m.notes||null,sortOrder:m.sortOrder||0})),
     taskCount:t._count?.tasks||0,taskDone:(t.tasks||[]).filter(tk=>tk.status==="done").length,
     personnelCount:t._count?.personnel||0,reservationCount:t._count?.reservations||0,boatCount:t._count?.boats||0});
   const xformBoat=b=>({id:b.id,name:b.name,type:b.type||"",hullId:b.hullId||"",length:b.length,
