@@ -4,6 +4,94 @@ function getToken() {
   return localStorage.getItem('slate_token');
 }
 
+function setToken(token) {
+  localStorage.setItem('slate_token', token);
+}
+
+// ─── Token refresh state ───
+// Prevents multiple simultaneous refresh attempts and queues waiting requests
+let refreshPromise = null;
+let sessionExpiredHandled = false;
+
+// Event target for session events that auth.jsx can listen to
+export const sessionEvents = new EventTarget();
+
+/**
+ * Attempt to refresh the JWT token silently.
+ * Returns the new token on success, or null on failure.
+ */
+async function refreshToken() {
+  const token = getToken();
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json().catch(() => null);
+    if (!data?.token) return null;
+
+    setToken(data.token);
+    localStorage.setItem('slate_user', JSON.stringify(data.user));
+    sessionEvents.dispatchEvent(new CustomEvent('token-refreshed', { detail: data }));
+    return data.token;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Coordinate token refresh across concurrent requests.
+ * Only one refresh runs at a time; others wait for the same result.
+ */
+async function coordinatedRefresh() {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = refreshToken().finally(() => {
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+}
+
+/**
+ * Handle unrecoverable session expiration (only fires once to avoid loops).
+ */
+function handleSessionExpired() {
+  if (sessionExpiredHandled) return;
+  sessionExpiredHandled = true;
+
+  localStorage.removeItem('slate_token');
+  localStorage.removeItem('slate_user');
+  sessionEvents.dispatchEvent(new CustomEvent('session-expired'));
+}
+
+// Reset the flag when a new login happens
+sessionEvents.addEventListener('login', () => {
+  sessionExpiredHandled = false;
+});
+
+/**
+ * Parse JWT expiry time from the token payload.
+ * Returns the expiry time in milliseconds, or 0 if unparseable.
+ */
+export function getTokenExpiry(token) {
+  if (!token) return 0;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return (payload.exp || 0) * 1000;
+  } catch {
+    return 0;
+  }
+}
+
 async function request(path, options = {}) {
   const token = getToken();
   const headers = { ...options.headers };
@@ -13,12 +101,44 @@ async function request(path, options = {}) {
     options.body = JSON.stringify(options.body);
   }
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
+
+  // On 401, attempt a silent token refresh and retry the original request once
   if (res.status === 401) {
-    localStorage.removeItem('slate_token');
-    localStorage.removeItem('slate_user');
-    window.location.reload();
+    // Don't try to refresh the refresh endpoint itself
+    if (path === '/auth/refresh') {
+      handleSessionExpired();
+      throw new Error('Session expired');
+    }
+
+    const newToken = await coordinatedRefresh();
+    if (newToken) {
+      // Retry the original request with the new token
+      const retryHeaders = { ...options.headers };
+      retryHeaders['Authorization'] = `Bearer ${newToken}`;
+      if (options.body && typeof options.body === 'string' && !options.headers?.['Content-Type']) {
+        retryHeaders['Content-Type'] = 'application/json';
+      }
+      const retryRes = await fetch(`${BASE}${path}`, { ...options, headers: retryHeaders });
+      if (retryRes.status === 401) {
+        // Refresh succeeded but still getting 401 — session is truly expired
+        handleSessionExpired();
+        throw new Error('Session expired');
+      }
+      const retryData = await retryRes.json().catch(() => ({}));
+      if (!retryRes.ok) throw new Error(retryData.error || `Request failed (${retryRes.status})`);
+      return retryData;
+    }
+
+    // Refresh failed — session is expired
+    handleSessionExpired();
     throw new Error('Session expired');
   }
+
+  // On 403, dispatch event so auth context can refresh user permissions
+  if (res.status === 403) {
+    sessionEvents.dispatchEvent(new CustomEvent('permission-changed'));
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
@@ -31,6 +151,7 @@ export const auth = {
   signupInfo: () => request('/auth/signup-info'),
   signup: (data) => request('/auth/signup', { method: 'POST', body: data }),
   me: () => request('/auth/me'),
+  refresh: () => coordinatedRefresh(),
   updateProfile: (data) => request('/auth/me', { method: 'PUT', body: data }),
   changePassword: (newPassword, currentPassword) => request('/auth/me/password', { method: 'PUT', body: { newPassword, currentPassword } }),
 };
