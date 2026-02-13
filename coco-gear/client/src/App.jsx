@@ -76,7 +76,7 @@ export default function App(){
   const[reservations,setReservations]=useState([]);const[trips,setTrips]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[boats,setBoats]=useState([]);const[favorites,setFavorites]=useState([]);
   const[searchMd,setSearchMd]=useState(false);const[scanMd,setScanMd]=useState(null);const[kitFilter,setKitFilter]=useState("all");const[navKitId,setNavKitId]=useState(null);const[navAction,setNavAction]=useState(null);const[navPersonId,setNavPersonId]=useState(null);
-  const[collapsedSections,setCollapsedSections]=useState({});
+  const[collapsedSections,setCollapsedSections]=useState({insights:true,config:true});
   const[dataLoaded,setDataLoaded]=useState(false);const[loadError,setLoadError]=useState("");
   const[loginUsers,setLoginUsers]=useState([]);
   const[showSignup,setShowSignup]=useState(false);const[signupDomain,setSignupDomain]=useState("");
