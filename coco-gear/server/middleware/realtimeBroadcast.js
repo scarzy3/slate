@@ -23,6 +23,7 @@ const ENTITY_MAP = [
   ['/api/reservations', 'reservations'],
   ['/api/boats', 'boats'],
   ['/api/maintenance', 'kits'],   // maintenance affects kits
+  ['/api/approval', 'approvals'],
   ['/api/settings', 'settings'],
   ['/api/packing-templates', 'trips'],
   ['/api/task-templates', 'trips'],

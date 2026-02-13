@@ -18,10 +18,16 @@ model User {
   mustChangePassword Boolean @default(true)
   deptId    String?
   dashboardConfig Json?    // { widgets: [{ id, visible, order }], columns?: number }
+  approvalStatus  String   @default("approved") // pending | approved | denied
+  approvedById    String?
+  approvedAt      DateTime?
+  denialReason    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   department      Department?        @relation("UserDepartment", fields: [deptId], references: [id], onDelete: SetNull)
+  approvedBy      User?              @relation("ApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedUsers   User[]             @relation("ApprovedBy")
   managedDepts    DepartmentManager[] @relation("DeptManager")
   ledDepts        DepartmentLead[]    @relation("DeptLead")
   kitCheckouts    IssueHistory[]     @relation("IssuedTo")
@@ -48,6 +54,7 @@ model User {
 
   @@index([role])
   @@index([deptId])
+  @@index([approvalStatus])
 }
 
 // ─── Departments ───

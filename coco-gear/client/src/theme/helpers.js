@@ -25,7 +25,7 @@ const DEF_SETTINGS={
   requireSerialsOnCheckout:true,requireSerialsOnReturn:true,requireSerialsOnInspect:true,
   allowUserInspect:true,allowUserCheckout:true,
   inspectionDueThreshold:30,overdueReturnThreshold:14,
-  enableReservations:true,enableMaintenance:true,enableConsumables:true,enableQR:true,
+  enableReservations:true,enableMaintenance:true,enableConsumables:true,enableQR:true,requireSignupApproval:true,
   boatFields:{type:true,hullId:true,length:true,homePort:true,notes:true},
   autoReserveOnTrip:true,
   restrictReturnToHolder:true,

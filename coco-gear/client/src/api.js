@@ -150,10 +150,20 @@ export const auth = {
   login: (userId, pin) => request('/auth/login', { method: 'POST', body: { userId, pin } }),
   signupInfo: () => request('/auth/signup-info'),
   signup: (data) => request('/auth/signup', { method: 'POST', body: data }),
+  signupStatus: (email) => request(`/auth/signup-status/${encodeURIComponent(email)}`),
   me: () => request('/auth/me'),
   refresh: () => coordinatedRefresh(),
   updateProfile: (data) => request('/auth/me', { method: 'PUT', body: data }),
   changePassword: (newPassword, currentPassword) => request('/auth/me/password', { method: 'PUT', body: { newPassword, currentPassword } }),
+};
+
+// ─── User Approval ───
+export const approval = {
+  list: (status = 'pending') => request(`/approval?status=${status}`),
+  count: () => request('/approval/count'),
+  approve: (id, data = {}) => request(`/approval/${id}/approve`, { method: 'PUT', body: data }),
+  deny: (id, data = {}) => request(`/approval/${id}/deny`, { method: 'PUT', body: data }),
+  revoke: (id, data = {}) => request(`/approval/${id}/revoke`, { method: 'PUT', body: data }),
 };
 
 // ─── Kits ───
@@ -427,7 +437,7 @@ export const dashboard = {
 export const health = () => request('/health');
 
 export default {
-  auth, kits, types, components, locations, departments,
+  auth, approval, kits, types, components, locations, departments,
   personnel, consumables, assets, reservations, trips, tasks, taskTemplates,
   tripTemplates, packingTemplates, packing, comms, boats, maintenance,
   audit, settings, reports, upload, dashboard, health,

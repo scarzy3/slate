@@ -34,6 +34,7 @@ const DEFAULT_SETTINGS = {
   autoReserveOnTrip: true,
   restrictReturnToHolder: true,
   enableSelfSignup: true,
+  requireSignupApproval: true,
   allowedEmailDomain: 'saronic.com',
   adminPerms: {
     analytics: true,

@@ -30,7 +30,8 @@ import maintenanceRoutes from './routes/maintenance.js';
 import auditRoutes from './routes/audit.js';
 import settingsRoutes from './routes/settings.js';
 import reportRoutes from './routes/reports.js';
-import { authMiddleware } from './middleware/auth.js';
+import approvalRoutes from './routes/approval.js';
+import { authMiddleware, requireApproved } from './middleware/auth.js';
 import { realtimeBroadcast } from './middleware/realtimeBroadcast.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -96,7 +97,24 @@ app.post('/api/upload', authMiddleware, upload.array('photos', 10), (req, res) =
 app.use(realtimeBroadcast);
 
 // ─── API Routes ───
+// Auth routes are exempt from approval check (login, signup, status check all work for pending users)
 app.use('/api/auth', authRoutes);
+// Approval routes need auth but use their own approval checks internally
+app.use('/api/approval', approvalRoutes);
+
+// All other API routes require an approved account
+app.use('/api', (req, res, next) => {
+  // Skip for auth and approval routes (already mounted above)
+  if (req.path.startsWith('/auth') || req.path.startsWith('/approval')) return next();
+  // Skip for health check
+  if (req.path === '/health') return next();
+  // For all other routes, require approved status after auth
+  authMiddleware(req, res, (err) => {
+    if (err) return next(err);
+    requireApproved(req, res, next);
+  });
+});
+
 app.use('/api/kits', kitRoutes);
 app.use('/api/types', typeRoutes);
 app.use('/api/components', componentRoutes);

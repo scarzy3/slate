@@ -11,10 +11,11 @@ const router = Router();
 
 const SALT_ROUNDS = 10;
 
-// GET / - list all users (any authenticated user — needed for kit checkout/return display)
+// GET / - list all approved users (any authenticated user — needed for kit checkout/return display)
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
+      where: { approvalStatus: 'approved' },
       select: {
         id: true,
         name: true,

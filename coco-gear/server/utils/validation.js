@@ -329,6 +329,7 @@ export const settingsSchema = z.object({
   requireAccessRequest: z.boolean().optional(),
   accessRequestMinApprovalRole: z.enum(['lead','manager','director']).optional(),
   enableSelfSignup: z.boolean().optional(),
+  requireSignupApproval: z.boolean().optional(),
   allowedEmailDomain: z.string().max(200).optional(),
   adminPerms: z.object({
     analytics: z.boolean().optional(),
