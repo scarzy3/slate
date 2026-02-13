@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { T } from '../theme/theme.js';
 import { stMeta, fmtDate } from '../theme/helpers.js';
 import { Sw, Bg, Bt, Fl, In, Sl, SH, ModalWrap, ConfirmDialog, DeptBg } from '../components/ui/index.js';
@@ -13,6 +13,17 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
   const[accessNotes,setAccessNotes]=useState("");
   // Request form state
   const[reqPurpose,setReqPurpose]=useState("");const[reqNotes,setReqNotes]=useState("");const[reqSubmitting,setReqSubmitting]=useState(false);
+  // Toast/banner state for submission confirmation
+  const[toast,setToast]=useState(null);const toastTimer=useRef(null);
+  const showToast=(msg,variant)=>{clearTimeout(toastTimer.current);setToast({msg,variant});toastTimer.current=setTimeout(()=>setToast(null),6000)};
+
+  // Auto-refresh checkout requests on mount and on window focus so user sees approvals/denials
+  useEffect(()=>{
+    if(onRefreshRequests)onRefreshRequests();
+    const onFocus=()=>{if(onRefreshRequests)onRefreshRequests()};
+    window.addEventListener("focus",onFocus);
+    return()=>{window.removeEventListener("focus",onFocus);clearTimeout(toastTimer.current)};
+  },[]);
   const filt=useMemo(()=>{let list=kits;
     if(view==="dept"&&userDeptId)list=list.filter(k=>k.deptId===userDeptId);
     if(view==="issued")list=list.filter(k=>k.issuedTo);if(view==="available")list=list.filter(k=>!k.issuedTo&&!k.maintenanceStatus&&!k.degraded);
@@ -75,7 +86,9 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     try{
       const result=await api.kits.submitCheckoutRequest({kitId,purpose:reqPurpose,notes:reqNotes});
       if(setRequests)setRequests(p=>[result,...p]);
+      const kit=kits.find(k=>k.id===kitId);
       setMd(null);setReqPurpose("");setReqNotes("");
+      showToast("Request submitted for Kit "+(kit?.color||"")+" — you will be notified when the department makes a decision.","success");
     }catch(e){alert(e.message)}
     finally{setReqSubmitting(false)}
   };
@@ -107,6 +120,13 @@ function KitIssuance({kits,setKits,types,locs,personnel,allC,depts,isAdmin,isSup
     <SH title="Checkout / Return" sub={issuedCt+" out | "+(kits.length-issuedCt)+" available | "+myCt+" mine"}
       action={<div style={{display:"flex",gap:6}}>
         <Bt v="primary" onClick={()=>setMd("issueTo")}>Issue To...</Bt></div>}/>
+    {toast&&<div style={{padding:"10px 16px",borderRadius:8,marginBottom:12,display:"flex",alignItems:"center",gap:10,
+      background:toast.variant==="success"?"rgba(34,197,94,.08)":"rgba(239,68,68,.08)",
+      border:"1px solid "+(toast.variant==="success"?"rgba(34,197,94,.2)":"rgba(239,68,68,.2)"),
+      color:toast.variant==="success"?T.gn:T.rd}}>
+      <span style={{fontSize:14}}>{toast.variant==="success"?"\u2705":"\u274C"}</span>
+      <span style={{flex:1,fontSize:11,fontFamily:T.m}}>{toast.msg}</span>
+      <button onClick={()=>setToast(null)} style={{all:"unset",cursor:"pointer",fontSize:12,opacity:.6}}>x</button></div>}
     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
       <In value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:200,maxWidth:"100%"}}/>
       {[...(hasDept?["dept"]:[]),"all","mine","issued","available"].map(v=>{const ct=v==="all"?kits.length:v==="mine"?myCt:v==="dept"?deptCt:v==="issued"?issuedCt:kits.filter(k=>!k.issuedTo&&!k.maintenanceStatus&&!k.degraded).length;
