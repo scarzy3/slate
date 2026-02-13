@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from './auth.jsx';
 import api from './api.js';
 
@@ -6,6 +6,7 @@ import { T, applyTheme } from './theme/theme.js';
 import { uid, SYS_ROLE_LABELS, sysRoleColor, DEF_ROLE_PERMS, DEF_SETTINGS, fmtDate } from './theme/helpers.js';
 import { Sw, Bg, Bt, ModalWrap, DeptBg } from './components/ui/index.js';
 import useAnalytics from './hooks/useAnalytics.js';
+import useSocket from './hooks/useSocket.js';
 
 import NavSection from './components/NavSection.jsx';
 import GlobalSearch from './components/GlobalSearch.jsx';
@@ -179,6 +180,17 @@ export default function App(){
   const refreshDepts=async()=>{try{const d=await api.departments.list();setDepts(d.map(xformDept))}catch(e){}};
   const refreshLogs=async()=>{try{const d=await api.audit.list({limit:500});setLogs((d.logs||[]).map(xformLog))}catch(e){}};
   const saveSettings=async(s)=>{try{await api.settings.update(s)}catch(e){console.error("Settings save error:",e)}};
+  const refreshSettings=async()=>{try{const s=await api.settings.get();setSettings(prev=>({...prev,...s}))}catch(e){}};
+
+  /* ─── Real-time updates via Socket.IO ─── */
+  const socketRefreshCallbacks=useMemo(()=>({
+    kits:refreshKits,trips:refreshTrips,personnel:refreshPersonnel,
+    types:refreshTypes,components:refreshComps,locations:refreshLocs,
+    departments:refreshDepts,reservations:refreshReservations,
+    consumables:refreshConsumables,assets:refreshAssets,boats:refreshBoats,
+    settings:refreshSettings,
+  }),[]);
+  const{connected:socketConnected,lastEvent:socketLastEvent}=useSocket(authCtx.token,socketRefreshCallbacks,curUser||authCtx.user?.id);
 
   const user=curUser?personnel.find(p=>p.id===curUser):authCtx.user?personnel.find(p=>p.id===authCtx.user.id):personnel[0];
   const isDeveloper=user?.role==="developer";
@@ -297,7 +309,10 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
             <div style={{width:6,height:6,borderRadius:"50%",background:roleColor,boxShadow:"0 0 8px "+roleColor+"55"}}/>
             <span style={{fontSize:8,textTransform:"uppercase",letterSpacing:1.5,color:roleColor,fontFamily:T.m,fontWeight:600}}>{roleLabel}</span></div>
-          <div style={{fontSize:15,fontWeight:800,fontFamily:T.u,letterSpacing:-.3}}>Slate</div>
+          <div style={{fontSize:15,fontWeight:800,fontFamily:T.u,letterSpacing:-.3,display:"flex",alignItems:"center",gap:6}}>Slate
+            {socketConnected&&<span title="Live updates active" style={{fontSize:7,fontWeight:600,fontFamily:T.m,color:T.gn,
+              textTransform:"uppercase",letterSpacing:1,display:"flex",alignItems:"center",gap:3}}>
+              <span style={{width:5,height:5,borderRadius:"50%",background:T.gn,display:"inline-block",boxShadow:"0 0 6px "+T.gn+"88"}}/>live</span>}</div>
           {isDeveloper&&<select value={devViewAs||""} onChange={e=>setDevViewAs(e.target.value||null)}
             style={{marginTop:6,width:"100%",padding:"4px 6px",fontSize:9,fontFamily:T.m,fontWeight:600,
               background:T.card,color:T.tx,border:"1px solid "+T.gn+"44",borderRadius:4,cursor:"pointer",outline:"none"}}>
