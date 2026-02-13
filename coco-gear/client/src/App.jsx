@@ -71,7 +71,7 @@ export default function App(){
   const[comps,setComps]=useState([]);const[types,setTypes]=useState([]);const[locs,setLocs]=useState([]);
   const[depts,setDepts]=useState([]);const[personnel,setPersonnel]=useState([]);
   const[kits,setKits]=useState([]);
-  const[curUser,setCurUser]=useState(null);const[mustChangePw,setMustChangePw]=useState(false);const[settings,setSettings]=useState(DEF_SETTINGS);
+  const[curUser,setCurUser]=useState(authCtx.user?.id||null);const[mustChangePw,setMustChangePw]=useState(false);const[settings,setSettings]=useState(DEF_SETTINGS);
   const[requests,setRequests]=useState([]);const[accessRequests,setAccessRequests]=useState([]);const[logs,setLogs]=useState([]);
   const[reservations,setReservations]=useState([]);const[trips,setTrips]=useState([]);
   const[consumables,setConsumables]=useState([]);const[assets,setAssets]=useState([]);const[boats,setBoats]=useState([]);const[favorites,setFavorites]=useState([]);
