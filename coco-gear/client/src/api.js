@@ -258,6 +258,12 @@ export const upload = {
   },
 };
 
+// ─── Dashboard ───
+export const dashboard = {
+  getConfig: () => request('/auth/me/dashboard'),
+  saveConfig: (config) => request('/auth/me/dashboard', { method: 'PUT', body: config }),
+};
+
 // ─── Health ───
 export const health = () => request('/health');
 
@@ -265,5 +271,5 @@ export default {
   auth, kits, types, components, locations, departments,
   personnel, consumables, assets, reservations, trips, tasks, taskTemplates,
   packingTemplates, packing, comms, boats, maintenance,
-  audit, settings, reports, upload, health,
+  audit, settings, reports, upload, dashboard, health,
 };

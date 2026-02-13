@@ -256,4 +256,46 @@ router.put('/me/password', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /me/dashboard - return current user's dashboard config
+router.get('/me/dashboard', authMiddleware, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { dashboardConfig: true },
+    });
+    if (!user) return res.status(401).json({ error: 'User no longer exists' });
+    return res.json(user.dashboardConfig || null);
+  } catch (err) {
+    console.error('Get dashboard config error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /me/dashboard - save dashboard config
+router.put('/me/dashboard', authMiddleware, async (req, res) => {
+  try {
+    const { widgets, columns } = req.body;
+    if (!widgets || !Array.isArray(widgets)) {
+      return res.status(400).json({ error: 'widgets array is required' });
+    }
+    for (const w of widgets) {
+      if (typeof w.id !== 'string' || typeof w.visible !== 'boolean' || typeof w.order !== 'number') {
+        return res.status(400).json({ error: 'Each widget must have id (string), visible (boolean), order (number)' });
+      }
+    }
+    const config = { widgets };
+    if (columns !== undefined) config.columns = columns;
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { dashboardConfig: config },
+      select: { dashboardConfig: true },
+    });
+    return res.json(user.dashboardConfig);
+  } catch (err) {
+    console.error('Save dashboard config error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
