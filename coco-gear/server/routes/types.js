@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireAdminPerm } from '../middleware/rbac.js';
-import { validate, kitTypeSchema } from '../utils/validation.js';
+import { validate, kitTypeSchema, kitTypeUpdateSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -93,10 +93,10 @@ router.post('/', authMiddleware, requireAdminPerm('types'), validate(kitTypeSche
 });
 
 // PUT /:id - update kit type (admin+, perm: types)
-router.put('/:id', authMiddleware, requireAdminPerm('types'), async (req, res) => {
+router.put('/:id', authMiddleware, requireAdminPerm('types'), validate(kitTypeUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, desc, components, fields, deptIds } = req.body;
+    const { name, desc, components, fields, deptIds } = req.validated;
 
     const existing = await prisma.kitType.findUnique({ where: { id } });
     if (!existing) {

@@ -9,6 +9,36 @@ const prisma = new PrismaClient();
 const router = Router();
 const SALT_ROUNDS = 10;
 
+// SEC-004 fix: Simple in-memory rate limiter for auth endpoints
+const rateLimitStores = {};
+function rateLimit({ windowMs, max, message }) {
+  const store = new Map();
+  return (req, res, next) => {
+    const key = req.ip || req.connection.remoteAddress || 'unknown';
+    const now = Date.now();
+    const record = store.get(key);
+    if (record && now - record.start < windowMs) {
+      record.count++;
+      if (record.count > max) {
+        return res.status(429).json({ error: message || 'Too many requests, please try again later' });
+      }
+    } else {
+      store.set(key, { start: now, count: 1 });
+    }
+    // Periodic cleanup (every 100 requests)
+    if (store.size > 10000 || Math.random() < 0.01) {
+      for (const [k, v] of store) {
+        if (now - v.start >= windowMs) store.delete(k);
+      }
+    }
+    next();
+  };
+}
+
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: 'Too many login attempts. Try again in 15 minutes.' });
+const signupLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: 'Too many signup attempts. Try again later.' });
+const passwordChangeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: 'Too many password change attempts. Try again later.' });
+
 // GET /users - public user list for login screen (id, name, title, role only)
 // Only shows approved users — pending/denied users are excluded from the login picker
 router.get('/users', async (req, res) => {
@@ -50,7 +80,7 @@ router.get('/signup-status/:email', async (req, res) => {
 });
 
 // POST /login - verify password and return JWT + user data
-router.post('/login', validate(loginSchema), async (req, res) => {
+router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
   try {
     const { userId, pin } = req.body;
 
@@ -131,7 +161,7 @@ router.get('/signup-info', async (req, res) => {
 });
 
 // POST /signup - self-registration with domain-restricted email
-router.post('/signup', validate(signupSchema), async (req, res) => {
+router.post('/signup', signupLimiter, validate(signupSchema), async (req, res) => {
   try {
     const { name, email, password, title } = req.validated;
 
@@ -324,7 +354,7 @@ router.put('/me', authMiddleware, validate(profileUpdateSchema), async (req, res
 });
 
 // PUT /me/password - change own password
-router.put('/me/password', authMiddleware, async (req, res) => {
+router.put('/me/password', passwordChangeLimiter, authMiddleware, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 

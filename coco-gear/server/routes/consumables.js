@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireAdminPerm } from '../middleware/rbac.js';
-import { validate, consumableSchema, consumableAdjustSchema } from '../utils/validation.js';
+import { validate, consumableSchema, consumableAdjustSchema, consumableUpdateSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -38,10 +38,10 @@ router.post('/', authMiddleware, requireAdminPerm('consumables'), validate(consu
 });
 
 // PUT /:id - update consumable (admin+, perm: consumables)
-router.put('/:id', authMiddleware, requireAdminPerm('consumables'), async (req, res) => {
+router.put('/:id', authMiddleware, requireAdminPerm('consumables'), validate(consumableUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, sku, category, qty, minQty, unit } = req.body;
+    const { name, sku, category, qty, minQty, unit } = req.validated;
 
     const existing = await prisma.consumable.findUnique({ where: { id } });
     if (!existing) {

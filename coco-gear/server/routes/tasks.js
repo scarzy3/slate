@@ -122,8 +122,8 @@ taskRouter.post('/:tripId/tasks', requirePerm('trips'), requireTripAccess, async
   }
 });
 
-// PUT /api/trips/:tripId/tasks/:taskId - update a task
-taskRouter.put('/:tripId/tasks/:taskId', requireTripAccess, async (req, res) => {
+// PUT /api/trips/:tripId/tasks/:taskId - update a task (SEC-015 fix: added requirePerm)
+taskRouter.put('/:tripId/tasks/:taskId', requirePerm('trips'), requireTripAccess, async (req, res) => {
   try {
     const { tripId, taskId } = req.params;
     const { title, description, assignedToId, phase, priority, status, dueDate, sortOrder } = req.body;

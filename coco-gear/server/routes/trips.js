@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/rbac.js';
-import { validate, tripSchema, tripPersonnelSchema, tripNoteSchema } from '../utils/validation.js';
+import { validate, tripSchema, tripUpdateSchema, tripPersonnelSchema, tripNoteSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -283,11 +283,11 @@ router.post('/', requirePerm('trips'), validate(tripSchema), async (req, res) =>
 });
 
 // PUT /:id - update trip (admin+)
-router.put('/:id', requirePerm('trips'), async (req, res) => {
+router.put('/:id', requirePerm('trips'), validate(tripUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, location, objectives, leadId, startDate, endDate, status: tripStatus,
-      restricted, classification } = req.body;
+      restricted, classification } = req.validated;
 
     const existing = await prisma.trip.findUnique({
       where: { id },

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireAdminPerm } from '../middleware/rbac.js';
-import { validate, departmentSchema } from '../utils/validation.js';
+import { validate, departmentSchema, departmentUpdateSchema } from '../utils/validation.js';
 import { auditLog } from '../utils/auditLogger.js';
 
 const prisma = new PrismaClient();
@@ -86,10 +86,10 @@ router.post('/', authMiddleware, requireAdminPerm('departments'), validate(depar
 });
 
 // PUT /:id - update department (admin+, perm: departments)
-router.put('/:id', authMiddleware, requireAdminPerm('departments'), async (req, res) => {
+router.put('/:id', authMiddleware, requireAdminPerm('departments'), validate(departmentUpdateSchema), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, color, site, managerIds, leadIds } = req.body;
+    const { name, color, site, managerIds, leadIds } = req.validated;
 
     const existing = await prisma.department.findUnique({ where: { id } });
     if (!existing) {
